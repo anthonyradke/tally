@@ -12,6 +12,7 @@ from .engine import dollars, month_of, cents, Txn
 app = FastAPI(title="Money")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 tpl = Jinja2Templates(directory="app/templates")
+tpl.env.add_extension("jinja2.ext.do")
 tpl.env.filters["money"] = dollars
 tpl.env.filters["mon"] = lambda m: m.strftime("%b %Y")
 tpl.env.globals["today"] = date.today

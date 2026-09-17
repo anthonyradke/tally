@@ -1,21 +1,23 @@
 {% extends "base.html" %}{% import "_macros.html" as m %}{% block body %}
 {% set ym = "%04d-%02d" % (mo.year, mo.month) %}
+{% set TICK %}<svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg>{% endset %}
+<div class="month-nav">{% for x in st.months | reverse %}<a class="chip {{ 'on' if x == mo }}" href="/month-end/{{ '%04d-%02d' % (x.year, x.month) }}">{{ x | mon }}</a>{% endfor %}</div>
 <h1>Month end · {{ mo | mon }}</h1>
-<p class="small">{% for x in st.months %}<a href="/month-end/{{ '%04d-%02d' % (x.year, x.month) }}">{{ x | mon }}</a>{{ ' · ' if not loop.last }}{% endfor %}</p>
-<div class="card"><h2>1. Type the investment balances {{ '✓' if status.typed_done }}</h2>
-<form method="post" action="/month-end/{{ ym }}/typed">{% for a in st.by_kind('investment') %}
-<div class="inline"><label style="flex:1">{{ a.name }}</label><input type="number" step="0.01" inputmode="decimal" name="acct_{{ a.id }}"
- value="{{ (status.typed[a.id] / 100) if status.typed[a.id] is not none else '' }}" placeholder="balance on {{ mo | mon }} end"></div>{% endfor %}
-<button type="submit">Save balances</button></form></div>
-<div class="card"><h2>2. Log HYSA interest {{ '✓' if status.interest_done }}</h2>
-<form method="post" action="/month-end/{{ ym }}/interest">{% for a in st.accounts if a.id in status.interest %}{% set s = status.interest[a.id] %}
-<div class="inline"><label style="flex:1">{{ m.acct(a) }}</label>
-{% if s.logged %}<b class="t-in">{{ s.logged[0].amount | money }} logged</b>{% else %}
-<input type="number" step="0.01" inputmode="decimal" name="acct_{{ a.id }}" value="{{ s.proposed / 100 }}" title="proposed from APY, overwrite with the real figure">{% endif %}</div>{% endfor %}
-{% if not status.interest_done %}<p class="small muted">Proposed from each account's APY. Overwrite with what the bank actually paid, then save. Blank or zero skips.</p><button type="submit">Log interest</button>{% endif %}
-{% if not status.interest %}<p class="small muted">No account has an APY set. Add one in Settings.</p>{% endif %}</form></div>
-<div class="card"><h2>3. Reconcile {{ '✓' if status.recon_done }}</h2>
-{% for a in st.by_kind('cash') + st.by_kind('card') %}{% set r = status.recon[a.id] %}
-<div class="row"><span>{{ m.acct(a) }}</span><span class="small">{% if r %}{{ 'reconciled' if r['actual'] == r['expected'] else 'gap ' ~ ((r['actual'] - r['expected']) | money) }} on {{ r['date'] }}{% else %}<span class="muted">not yet</span>{% endif %}</span></div>{% endfor %}
-<p class="small"><a href="/balances">Go reconcile on Balances</a></p></div>
+<div class="card"><div class="step"><span class="n {{ 'done' if status.typed_done }}">{% if status.typed_done %}{{ TICK }}{% else %}1{% endif %}</span><div style="flex:1">
+<h3>Investment balances</h3><p class="small muted" style="margin-bottom:var(--s3)">Type what each account showed at the end of {{ mo | mon }}.</p>
+<form method="post" action="/month-end/{{ ym }}/typed" class="stack">{% for a in st.by_kind('investment') %}
+<div><label class="lbl">{{ a.name }}</label><input type="number" step="0.01" inputmode="decimal" name="acct_{{ a.id }}" value="{{ (status.typed[a.id] / 100) if status.typed[a.id] is not none else '' }}" placeholder="0.00"></div>{% endfor %}
+<button type="submit" class="ghost block">Save balances</button></form></div></div></div>
+<div class="card"><div class="step"><span class="n {{ 'done' if status.interest_done }}">{% if status.interest_done %}{{ TICK }}{% else %}2{% endif %}</span><div style="flex:1">
+<h3>HYSA interest</h3>
+{% if not status.interest %}<p class="small muted">No account has an APY. Set one in Settings and the app will propose a figure here.</p>{% else %}
+<p class="small muted" style="margin-bottom:var(--s3)">Proposed from each APY. Overwrite with what the bank actually paid.</p>
+<form method="post" action="/month-end/{{ ym }}/interest" class="stack">{% for a in st.accounts if a.id in status.interest %}{% set s = status.interest[a.id] %}
+<div><label class="lbl">{{ a.name }}</label>{% if s.logged %}<div class="field" style="cursor:default"><span class="v t-in">{{ s.logged[0].amount | money }} logged</span></div>
+{% else %}<input type="number" step="0.01" inputmode="decimal" name="acct_{{ a.id }}" value="{{ s.proposed / 100 }}">{% endif %}</div>{% endfor %}
+{% if not status.interest_done %}<button type="submit" class="ghost block">Log interest</button>{% endif %}</form>{% endif %}</div></div></div>
+<div class="card"><div class="step"><span class="n {{ 'done' if status.recon_done }}">{% if status.recon_done %}{{ TICK }}{% else %}3{% endif %}</span><div style="flex:1">
+<h3>Reconcile</h3><div class="card flush" style="margin:var(--s3) 0">{% for a in st.by_kind('cash') + st.by_kind('card') %}{% set r = status.recon[a.id] %}
+<div class="row"><span class="label">{{ m.acct(a) }}</span><span class="small {{ 'ok' if r and r['actual'] == r['expected'] else ('bad' if r else 'muted') }}">{% if r %}{{ 'reconciled' if r['actual'] == r['expected'] else 'gap ' ~ ((r['actual'] - r['expected']) | money) }} · {{ r['date'][5:] }}{% else %}not yet{% endif %}</span></div>{% endfor %}</div>
+<a class="btn ghost block" href="/balances">Reconcile on Balances</a></div></div></div>
 {% endblock %}

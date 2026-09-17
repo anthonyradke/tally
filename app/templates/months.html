@@ -1,16 +1,17 @@
 {% extends "base.html" %}{% import "_macros.html" as m %}{% block body %}
-<div class="month-cards">{% for r in st.rows | reverse %}<div class="card"><h1>{{ r.month | mon }}</h1>
-<details open><summary>In and out</summary>
-<div class="row"><span>Money in</span><b class="t-in">{{ r.money_in | money }}</b></div><div class="row"><span>Spent</span><b>{{ r.spent | money }}</b></div>
-<div class="row"><span>Loan payments</span><b class="t-loan">{{ r.loan | money }}</b></div><div class="row"><span>Saving</span><b class="t-saving">{{ r.saving | money }}</b></div>
-<div class="row"><span>Left over</span><b class="{{ 'ok' if r.left_over >= 0 else 'bad' }}">{{ r.left_over | money }}</b></div></details>
-<details><summary>Balances · net worth {{ r.net_worth | money }}</summary>{% for a in st.accounts %}<div class="row"><span>{{ m.acct(a) }}</span><b>{{ r.balances[a.id] | money }}</b></div>{% endfor %}</details>
-<details><summary>Spending by category</summary>{% for c in spending %}{% if r.by_category.get(c.id) %}<div class="row"><span>{{ c.name }}</span><b>{{ r.by_category[c.id] | money }}</b></div>{% endif %}{% endfor %}</details>
+{% if not st.rows %}<div class="card"><div class="empty"><b>No months yet</b>Log an entry and the table fills itself.</div></div>{% endif %}
+<div class="hide-desk">{% for r in st.rows | reverse %}<div class="card flush">
+<div class="row" style="padding:var(--s4)"><h3>{{ r.month | mon }}</h3><span class="money {{ 'ok' if r.left_over >= 0 else 'bad' }}" style="font-weight:600">{{ r.left_over | money }} left</span></div>
+<details class="acc" open><summary>In and out</summary><div class="inner card flush" style="margin:0;border:0">
+<div class="row"><span class="dim">Money in</span><b class="money t-in">{{ r.money_in | money }}</b></div><div class="row"><span class="dim">Spent</span><b class="money">{{ r.spent | money }}</b></div>
+<div class="row"><span class="dim">Loan payments</span><b class="money t-loan">{{ r.loan | money }}</b></div><div class="row"><span class="dim">Saving</span><b class="money t-saving">{{ r.saving | money }}</b></div></div></details>
+<details class="acc"><summary>Balances <span class="money muted">{{ r.net_worth | money }}</span></summary><div class="inner card flush" style="margin:0;border:0">{% for a in st.accounts %}<div class="row"><span class="label">{{ m.acct(a) }}</span><b class="money">{{ r.balances[a.id] | money }}</b></div>{% endfor %}</div></details>
+<details class="acc"><summary>Spending by category <span class="money muted">{{ r.spent | money }}</span></summary><div class="inner card flush" style="margin:0;border:0">{% for c in spending %}{% if r.by_category.get(c.id) %}<div class="row"><span class="dim">{{ c.name }}</span><b class="money">{{ r.by_category[c.id] | money }}</b></div>{% endif %}{% endfor %}</div></details>
 </div>{% endfor %}</div>
-<div class="wide-table card"><table><tr><th>Month</th><th class="num">Money in</th>{% for c in spending %}<th class="num">{{ c.name }}</th>{% endfor %}
-<th class="num">TOTAL SPENT</th><th class="num">Loans</th><th class="num">Saving</th><th class="num">LEFT OVER</th>{% for a in st.accounts %}<th class="num">{{ a.name }}</th>{% endfor %}<th class="num">NET WORTH</th></tr>
-{% for r in st.rows %}<tr><td>{{ r.month | mon }}</td><td class="num t-in">{{ r.money_in | money }}</td>{% for c in spending %}<td class="num">{{ r.by_category.get(c.id, 0) | money }}</td>{% endfor %}
-<td class="num"><b>{{ r.spent | money }}</b></td><td class="num t-loan">{{ r.loan | money }}</td><td class="num t-saving">{{ r.saving | money }}</td><td class="num"><b>{{ r.left_over | money }}</b></td>
-{% for a in st.accounts %}<td class="num {{ a.bank or '' }} {{ 'cc' if a.kind == 'card' }}">{{ r.balances[a.id] | money }}</td>{% endfor %}<td class="num"><b>{{ r.net_worth | money }}</b></td></tr>{% endfor %}</table></div>
-<p class="small"><a href="/export/months.csv">Download months.csv</a> · <a href="/export/log.csv">Download log.csv</a></p>
+<div class="show-desk">{% if st.rows %}<div class="card flush tbl-wide"><table><tr><th>Month</th><th class="num">Money in</th>{% for c in spending %}<th class="num">{{ c.name }}</th>{% endfor %}
+<th class="num">Total spent</th><th class="num">Loans</th><th class="num">Saving</th><th class="num">Left over</th>{% for a in st.accounts %}<th class="num">{{ a.name }}</th>{% endfor %}<th class="num">Net worth</th></tr>
+{% for r in st.rows %}<tr><td>{{ r.month | mon }}</td><td class="num t-in">{{ r.money_in | money }}</td>{% for c in spending %}<td class="num {{ 'muted' if not r.by_category.get(c.id) }}">{{ r.by_category.get(c.id, 0) | money }}</td>{% endfor %}
+<td class="num"><b>{{ r.spent | money }}</b></td><td class="num t-loan">{{ r.loan | money }}</td><td class="num t-saving">{{ r.saving | money }}</td><td class="num"><b class="{{ 'ok' if r.left_over >= 0 else 'bad' }}">{{ r.left_over | money }}</b></td>
+{% for a in st.accounts %}<td class="num" style="color:var(--{{ a.bank or 'hsa' }})">{{ r.balances[a.id] | money }}</td>{% endfor %}<td class="num"><b>{{ r.net_worth | money }}</b></td></tr>{% endfor %}</table></div>{% endif %}</div>
+<p class="xs muted" style="margin-top:var(--s4)"><a href="/export/months.csv">Download months.csv</a> · <a href="/export/log.csv">Download log.csv</a></p>
 {% endblock %}

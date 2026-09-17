@@ -1,38 +1,41 @@
-{% extends "base.html" %}{% block body %}
-<h2>General</h2><div class="card"><form method="post" action="/settings/keys" class="entry">
-<label>Log starts<input type="date" name="start_month" value="{{ keys.start_month }}"></label>
-<label>Emergency fund months<input type="number" name="ef_months" value="{{ keys.ef_months }}"></label>
-<label>Roth limit<input type="number" step="0.01" name="roth_limit" value="{{ keys.roth_limit | int / 100 }}"></label>
-<button class="wide">Save</button></form></div>
-<h2>Favorites</h2><div class="card">{% for f in favs %}<form method="post" action="/settings/favorite" class="row"><span>{{ f['label'] }}{% if f['amount'] %} · {{ f['amount'] | money }}{% endif %}</span>
-<input type="hidden" name="id" value="{{ f['id'] }}"><button name="delete" value="1" class="ghost" style="width:auto;padding:4px 10px">remove</button></form>{% endfor %}
-<form method="post" action="/settings/favorite" class="entry"><input class="wide" name="label" placeholder="Label (e.g. Gas)" required>
-<select name="category_id">{% for c in st.categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
-<select name="from_account_id"><option value="0">From (none)</option>{% for a in st.accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select>
-<select name="to_account_id"><option value="0">To (none)</option>{% for a in st.accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select>
-<input type="number" step="0.01" name="amount" placeholder="Fixed amount (optional)"><button class="wide">Add favorite</button></form></div>
-<h2>Accounts</h2>{% for a in accounts %}<details class="card"><summary>{{ a['name'] }} <span class="muted small">{{ a['kind'] }}{{ '' if a['active'] else ' · hidden' }}</span></summary>
-<form method="post" action="/settings/account" class="entry"><input type="hidden" name="id" value="{{ a['id'] }}">
-<label>Name<input name="name" value="{{ a['name'] }}"></label><label>Kind<select name="kind">{% for k in ['cash','card','investment','loan'] %}<option {{ 'selected' if a['kind'] == k }}>{{ k }}</option>{% endfor %}</select></label>
-<label>Bank tint<select name="bank"><option value="">none</option>{% for b in ['chase','amex','sofi','hsa'] %}<option {{ 'selected' if a['bank'] == b }}>{{ b }}</option>{% endfor %}</select></label>
-<label>Starting balance<input type="number" step="0.01" name="start_balance" value="{{ a['start_balance'] / 100 }}"></label>
-<label>APY % (HYSA)<input type="number" step="0.01" name="apy" value="{{ (a['apy'] * 100) | round(2) if a['apy'] else '' }}"></label>
-<label>Loan rate %<input type="number" step="0.001" name="loan_rate" value="{{ (a['loan_rate'] * 100) | round(3) if a['loan_rate'] else '' }}"></label>
-<label>Sort<input type="number" name="sort" value="{{ a['sort'] }}"></label>
-<label><input type="checkbox" name="ef" {{ 'checked' if a['ef'] }} style="width:auto"> Counts toward emergency fund</label>
-<label><input type="checkbox" name="active" {{ 'checked' if a['active'] }} style="width:auto"> Active</label><button class="wide">Save</button></form></details>{% endfor %}
-<details class="card"><summary>Add account (e.g. the Tesla loan: kind loan, starting balance, rate)</summary>
-<form method="post" action="/settings/account" class="entry"><label>Name<input name="name" required></label><label>Kind<select name="kind">{% for k in ['cash','card','investment','loan'] %}<option>{{ k }}</option>{% endfor %}</select></label>
-<label>Bank tint<select name="bank"><option value="">none</option>{% for b in ['chase','amex','sofi','hsa'] %}<option>{{ b }}</option>{% endfor %}</select></label>
-<label>Starting balance<input type="number" step="0.01" name="start_balance" value="0"></label><label>APY %<input type="number" step="0.01" name="apy"></label>
-<label>Loan rate %<input type="number" step="0.001" name="loan_rate"></label><label>Sort<input type="number" name="sort" value="50"></label>
-<label><input type="checkbox" name="ef" style="width:auto"> Emergency fund</label><input type="hidden" name="active" value="1"><button class="wide">Add</button></form></details>
-<p class="small muted">A loan starts at its balance on the log start date and accrues rate/12 monthly. Log payments with To = the loan.</p>
-<h2>Categories</h2>{% for c in cats %}<details class="card"><summary>{{ c['name'] }} <span class="muted small">{{ c['type'] }}</span></summary>
-<form method="post" action="/settings/category" class="entry"><input type="hidden" name="id" value="{{ c['id'] }}"><input name="name" value="{{ c['name'] }}">
-<select name="type">{% for t in ['Money in','Spending','Saving','Transfer','Loan'] %}<option {{ 'selected' if c['type'] == t }}>{{ t }}</option>{% endfor %}</select>
-<label>Sort<input type="number" name="sort" value="{{ c['sort'] }}"></label><label><input type="checkbox" name="active" {{ 'checked' if c['active'] }} style="width:auto"> Active</label><button class="wide">Save</button></form></details>{% endfor %}
-<details class="card"><summary>Add category</summary><form method="post" action="/settings/category" class="entry"><input name="name" required placeholder="Name">
-<select name="type">{% for t in ['Money in','Spending','Saving','Transfer','Loan'] %}<option>{{ t }}</option>{% endfor %}</select><input type="hidden" name="active" value="1"><input type="hidden" name="sort" value="50"><button class="wide">Add</button></form></details>
-<p class="small"><a href="/export/log.csv">Download log.csv</a> · <a href="/export/months.csv">Download months.csv</a></p>
+{% extends "base.html" %}{% import "_macros.html" as m %}{% block body %}
+{% set kinds = [{'value':'cash','label':'Cash'},{'value':'card','label':'Credit card'},{'value':'investment','label':'Investment (typed)'},{'value':'loan','label':'Loan (amortizes)'}] %}
+{% set banks = [{'value':'','label':'None'},{'value':'chase','label':'Chase','cls':'chase'},{'value':'amex','label':'Amex','cls':'amex'},{'value':'sofi','label':'SoFi','cls':'sofi'},{'value':'hsa','label':'Grey','cls':'hsa'}] %}
+{% set types = [] %}{% for t in ['Money in','Spending','Saving','Transfer','Loan'] %}{% do types.append({'value':t,'label':t}) %}{% endfor %}
+{% set cat_items = [] %}{% for c in st.categories %}{% do cat_items.append({'value':c.id,'label':c.name,'group':c.type}) %}{% endfor %}
+{% set acct_items = [{'value':'0','label':'None'}] %}{% for a in st.accounts %}{% do acct_items.append({'value':a.id,'label':a.name,'cls':(a.bank or 'hsa') ~ (' cc' if a.kind == 'card' else '')}) %}{% endfor %}
+{% macro account_form(a) %}
+<form method="post" action="/settings/account" class="stack">{% if a %}<input type="hidden" name="id" value="{{ a['id'] }}">{% endif %}
+<div><label class="lbl">Name</label><input type="text" name="name" value="{{ a['name'] if a else '' }}" required></div>
+<div class="grid2">{{ m.picker('kind', 'Kind', a['kind'] if a else 'cash', kinds) }}{{ m.picker('bank', 'Tint', a['bank'] if a else '', banks) }}</div>
+<div class="grid2"><div><label class="lbl">Starting balance</label><input type="number" step="0.01" inputmode="decimal" name="start_balance" value="{{ (a['start_balance'] / 100) if a else 0 }}"></div>
+<div><label class="lbl">Sort</label><input type="number" inputmode="numeric" name="sort" value="{{ a['sort'] if a else 50 }}"></div></div>
+<div class="grid2"><div><label class="lbl">APY % (HYSA)</label><input type="number" step="0.01" inputmode="decimal" name="apy" value="{{ (a['apy'] * 100) | round(2) if a and a['apy'] else '' }}" placeholder="e.g. 4.00"></div>
+<div><label class="lbl">Loan rate %</label><input type="number" step="0.001" inputmode="decimal" name="loan_rate" value="{{ (a['loan_rate'] * 100) | round(3) if a and a['loan_rate'] else '' }}" placeholder="e.g. 1.49"></div></div>
+<label class="toggle-row"><span>Counts toward emergency fund</span><input type="checkbox" class="switch" name="ef" {{ 'checked' if a and a['ef'] }}></label>
+<label class="toggle-row"><span>Active</span><input type="checkbox" class="switch" name="active" {{ 'checked' if (not a) or a['active'] }}></label>
+<button class="ghost block">{{ 'Save' if a else 'Add account' }}</button></form>{% endmacro %}
+<h1>Settings</h1>
+<h2>General</h2><div class="card"><form method="post" action="/settings/keys" class="stack">
+<div class="grid2"><div><label class="lbl">Emergency fund, months</label><input type="number" inputmode="numeric" name="ef_months" value="{{ keys.ef_months }}"></div>
+<div><label class="lbl">Roth IRA limit</label><input type="number" step="0.01" inputmode="decimal" name="roth_limit" value="{{ keys.roth_limit | int / 100 }}"></div></div>
+<div><label class="lbl">Log starts</label>{{ m.date_picker('start_month', keys.start_month) }}</div>
+<button class="ghost block">Save</button></form></div>
+<h2>Favorites</h2><div class="card flush">{% for f in favs %}<form method="post" action="/settings/favorite" class="row"><span>{{ f['label'] }}{% if f['amount'] %} <span class="muted money">{{ f['amount'] | money }}</span>{% endif %}</span>
+<input type="hidden" name="id" value="{{ f['id'] }}"><button name="delete" value="1" class="ghost sm">Remove</button></form>{% endfor %}
+{% if not favs %}<div class="empty"><b>No favorites</b>Add one below and it shows as a chip on the Log.</div>{% endif %}
+<details class="acc"><summary>Add favorite</summary><div class="inner"><form method="post" action="/settings/favorite" class="stack">
+<input type="text" name="label" placeholder="Label, e.g. Gas" required>
+{{ m.picker('category_id', 'Category', cat_items[0].value if cat_items else '', cat_items) }}
+<div class="grid2">{{ m.picker('from_account_id', 'From', '0', acct_items) }}{{ m.picker('to_account_id', 'To', '0', acct_items) }}</div>
+<input type="number" step="0.01" inputmode="decimal" name="amount" placeholder="Fixed amount (optional)"><button class="ghost block">Add favorite</button></form></div></details></div>
+<h2>Accounts</h2><div class="card flush">{% for a in accounts %}<details class="acc"><summary><span class="label">{{ m.acct(a) }}</span><span class="xs muted">{{ a['kind'] }}{{ ' · hidden' if not a['active'] }}</span></summary><div class="inner">{{ account_form(a) }}</div></details>{% endfor %}
+<details class="acc"><summary>Add account</summary><div class="inner"><p class="xs muted" style="margin-bottom:var(--s3)">For the Tesla loan: kind Loan, starting balance as of the log start, rate. Log payments with To = the loan.</p>{{ account_form(None) }}</div></details></div>
+<h2>Categories</h2><div class="card flush">{% for c in cats %}<details class="acc"><summary><span>{{ c['name'] }}</span><span class="xs muted">{{ c['type'] }}{{ ' · hidden' if not c['active'] }}</span></summary><div class="inner">
+<form method="post" action="/settings/category" class="stack"><input type="hidden" name="id" value="{{ c['id'] }}"><input type="text" name="name" value="{{ c['name'] }}">
+<div class="grid2">{{ m.picker('type', 'Type', c['type'], types) }}<div><input type="number" inputmode="numeric" name="sort" value="{{ c['sort'] }}" aria-label="Sort"></div></div>
+<label class="toggle-row"><span>Active</span><input type="checkbox" class="switch" name="active" {{ 'checked' if c['active'] }}></label><button class="ghost block">Save</button></form></div></details>{% endfor %}
+<details class="acc"><summary>Add category</summary><div class="inner"><form method="post" action="/settings/category" class="stack"><input type="text" name="name" required placeholder="Name">
+{{ m.picker('type', 'Type', 'Spending', types) }}<input type="hidden" name="active" value="1"><input type="hidden" name="sort" value="50"><button class="ghost block">Add category</button></form></div></details></div>
+<p class="xs muted" style="margin-top:var(--s4)"><a href="/export/log.csv">Download log.csv</a> · <a href="/export/months.csv">Download months.csv</a></p>
 {% endblock %}

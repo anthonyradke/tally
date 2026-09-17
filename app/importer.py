@@ -148,9 +148,8 @@ def seed_favorites(con, n: int = 6) -> int:
         " FROM transactions t JOIN categories c ON c.id=t.category_id"
         " WHERE c.type='Spending' GROUP BY 1,2,3 ORDER BY n DESC LIMIT ?", (n,)).fetchall()
     for i, r in enumerate(rows):
-        frm = con.execute("SELECT name FROM accounts WHERE id=?", (r[1],)).fetchone()[0] if r[1] else ""
         con.execute("INSERT INTO favorites(label,category_id,from_account_id,to_account_id,amount,sort)"
-                    " VALUES(?,?,?,?,?,?)", (f"{r[3]} · {frm}", r[0], r[1], r[2], r[6] if r[5] else None, i))
+                    " VALUES(?,?,?,?,?,?)", (r[3], r[0], r[1], r[2], r[6] if r[5] else None, i))
     con.commit()
     return len(rows)
 

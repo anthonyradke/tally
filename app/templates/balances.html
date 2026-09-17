@@ -1,16 +1,27 @@
 {% extends "base.html" %}{% import "_macros.html" as m %}{% block body %}
 {% set r = st.current %}
-<div class="card"><div class="row"><span>Net worth</span><span class="big">{{ r.net_worth | money }}</span></div>
-<div class="row"><span>Left over this month</span><b class="{{ 'ok' if r.left_over >= 0 else 'bad' }}">{{ r.left_over | money }}</b></div>
-<div class="row"><span>Spending this month</span><b>{{ r.spent | money }}</b></div>
-<div class="row"><span>Emergency fund</span><b>{{ progress | money }} of {{ goal | money }}</b></div>
-<div class="row"><span>Roth IRA this year</span><b>{{ st.roth_ytd() | money }} of {{ roth_limit | money }}</b></div></div>
-{% for kind, label, total in [('cash','Cash',r.cash),('investment','Investments',r.invested),('card','Cards',r.cards),('loan','Loans',r.loans)] %}
-<h2>{{ label }} · {{ total | money }}</h2><div class="card">{% for a in st.by_kind(kind) %}
-<div class="row"><span>{{ m.acct(a) }}</span><b>{{ r.balances[a.id] | money }}</b></div>
-{% if kind in ('cash','card') %}<form hx-post="/reconcile/{{ a.id }}" hx-target="#rec{{ a.id }}" class="inline small">
-<input type="number" step="0.01" inputmode="decimal" name="actual" placeholder="Bank shows…" required>
-<button class="ghost" type="submit">Check</button><button type="submit" name="save" value="1">Save</button></form><div id="rec{{ a.id }}"></div>{% endif %}
-{% endfor %}</div>{% endfor %}
-<p class="small muted">Reconcile uses rows dated on or before today. Future-dated rows are listed separately.</p>
+<div class="card" style="padding:var(--s6) var(--s5)">
+<div class="xs muted" style="font-weight:600;text-transform:uppercase;letter-spacing:.06em">Net worth</div>
+<div class="hero {{ 'bad' if r.net_worth < 0 }}" style="margin:var(--s1) 0 var(--s5)">{{ r.net_worth | money }}</div>
+<div class="grid3 stack" style="margin:0">
+<div><div class="xs muted">Left over · {{ r.month | mon }}</div><div class="big {{ 'ok' if r.left_over >= 0 else 'bad' }}">{{ r.left_over | money }}</div></div>
+<div><div class="xs muted">Spent · {{ r.month | mon }}</div><div class="big">{{ r.spent | money }}</div></div>
+<div><div class="xs muted">Roth IRA this year</div><div class="big">{{ st.roth_ytd() | money }} <span class="small muted">of {{ roth_limit | money }}</span></div></div>
+</div></div>
+<div class="card"><div class="row" style="padding:0;border:0"><span class="dim">Emergency fund</span><b class="money">{{ progress | money }} <span class="muted" style="font-weight:400">of {{ goal | money }}</span></b></div>
+<div class="bar"><i style="width:{{ (100 * progress / goal) if goal else 0 }}%"></i></div></div>
+{% for kind, label, total in [('cash','Cash',r.cash),('card','Cards',r.cards),('investment','Investments',r.invested),('loan','Loans',r.loans)] %}
+{% set accts = st.by_kind(kind) %}{% if accts %}
+<h2>{{ label }} <span style="float:right;text-transform:none;letter-spacing:0" class="money">{{ total | money }}</span></h2>
+<div class="card flush">{% for a in accts %}
+<div class="row"><span class="label">{{ m.acct(a) }}</span>
+<span style="display:flex;align-items:center;gap:var(--s2)"><b class="money">{{ r.balances[a.id] | money }}</b>
+{% if kind in ('cash','card') %}<button type="button" class="ghost sm" onclick="const p=document.getElementById('rf{{ a.id }}');p.hidden=!p.hidden;if(!p.hidden)p.querySelector('input').focus()">Reconcile</button>{% endif %}</span></div>
+{% if kind in ('cash','card') %}<div id="rf{{ a.id }}" hidden style="padding:0 var(--s4) var(--s4)">
+<form hx-post="/reconcile/{{ a.id }}" hx-target="#rec{{ a.id }}" hx-indicator="#rec{{ a.id }}-sp" class="grid2" style="grid-template-columns:1fr auto auto">
+<input type="number" step="0.01" inputmode="decimal" name="actual" placeholder="Balance in the bank app" required aria-label="Bank balance">
+<button class="ghost" type="submit">Check</button><button type="submit" name="save" value="1">Save</button></form>
+<span id="rec{{ a.id }}-sp" class="htmx-indicator spinner" style="margin-top:var(--s2)"></span><div id="rec{{ a.id }}"></div></div>{% endif %}
+{% endfor %}</div>{% endif %}{% endfor %}
+<p class="xs muted" style="margin-top:var(--s4)">Reconcile compares rows dated on or before today. Future-dated rows are listed separately.</p>
 {% endblock %}
