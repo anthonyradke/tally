@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{% block title %}Money{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css"><link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon.svg"><meta name="apple-mobile-web-app-capable" content="yes">
+<script src="/static/htmx.min.js" defer></script></head><body>
+{% set path = request.url.path %}
+<nav><a href="/" class="{{ 'on' if path == '/' }}">Log</a><a href="/balances" class="{{ 'on' if path == '/balances' }}">Balances</a>
+<a href="/months" class="{{ 'on' if path == '/months' }}">Months</a><a href="/month-end" class="{{ 'on' if path.startswith('/month-end') }}">Month end</a>
+<a href="/settings" class="{{ 'on' if path == '/settings' }}">Settings</a></nav>
+<main>{% block body %}{% endblock %}</main></body></html>

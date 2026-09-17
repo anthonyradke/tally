@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% import "_macros.html" as m %}{% block body %}
+{% set t = editing %}
+{% if not t %}<div class="favs">{% for f in favs %}
+<form method="post" action="/txn" style="display:contents"><input type="hidden" name="date" value="{{ today() }}"><input type="hidden" name="category_id" value="{{ f['category_id'] }}">
+<input type="hidden" name="from_account_id" value="{{ f['from_account_id'] or '' }}"><input type="hidden" name="to_account_id" value="{{ f['to_account_id'] or '' }}">
+<input type="hidden" name="what" value="{{ f['label'] }}">
+{% if f['amount'] %}<input type="hidden" name="amount" value="{{ f['amount'] / 100 }}"><button type="submit" class="ghost">{{ f['label'] }} {{ f['amount'] | money }}</button>
+{% else %}<button type="button" class="ghost" onclick="pick({{ f['category_id'] }},{{ f['from_account_id'] or 'null' }},{{ f['to_account_id'] or 'null' }},{{ f['label'] | tojson }})">{{ f['label'] }}</button>{% endif %}
+</form>{% endfor %}</div>{% endif %}
+{% if errors %}<div class="errors">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>{% endif %}
+<form class="entry card" method="post" action="{{ '/txn/' ~ t.id if t and t.id else '/txn' }}" id="entry">
+<input class="wide" type="number" step="0.01" inputmode="decimal" name="amount" placeholder="Amount" required autofocus value="{{ (t.amount / 100) if t else '' }}">
+<select class="wide" name="category_id" id="cat" onchange="shape()">{% for c in st.categories %}
+<option value="{{ c.id }}" data-type="{{ c.type }}" {{ 'selected' if t and t.category_id == c.id }}>{{ c.name }}</option>{% endfor %}</select>
+<select name="from_account_id" id="from"><option value="">From</option>{% for a in st.accounts %}{% if a.kind != 'loan' %}
+<option value="{{ a.id }}" {{ 'selected' if t and t.from_id == a.id }}>{{ a.name }}</option>{% endif %}{% endfor %}</select>
+<select name="to_account_id" id="to"><option value="">To</option>{% for a in st.accounts %}
+<option value="{{ a.id }}" {{ 'selected' if t and t.to_id == a.id }}>{{ a.name }}</option>{% endfor %}</select>
+<input name="what" placeholder="What it was" value="{{ t.what if t else '' }}" autocomplete="off">
+<input type="date" name="date" value="{{ t.date if t else today() }}" required>
+<div class="wide small muted" id="hint"></div>
+<button class="wide" type="submit">{{ 'Save' if t and t.id else 'Add' }}</button>
+{% if t and t.id %}<a class="wide small" href="/">Cancel</a>{% endif %}</form>
+{% if t and t.id %}<form method="post" action="/txn/{{ t.id }}/delete" onsubmit="return confirm('Delete this row?')"><button class="ghost">Delete</button></form>{% endif %}
+<script>
+const HINT={"Money in":"Money in: fill To only.","Spending":"Spending: fill From only.","Transfer":"Transfer: fill From and To.","Saving":"Saving: From required, To optional.","Loan":"Loan: From required, To optional."};
+function shape(){const type=cat.selectedOptions[0].dataset.type;const f=document.getElementById('from'),t=document.getElementById('to');
+ f.style.display=type=="Money in"?"none":"";t.style.display=type=="Spending"?"none":"";
+ if(type=="Money in")f.value="";if(type=="Spending")t.value="";hint.textContent=HINT[type];}
+function pick(c,f,t,label){cat.value=c;shape();document.getElementById('from').value=f||"";document.getElementById('to').value=t||"";
+ document.querySelector('[name=what]').value=label;document.querySelector('[name=amount]').focus();}
+shape();
+</script>
+<h2>Recent</h2><div class="card"><table>{% for t in st.recent() %}{{ m.txn_row(st, t) }}{% endfor %}</table></div>
+{% endblock %}

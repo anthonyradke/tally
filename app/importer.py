@@ -138,9 +138,26 @@ def verify(con, path: str) -> list[str]:
     return bad
 
 
+
+
+def seed_favorites(con, n: int = 6) -> int:
+    """Favorites from the most frequent (category, from, to) combos in the log."""
+    rows = con.execute(
+        "SELECT t.category_id, t.from_account_id, t.to_account_id, c.name, COUNT(*) n,"
+        " MIN(t.amount)=MAX(t.amount) AS fixed, MIN(t.amount) amt"
+        " FROM transactions t JOIN categories c ON c.id=t.category_id"
+        " WHERE c.type='Spending' GROUP BY 1,2,3 ORDER BY n DESC LIMIT ?", (n,)).fetchall()
+    for i, r in enumerate(rows):
+        frm = con.execute("SELECT name FROM accounts WHERE id=?", (r[1],)).fetchone()[0] if r[1] else ""
+        con.execute("INSERT INTO favorites(label,category_id,from_account_id,to_account_id,amount,sort)"
+                    " VALUES(?,?,?,?,?,?)", (f"{r[3]} · {frm}", r[0], r[1], r[2], r[6] if r[5] else None, i))
+    con.commit()
+    return len(rows)
+
 if __name__ == "__main__":
     xlsx = sys.argv[1]
     con = db.connect(sys.argv[2] if len(sys.argv) > 2 else None)
     print(import_workbook(con, xlsx))
+    print("favorites:", seed_favorites(con))
     for line in verify(con, xlsx):
         print(line)

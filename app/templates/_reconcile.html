@@ -1,0 +1,10 @@
+{% import "_macros.html" as m %}
+<div class="row"><span>App shows</span><b>{{ d.expected | money }}</b></div>
+<div class="row"><span>Bank shows</span><b>{{ d.actual | money }}</b></div>
+<div class="row"><span>Gap</span><b class="{{ 'ok' if d.gap == 0 else 'bad' }}">{{ d.gap | money }}</b></div>
+{% if d.gap == 0 %}<p class="ok">Reconciles.{% if saved %} Saved.{% endif %}</p>{% else %}
+{% if d.doubled %}<p class="small"><b>Exactly double a row.</b> Likely income routed From instead of To:</p><table>{% for t in d.doubled %}{{ m.txn_row(st, t) }}{% endfor %}</table>{% endif %}
+{% if d.single %}<p class="small"><b>Exactly one row.</b> Missing or duplicated:</p><table>{% for t in d.single %}{{ m.txn_row(st, t) }}{% endfor %}</table>{% endif %}
+{% if not d.doubled and not d.single %}<p class="small muted">No single row explains it. Check for a missing entry.</p>{% endif %}
+{% if saved %}<p class="small muted">Saved with the gap.</p>{% endif %}{% endif %}
+{% if d.future %}<p class="small muted">Pre-logged, not yet posted (excluded above):</p><table>{% for t in d.future %}{{ m.txn_row(st, t) }}{% endfor %}</table>{% endif %}

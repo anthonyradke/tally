@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% import "_macros.html" as m %}{% block body %}
+<div class="month-cards">{% for r in st.rows | reverse %}<div class="card"><h1>{{ r.month | mon }}</h1>
+<details open><summary>In and out</summary>
+<div class="row"><span>Money in</span><b class="t-in">{{ r.money_in | money }}</b></div><div class="row"><span>Spent</span><b>{{ r.spent | money }}</b></div>
+<div class="row"><span>Loan payments</span><b class="t-loan">{{ r.loan | money }}</b></div><div class="row"><span>Saving</span><b class="t-saving">{{ r.saving | money }}</b></div>
+<div class="row"><span>Left over</span><b class="{{ 'ok' if r.left_over >= 0 else 'bad' }}">{{ r.left_over | money }}</b></div></details>
+<details><summary>Balances · net worth {{ r.net_worth | money }}</summary>{% for a in st.accounts %}<div class="row"><span>{{ m.acct(a) }}</span><b>{{ r.balances[a.id] | money }}</b></div>{% endfor %}</details>
+<details><summary>Spending by category</summary>{% for c in spending %}{% if r.by_category.get(c.id) %}<div class="row"><span>{{ c.name }}</span><b>{{ r.by_category[c.id] | money }}</b></div>{% endif %}{% endfor %}</details>
+</div>{% endfor %}</div>
+<div class="wide-table card"><table><tr><th>Month</th><th class="num">Money in</th>{% for c in spending %}<th class="num">{{ c.name }}</th>{% endfor %}
+<th class="num">TOTAL SPENT</th><th class="num">Loans</th><th class="num">Saving</th><th class="num">LEFT OVER</th>{% for a in st.accounts %}<th class="num">{{ a.name }}</th>{% endfor %}<th class="num">NET WORTH</th></tr>
+{% for r in st.rows %}<tr><td>{{ r.month | mon }}</td><td class="num t-in">{{ r.money_in | money }}</td>{% for c in spending %}<td class="num">{{ r.by_category.get(c.id, 0) | money }}</td>{% endfor %}
+<td class="num"><b>{{ r.spent | money }}</b></td><td class="num t-loan">{{ r.loan | money }}</td><td class="num t-saving">{{ r.saving | money }}</td><td class="num"><b>{{ r.left_over | money }}</b></td>
+{% for a in st.accounts %}<td class="num {{ a.bank or '' }} {{ 'cc' if a.kind == 'card' }}">{{ r.balances[a.id] | money }}</td>{% endfor %}<td class="num"><b>{{ r.net_worth | money }}</b></td></tr>{% endfor %}</table></div>
+<p class="small"><a href="/export/months.csv">Download months.csv</a> · <a href="/export/log.csv">Download log.csv</a></p>
+{% endblock %}

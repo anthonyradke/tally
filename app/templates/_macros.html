@@ -1,0 +1,7 @@
+{% macro acct(a) %}{% if a %}<span class="pill {{ a.bank or '' }} {{ 'cc' if a.kind == 'card' }}">{{ a.name }}</span>{% endif %}{% endmacro %}
+{% macro tclass(type) %}{{ {'Money in':'t-in','Saving':'t-saving','Loan':'t-loan','Transfer':'t-transfer'}.get(type,'') }}{% endmacro %}
+{% macro txn_row(st, t) %}{% set c = st.cat[t.category_id] %}
+<tr class="{{ 'future' if t.date > st.today }}"><td class="small muted">{{ t.date.strftime('%-m/%-d') }}</td>
+<td><a href="/?edit={{ t.id }}" style="color:inherit;text-decoration:none">{{ t.what or c.name }}</a><div class="small muted">{{ c.name }}</div></td>
+<td class="small">{{ acct(st.acct.get(t.from_id)) }}{% if t.from_id and t.to_id %} → {% endif %}{{ acct(st.acct.get(t.to_id)) }}</td>
+<td class="num {{ tclass(c.type) }}">{{ t.amount | money }}</td></tr>{% endmacro %}
