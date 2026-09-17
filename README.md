@@ -3,9 +3,10 @@
 Replaces money.xlsx. Same From/To model, same balance rules, one SQLite file.
 
 ## Run locally (Mac, first time)
-    python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-    .venv/bin/python -m app.importer ~/path/to/money.xlsx      # empty DB only; prints a cent-exact verification
-    .venv/bin/uvicorn app.main:app --port 8000                  # open http://localhost:8000
+Needs uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+    uv sync                                    # installs Python 3.13 (pinned in .python-version) and deps
+    uv run python -m app.importer ~/path/to/money.xlsx      # empty DB only; prints a cent-exact verification
+    uv run uvicorn app.main:app --port 8000                  # open http://localhost:8000
 
 ## Run on the server
     docker compose up -d --build
@@ -14,8 +15,8 @@ never publish port 8000 beyond the tailnet. On the iPhone open the Tailscale URL
 Share, Add to Home Screen.
 
 ## Tests
-    .venv/bin/python -m pytest -q                              # engine
-    MONEY_XLSX=~/path/to/money.xlsx .venv/bin/python -m pytest -q   # plus import verification
+    uv run pytest -q                              # engine
+    MONEY_XLSX=~/path/to/money.xlsx uv run pytest -q   # plus import verification
 
 ## Screens
 Log (favorites, entry, recent) · Balances (snapshot, reconcile per account) · Months (cards on
