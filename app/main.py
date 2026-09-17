@@ -19,6 +19,9 @@ tpl.env.globals["today"] = date.today
 
 def render(name, request, **ctx):
     ctx.update(request=request, dollars=dollars)
+    st = ctx.get("st")
+    if st:
+        ctx["default_cat"] = next((c.id for c in st.categories if c.type == "Spending"), None)
     return tpl.TemplateResponse(request, name, ctx)
 
 

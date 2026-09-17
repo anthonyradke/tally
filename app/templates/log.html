@@ -11,7 +11,7 @@
 <form class="entry card" method="post" action="{{ '/txn/' ~ t.id if t and t.id else '/txn' }}" id="entry">
 <input class="wide" type="number" step="0.01" inputmode="decimal" name="amount" placeholder="Amount" required autofocus value="{{ (t.amount / 100) if t else '' }}">
 <select class="wide" name="category_id" id="cat" onchange="shape()">{% for c in st.categories %}
-<option value="{{ c.id }}" data-type="{{ c.type }}" {{ 'selected' if t and t.category_id == c.id }}>{{ c.name }}</option>{% endfor %}</select>
+<option value="{{ c.id }}" data-type="{{ c.type }}" {{ 'selected' if (t and t.category_id == c.id) or (not t and c.id == default_cat) }}>{{ c.name }}</option>{% endfor %}</select>
 <select name="from_account_id" id="from"><option value="">From</option>{% for a in st.accounts %}{% if a.kind != 'loan' %}
 <option value="{{ a.id }}" {{ 'selected' if t and t.from_id == a.id }}>{{ a.name }}</option>{% endif %}{% endfor %}</select>
 <select name="to_account_id" id="to"><option value="">To</option>{% for a in st.accounts %}
