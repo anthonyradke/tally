@@ -51,7 +51,12 @@ export function AddSheet({ open, seed, onClose }: Props) {
   useEffect(() => {
     if (!open || !boot.data) return
     const e = seed.edit, f = seed.favorite
-    const defaultCat = boot.data.categories.find((c) => c.type === 'Spending')?.id ?? boot.data.categories[0]?.id ?? null
+    // Default to the spending category used most in the last 300 entries, else the first spending category.
+    const counts = new Map<number, number>()
+    for (const t of recent.data?.items ?? []) counts.set(t.category_id, (counts.get(t.category_id) ?? 0) + 1)
+    const spendingIds = new Set(boot.data.categories.filter((c) => c.type === 'Spending').map((c) => c.id))
+    const top = [...counts.entries()].filter(([id]) => spendingIds.has(id)).sort((a, b) => b[1] - a[1])[0]?.[0]
+    const defaultCat = top ?? boot.data.categories.find((c) => c.type === 'Spending')?.id ?? boot.data.categories[0]?.id ?? null
     setDigits(e ? toDigits(e.amount) : f?.amount ? toDigits(f.amount) : '')
     setNeg(!!e && e.amount < 0)
     setCat(e?.category_id ?? f?.category_id ?? defaultCat)
@@ -148,11 +153,11 @@ export function AddSheet({ open, seed, onClose }: Props) {
 
   if (!boot.data) return null
   const b = boot.data
-  const catOptions: Option[] = b.categories.map((c) => { const v = categoryVisual(c.name, c.type); return { value: String(c.id), label: c.name, group: c.type, mark: <Mark Icon={v.Icon} color={v.color} size="sm" /> } })
+  const catOptions: Option[] = b.categories.map((c) => { const v = categoryVisual(c); return { value: String(c.id), label: c.name, group: c.type, mark: <Mark Icon={v.Icon} color={v.color} size="sm" /> } })
   const acctOptions = (forTo: boolean): Option[] => b.accounts.filter((a) => forTo || a.kind !== 'loan')
     .map((a) => ({ value: String(a.id), label: a.name, group: { cash: 'Cash', card: 'Cards', investment: 'Investments', loan: 'Loans' }[a.kind], mark: <i className={s.dot} style={{ background: bankColor(a) }} /> }))
   const acctValue = (id: number | null) => { const a = id ? lk.acct.get(id) : undefined; return a ? <><i className={s.dot} style={{ background: bankColor(a) }} />{a.name}</> : undefined }
-  const catVis = category ? categoryVisual(category.name, category.type) : undefined
+  const catVis = category ? categoryVisual(category) : undefined
   const canSave = cents !== 0 && !!cat && !save.isPending
 
   return (
@@ -162,7 +167,7 @@ export function AddSheet({ open, seed, onClose }: Props) {
         <div className={s.body}>
           {!seed.edit && b.favorites.length > 0 && (
             <ChipRow className={s.quick}>
-              {b.favorites.map((f) => { const c = lk.cat.get(f.category_id); const v = c && categoryVisual(c.name, c.type)
+              {b.favorites.map((f) => { const c = lk.cat.get(f.category_id); const v = c && categoryVisual(c)
                 return <Chip key={f.id} size="sm" leading={v && <Mark Icon={v.Icon} color={v.color} size="sm" />}
                   onClick={() => { setCat(f.category_id); setFrom(f.from_account_id); setTo(f.to_account_id); setWhat(f.label.split(' · ')[0]); if (f.amount) { setDigits(toDigits(f.amount)); setPad(false) } touchedCat.current = true }}>{f.label}</Chip> })}
             </ChipRow>

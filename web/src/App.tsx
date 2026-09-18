@@ -6,11 +6,11 @@ import { TabBar } from './components/TabBar'
 import { Home } from './screens/Home'
 import { Activity } from './screens/Activity'
 import { AddSheet, type Seed } from './screens/AddSheet'
+import { Accounts } from './screens/Accounts'
+import { AccountDetail } from './screens/AccountDetail'
+import { Insights } from './screens/Insights'
+import { Settings } from './screens/Settings'
 import s from './App.module.css'
-
-function Stub({ title }: { title: string }) {
-  return <div><h1 className={s.stubTitle}>{title}</h1><p className="secondary">Coming in phase 3.</p></div>
-}
 
 export default function App() {
   const location = useLocation()
@@ -29,8 +29,11 @@ export default function App() {
             <Routes location={location}>
               <Route path="/" element={<Home />} />
               <Route path="/activity" element={<Activity />} />
-              <Route path="/accounts/*" element={<Stub title="Accounts" />} />
-              <Route path="/insights/*" element={<Stub title="Insights" />} />
+              <Route path="/accounts" element={<Accounts />} />
+              <Route path="/accounts/:id" element={<AccountDetail />} />
+              <Route path="/insights" element={<Insights />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/settings/:section" element={<Settings />} />
               <Route path="*" element={<Home />} />
             </Routes>
           </motion.div>

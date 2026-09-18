@@ -4,6 +4,7 @@ import type { CatType } from '@/api/client'
 import { useBootstrap, useLookups, useTransactions } from '@/lib/data'
 import { useAdd } from '@/lib/add'
 import { formatCents } from '@/lib/money'
+import { monthLabel } from '@/lib/dates'
 import { categoryVisual } from '@/icons/categories'
 import { Chip, ChipRow } from '@/components/Chip'
 import { Mark } from '@/components/Mark'
@@ -20,6 +21,8 @@ export function Activity() {
   const q = params.get('q') ?? ''
   const type = (params.get('type') ?? '') as CatType | ''
   const category = Number(params.get('category')) || undefined
+  const account = Number(params.get('account')) || undefined
+  const start = params.get('start') ?? '', end = params.get('end') ?? ''
   const set = (k: string, v: string | number | undefined) => {
     const p = new URLSearchParams(params)
     if (v === undefined || v === '') p.delete(k); else p.set(k, String(v))
@@ -28,7 +31,8 @@ export function Activity() {
 
   const boot = useBootstrap()
   const lookups = useLookups(boot.data)
-  const txns = useTransactions({ q, type, category, limit: 500 })
+  const txns = useTransactions({ q, type, category, account, start, end, limit: 500 })
+  const acct = account ? boot.data?.accounts.find((a) => a.id === account) : undefined
   const { open } = useAdd()
 
   const cats = (boot.data?.categories ?? []).filter((c) => !type || c.type === type)
@@ -44,13 +48,15 @@ export function Activity() {
       </label>
 
       <ChipRow className={s.chips}>
+        {acct && <Chip selected onClick={() => set('account', undefined)} trailing={<X strokeWidth={2.5} absoluteStrokeWidth style={{ width: 12, height: 12 }} />}>{acct.name}</Chip>}
+        {(start || end) && <Chip selected onClick={() => { set('start', undefined); set('end', undefined) }} trailing={<X strokeWidth={2.5} absoluteStrokeWidth style={{ width: 12, height: 12 }} />}>{start ? monthLabel(start) : `until ${end}`}</Chip>}
         {TYPES.map((t) => (
           <Chip key={t.value} selected={type === t.value} onClick={() => { set('type', t.value); set('category', undefined) }}>{t.label}</Chip>
         ))}
       </ChipRow>
       <ChipRow className={s.chips}>
         {cats.map((c) => {
-          const v = categoryVisual(c.name, c.type)
+          const v = categoryVisual(c)
           return (
             <Chip key={c.id} size="md" selected={category === c.id} onClick={() => set('category', category === c.id ? undefined : c.id)}
               leading={<Mark Icon={v.Icon} color={v.color} size="sm" />}>{c.name}</Chip>
@@ -61,7 +67,7 @@ export function Activity() {
       {txns.data && (
         <p className={`secondary ${s.summary}`}>
           {txns.data.total} {txns.data.total === 1 ? 'entry' : 'entries'}
-          {(q || type || category) && <> · net <span className="tnum">{formatCents(txns.data.sum)}</span></>}
+          {(q || type || category || account || start) && <> · net <span className="tnum">{formatCents(txns.data.sum)}</span></>}
         </p>
       )}
 

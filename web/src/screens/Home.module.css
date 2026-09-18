@@ -1,4 +1,7 @@
-.screen { display: flex; flex-direction: column; gap: var(--s-8); padding-bottom: var(--s-8); }
+.screen { display: flex; flex-direction: column; gap: var(--s-8); padding-bottom: var(--s-8); position: relative; }
+.gear { position: absolute; top: var(--s-4); right: 0; width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: var(--fg-2); background: var(--surface-2); z-index: 1; }
+.gear svg { width: 20px; height: 20px; }
+@media (min-width: 900px) { .gear { display: none; } }
 .delta { font-size: var(--t-13); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .deltaLabel { color: var(--fg-3); font-weight: 500; }
 
@@ -15,5 +18,5 @@
 .bar { display: grid; grid-template-columns: auto 1fr auto; gap: var(--s-3); align-items: center; width: 100%; min-height: 48px; text-align: left; }
 .barText { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .barName { font-size: var(--t-13); font-weight: 500; }
-.track { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+.track { height: 4px; border-radius: 2px; background: color-mix(in oklch, var(--c) 18%, transparent); overflow: hidden; }
 .track i { display: block; height: 100%; border-radius: 2px; transform-origin: left center; transition: transform var(--d-large) var(--ease-out); }

@@ -1,0 +1,48 @@
+.screen { display: flex; flex-direction: column; gap: var(--s-8); padding-bottom: var(--s-8); }
+.title { font-family: var(--font-display); font-size: var(--t-28); font-weight: 700; letter-spacing: var(--track-title); padding: var(--s-4) 0 0; margin-bottom: calc(-1 * var(--s-5)); }
+.trail { white-space: nowrap; }
+.trailLabel { color: var(--fg-3); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-5) var(--s-6); margin-top: calc(-1 * var(--s-3)); }
+@media (min-width: 720px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+.stat { display: flex; flex-direction: column; gap: var(--s-2); }
+.section { display: flex; flex-direction: column; gap: var(--s-3); }
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); }
+.bars { list-style: none; padding: 0; display: flex; flex-direction: column; }
+.bar { display: grid; grid-template-columns: auto 1fr auto; gap: var(--s-3); align-items: center; width: 100%; min-height: 52px; text-align: left; }
+.barText { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.barHead { display: flex; justify-content: space-between; gap: var(--s-2); }
+.barName { font-size: var(--t-13); font-weight: 500; }
+.track { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+.budgetTrack { background: color-mix(in oklch, var(--c) 22%, transparent); }
+.track i { display: block; height: 100%; border-radius: 2px; transform-origin: left center; transition: transform var(--d-large) var(--ease-out); }
+.barAmt { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.of { font-size: var(--t-11); }
+.link { align-self: flex-start; color: var(--fg-2); font-size: var(--t-13); font-weight: 600; min-height: 36px; }
+.a { text-decoration: underline; text-underline-offset: 2px; }
+
+.tableWrap { overflow-x: auto; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); }
+.table { border-collapse: collapse; font-size: var(--t-13); white-space: nowrap; }
+.table th, .table td { padding: 8px 12px 8px 0; text-align: right; border-bottom: 1px solid var(--line); }
+.table thead th { font-size: var(--t-11); font-weight: 600; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; }
+.table th:first-child, .table td:first-child { text-align: left; position: sticky; left: 0; background: var(--bg); padding-right: var(--s-4); }
+.table tbody th { font-weight: 500; }
+.on th, .on td { background: var(--surface-2); }
+.dim { color: var(--fg-3); }
+
+.step { display: flex; gap: var(--s-3); align-items: flex-start; padding: var(--s-3) 0; border-top: 1px solid var(--line); }
+.step:first-of-type { border-top: 0; }
+.n { flex: none; width: 26px; height: 26px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--line-2); display: inline-flex; align-items: center; justify-content: center; font-size: var(--t-11); font-weight: 700; color: var(--fg-2); }
+.n svg { width: 14px; height: 14px; }
+.done { background: var(--pos); color: white; box-shadow: none; }
+.stepBody { flex: 1; display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.stepTitle { font-size: var(--t-16); font-weight: 600; }
+.form { display: flex; flex-direction: column; gap: var(--s-2); }
+.field { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; background: var(--surface-2); border-radius: var(--r-control); padding: 0 var(--s-3); }
+.fieldLabel { flex: 1; font-size: var(--t-13); font-weight: 500; }
+.field input { width: 120px; border: 0; background: none; outline: none; text-align: right; font-size: var(--t-16); font-weight: 600; min-height: 44px; }
+.cur { color: var(--fg-3); }
+.primary { align-self: flex-start; min-height: 36px; padding: 0 var(--s-3); border-radius: var(--r-control); background: var(--ink); color: var(--on-ink); font-weight: 600; font-size: var(--t-13); }
+.primary:disabled { opacity: .45; }
+.reconList { display: flex; flex-direction: column; }
+.reconRow { display: flex; justify-content: space-between; align-items: center; min-height: 40px; width: 100%; text-align: left; border-top: 1px solid var(--line); font-size: var(--t-13); font-weight: 500; }
+.reconRow:first-child { border-top: 0; }

@@ -75,6 +75,8 @@ export const api = {
   monthEndInterest: (ym: string, byAccount: Record<number, number>) =>
     call<{ ok: true }>('POST', `/month-end/${ym}/interest`, Object.fromEntries(Object.entries(byAccount).map(([k, v]) => [k, v / 100]))),
   // settings-style CRUD (dollar fields converted at the call site)
+  orderAccounts: (ids: number[]) => call<{ ok: true }>('PUT', '/accounts/order', { ids }),
+  orderCategories: (ids: number[]) => call<{ ok: true }>('PUT', '/categories/order', { ids }),
   saveAccount: (body: object, id?: number) => id ? call<Account>('PUT', `/accounts/${id}`, body) : call<Account>('POST', '/accounts', body),
   deleteAccount: (id: number) => call<void>('DELETE', `/accounts/${id}`),
   saveCategory: (body: object, id?: number) => id ? call<Category>('PUT', `/categories/${id}`, body) : call<Category>('POST', '/categories', body),
