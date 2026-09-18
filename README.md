@@ -1,43 +1,41 @@
 # Money
 
-Replaces money.xlsx. Same From/To model, same balance rules, one SQLite file.
-
-## Run locally (Mac, first time)
-Needs uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-    uv sync                                    # installs Python 3.13 (pinned in .python-version) and deps
-    uv run python -m app.importer ~/path/to/money.xlsx      # empty DB only; prints a cent-exact verification
-    uv run uvicorn app.main:app --port 8000                  # open http://localhost:8000
-
-## Deployed on x1 (no Docker)
-Runs as `money.service` (systemd, User=tony) from `~/projects/money` with its own uv-managed `.venv`,
-bound to `127.0.0.1:8000` and published tailnet-only by Tailscale Serve at
-**https://x1.tailea62fa.ts.net:8443**. On the iPhone: open that URL in Safari, Share, Add to Home Screen.
-
-    ssh x1 "systemctl status money"; ssh x1 "journalctl -u money -f"
-    # deploy a change from the Mac:
-    rsync -a --exclude .venv --exclude data --exclude __pycache__ ~/code/money/ x1:projects/money/ && ssh x1 "cd projects/money && ~/.local/bin/uv sync --frozen && sudo systemctl restart money"
-
-Database lives only on x1 at `~/projects/money/data/money.db` (never rsync `data/` over it).
-
-## Backup
-x1 cron (03:15) runs `scripts/backup-x1.sh`: SQLite snapshot to `x1:~/backups/money/`, 30 kept.
-The Mac launchd job `com.ar.money-backup` (09:00 daily) runs `scripts/pull-backup-mac.sh`, which rsyncs that
-folder into iCloud `Financial/money-backups/`. Export anytime: `/export/log.csv`, `/export/months.csv`.
-
-## Tests
-    uv run pytest -q                              # engine
-    MONEY_XLSX=~/path/to/money.xlsx uv run pytest -q   # plus import verification
-
-## Screens
-Log (favorites, entry, recent) · Balances (snapshot, reconcile per account) · Months (cards on
-phone, full table on desktop) · Month end (typed balances, HYSA interest, reconcile status) · Settings.
-
-## Rules the app enforces at entry
-Money in: To only. Spending: From only. Transfer: both. Saving and Loan: From, To optional.
-Loans: add as kind `loan` with balance on the log start date and annual rate; log payments with To = the loan.
-HSA: typed balance, but usable as From so card swipes land in Health.
+Personal ledger that replaced `money.xlsx`. Same From/To model and balance rules, one SQLite file, now with a
+React PWA on top. Runs on x1 as `money.service`; open **https://x1.tailea62fa.ts.net:8443/next/** on the tailnet
+(iPhone: Share → Add to Home Screen — it installs as a standalone app with its own icon and works offline for
+reading). The legacy Jinja pages are still at `/` until the new app takes over that path.
 
 ## Layout
-    app/engine.py    pure balance engine (no DB)      app/importer.py  xlsx import + verify
-    app/db.py        schema, cents as integers        app/service.py   per-request state
-    app/main.py      routes                           app/templates    HTMX + Jinja
+    app/engine.py      pure balance engine (no DB)          app/importer.py   xlsx import + cent-exact verification
+    app/db.py          schema, cents as integers            app/migrate.py    additive columns/tables for the rebuild
+    app/service.py     per-request state                    app/recurring.py  templates → future-dated rows
+    app/main.py        legacy routes + serves the SPA       app/api*.py       JSON API (core, ops, admin, files)
+    app/templates      legacy HTMX + Jinja pages            web/              Vite + React + TypeScript frontend
+    tests/             engine + API tests                   scripts/          backup-x1.sh (x1), pull-backup-mac.sh (Mac)
+    DESIGN.md          the locked design spec ("Paper Ledger") — read before UI work
+
+## Run on x1
+    uv sync --frozen && (cd web && npm ci && npm run build)   # deps + frontend into app/static/dist
+    sudo systemctl restart money                              # Python changes only; a rebuild alone is picked up live
+    uv run pytest -q                                          # 13 tests (engine + API)
+
+Frontend dev loop: `cd web && npm run dev` (Vite on :5173, `/api` proxied to :8000). Point `MONEY_DB` at a copy of
+the database for experiments; never at the live file.
+
+## Screens (web/src/screens)
+Home (customizable widgets: net worth, left over/spent, quick actions, emergency fund, budgets, spending, upcoming,
+Roth, net-worth chart) · Activity (search, type/category/account/tag/date filters, sort, saved views, long-press
+multi-select with bulk recategorize/tag/delete) · Add/Edit sheet (keypad, merchant memory, splits, notes, tags,
+receipt photos, undo) · Accounts + account detail (balance chart, reconcile, typed balances) · Insights (month
+picker, budgets, net worth, month-end checklist, months table, CSV) · Settings (quick actions, accounts,
+categories with glyph/tint/budget, recurring, saved views, general, appearance).
+
+## Rules the app enforces at entry
+Money in: To only. Spending: From only. Transfer: both. Saving and Loan: From, To optional. Splits are ordinary
+rows sharing a `split_group`. Recurring templates post rows ~45 days ahead; edit or delete them like any row.
+
+## Data & backups
+Database: `data/money.db` (x1 only, never in git). Receipts: `data/receipts/`. x1 cron 03:15 runs
+`scripts/backup-x1.sh` (SQLite online backup → `~/backups/money/money-YYYY-MM-DD.db`, receipts mirrored, 30
+kept); the Mac launchd job `com.ar.money-backup` pulls that folder into iCloud daily. Export anytime:
+`/export/log.csv`, `/export/months.csv`.

@@ -6,8 +6,10 @@ import { MotionConfig } from 'motion/react'
 import App from './App'
 import { ToastProvider } from './components/Toast'
 import { applyTheme, getTheme } from './lib/theme'
+import { registerSW } from 'virtual:pwa-register'
 
 applyTheme(getTheme())
+registerSW({ immediate: true })
 import './styles/tokens.css'
 import './styles/global.css'
 

@@ -13,7 +13,7 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "allowImportingTsExtensions": true,
-    "types": ["vite/client"],
+    "types": ["vite/client", "vite-plugin-pwa/client"],
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src"]
