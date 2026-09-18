@@ -35,18 +35,20 @@ export function Activity() {
   const account = Number(params.get('account')) || undefined
   const tag = params.get('tag') ?? ''
   const start = params.get('start') ?? '', end = params.get('end') ?? ''
+  const group = params.get('group') ?? ''
   const sortKey = params.get('sort') ?? 'date-desc'
   const [sort, dir] = sortKey.split('-') as ['date' | 'amount', 'asc' | 'desc']
-  const set = (k: string, v: string | number | undefined) => {
+  // One write per change: consecutive calls would each start from the stale `params` and overwrite each other.
+  const set = (changes: Record<string, string | number | undefined>) => {
     const p = new URLSearchParams(params)
-    if (v === undefined || v === '') p.delete(k); else p.set(k, String(v))
+    for (const [k, v] of Object.entries(changes)) { if (v === undefined || v === '') p.delete(k); else p.set(k, String(v)) }
     setParams(p, { replace: true })
   }
-  const filtered = !!(q || type || category || account || tag || start || end)
+  const filtered = !!(q || type || category || account || tag || start || end || group)
 
   const boot = useBootstrap()
   const lookups = useLookups(boot.data)
-  const txns = useTransactions({ q, type, category, account, tag, start, end, sort, dir, limit: 500 })
+  const txns = useTransactions({ q, type, category, account, tag, start, end, group, sort, dir, limit: 500 })
   const { open } = useAdd()
   const toast = useToast()
   const qc = useQueryClient()
@@ -90,18 +92,19 @@ export function Activity() {
       <h1 className={s.title}>Activity</h1>
       <label className={s.search}>
         <Search className={s.searchIcon} strokeWidth={2} absoluteStrokeWidth />
-        <input type="search" value={q} onChange={(e) => set('q', e.target.value)} placeholder="Search entries, notes, tags, amounts" enterKeyHint="search" autoComplete="off" />
-        {q && <button type="button" className={s.clear} onClick={() => set('q', '')} aria-label="Clear search"><X strokeWidth={2.5} absoluteStrokeWidth /></button>}
+        <input type="search" value={q} onChange={(e) => set({ q: e.target.value })} placeholder="Search entries, notes, tags, amounts" enterKeyHint="search" autoComplete="off" />
+        {q && <button type="button" className={s.clear} onClick={() => set({ q: undefined })} aria-label="Clear search"><X strokeWidth={2.5} absoluteStrokeWidth /></button>}
       </label>
 
       <ChipRow className={s.chips}>
-        {TYPES.map((t) => <Chip key={t.value} selected={type === t.value} onClick={() => { set('type', t.value); set('category', undefined) }}>{t.label}</Chip>)}
+        {TYPES.map((t) => <Chip key={t.value} selected={type === t.value} onClick={() => set({ type: t.value, category: undefined })}>{t.label}</Chip>)}
       </ChipRow>
       <ChipRow className={s.chips}>
         <Chip selected={!!cat} onClick={() => setPicker('cat')} leading={cat && <Mark Icon={categoryVisual(cat).Icon} color={categoryVisual(cat).color} size="sm" />} trailing={<ChevronDown strokeWidth={2.5} absoluteStrokeWidth style={{ width: 14, height: 14 }} />}>{cat?.name ?? 'Category'}</Chip>
         <Chip selected={!!acct} onClick={() => setPicker('acct')} leading={acct && <i className={s.dot} style={{ background: bankColor(acct) }} />} trailing={<ChevronDown strokeWidth={2.5} absoluteStrokeWidth style={{ width: 14, height: 14 }} />}>{acct?.name ?? 'Account'}</Chip>
-        {tag && <Chip selected onClick={() => set('tag', undefined)} trailing={<X strokeWidth={2.5} absoluteStrokeWidth style={{ width: 12, height: 12 }} />}>#{tag}</Chip>}
-        {(start || end) && <Chip selected onClick={() => { set('start', undefined); set('end', undefined) }} trailing={<X strokeWidth={2.5} absoluteStrokeWidth style={{ width: 12, height: 12 }} />}>{start ? monthLabel(start) : `until ${end}`}</Chip>}
+        {tag && <Chip selected onClick={() => set({ tag: undefined })} trailing={<X strokeWidth={2.5} absoluteStrokeWidth style={{ width: 12, height: 12 }} />}>#{tag}</Chip>}
+        {group && <Chip selected onClick={() => set({ group: undefined })} trailing={<X strokeWidth={2.5} absoluteStrokeWidth style={{ width: 12, height: 12 }} />}>Split purchase</Chip>}
+        {(start || end) && <Chip selected onClick={() => set({ start: undefined, end: undefined })} trailing={<X strokeWidth={2.5} absoluteStrokeWidth style={{ width: 12, height: 12 }} />}>{start ? monthLabel(start) : `until ${end}`}</Chip>}
         <Chip selected={sortKey !== 'date-desc'} onClick={() => setPicker('sort')} leading={<ArrowDownUp strokeWidth={2} absoluteStrokeWidth style={{ width: 14, height: 14 }} />}>{SORTS.find((x) => x.value === sortKey)?.label}</Chip>
         {filtered && <Chip onClick={() => setSaving(true)} leading={<Bookmark strokeWidth={2} absoluteStrokeWidth style={{ width: 14, height: 14 }} />}>Save view</Chip>}
         {b?.saved_views.map((v) => <Chip key={v.id} selected={params.toString() === v.query} onClick={() => setParams(new URLSearchParams(v.query), { replace: true })} leading={<Bookmark strokeWidth={2} absoluteStrokeWidth style={{ width: 14, height: 14 }} />}>{v.name}</Chip>)}
@@ -138,9 +141,9 @@ export function Activity() {
         </div>
       )}
 
-      <Picker open={picker === 'cat'} onClose={() => setPicker(null)} title="Category" options={catOptions} value={category ? String(category) : ''} searchable noneLabel="All categories" onChange={(v) => set('category', v || undefined)} />
-      <Picker open={picker === 'acct'} onClose={() => setPicker(null)} title="Account" options={acctOptions} value={account ? String(account) : ''} noneLabel="All accounts" onChange={(v) => set('account', v || undefined)} />
-      <Picker open={picker === 'sort'} onClose={() => setPicker(null)} title="Sort" options={SORTS} value={sortKey} onChange={(v) => set('sort', v === 'date-desc' ? undefined : v)} />
+      <Picker open={picker === 'cat'} onClose={() => setPicker(null)} title="Category" options={catOptions} value={category ? String(category) : ''} searchable noneLabel="All categories" onChange={(v) => set({ category: v || undefined })} />
+      <Picker open={picker === 'acct'} onClose={() => setPicker(null)} title="Account" options={acctOptions} value={account ? String(account) : ''} noneLabel="All accounts" onChange={(v) => set({ account: v || undefined })} />
+      <Picker open={picker === 'sort'} onClose={() => setPicker(null)} title="Sort" options={SORTS} value={sortKey} onChange={(v) => set({ sort: v === 'date-desc' ? undefined : v })} />
       <Picker open={picker === 'recat'} onClose={() => setPicker(null)} title="Move to category" options={(b?.categories ?? []).map((c) => { const v = categoryVisual(c); return { value: String(c.id), label: c.name, group: c.type, mark: <Mark Icon={v.Icon} color={v.color} size="sm" /> } })} value={null} searchable onChange={(v) => bulk.mutate({ ids, action: 'recategorize', category_id: Number(v) })} />
 
       <Sheet open={saving} onClose={() => setSaving(false)} title="Save view" action={<button type="button" className={s.sheetSave} disabled={!viewName.trim() || saveView.isPending} onClick={() => saveView.mutate()}>Save</button>}>

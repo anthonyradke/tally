@@ -1,7 +1,7 @@
 .list { display: flex; flex-direction: column; }
 .group { padding-bottom: var(--s-3); }
 .day {
-  position: sticky; top: 0; z-index: 2;
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2;
   display: flex; align-items: baseline; justify-content: space-between;
   padding: var(--s-4) 0 var(--s-1); background: var(--bg);
 }

@@ -181,7 +181,8 @@ export function AddSheet({ open, seed, onClose }: Props) {
   return (
     <>
       <Sheet open={open} onClose={onClose} title={seed.edit ? 'Edit entry' : 'New entry'} tall
-        action={<button type="button" className={`${s.save} ${canSave ? '' : s.saveOff}`} disabled={!canSave} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : 'Save'}</button>}>
+        action={<button type="button" className={`${s.save} ${canSave ? '' : s.saveOff}`} disabled={!canSave} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : 'Save'}</button>}
+        footer={pad ? <div className={s.padDock}><Keypad onKey={onKey} negative={neg} /></div> : undefined}>
         <div className={s.body}>
           {!seed.edit && b.favorites.length > 0 && (
             <ChipRow className={s.quick}>
@@ -259,7 +260,6 @@ export function AddSheet({ open, seed, onClose }: Props) {
             <button type="button" className={s.delete} onClick={() => remove.mutate()} disabled={remove.isPending}><Trash2 strokeWidth={2} absoluteStrokeWidth />Delete entry</button>
           )}
         </div>
-        {pad && <div className={s.padDock}><Keypad onKey={onKey} negative={neg} /></div>}
       </Sheet>
 
       <Picker open={picker === 'cat'} onClose={() => setPicker(null)} title="Category" options={catOptions} value={cat ? String(cat) : null} searchable
