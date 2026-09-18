@@ -1,12 +1,20 @@
-.shell { min-height: 100dvh; padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--s-4)); }
+.shell { min-height: 100dvh; padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + var(--s-4)); }
+/* Titles sit where a native large title would: clear of the status bar and its scroll-edge blur. */
 .main {
+  position: relative;
   max-width: var(--content-max); margin: 0 auto;
-  padding: max(var(--s-2), env(safe-area-inset-top)) var(--gutter) 0;
+  padding: calc(env(safe-area-inset-top, 0px) + var(--s-6)) var(--gutter) 0;
 }
-.stubTitle { font-family: var(--font-display); font-size: var(--t-28); font-weight: 700; letter-spacing: var(--track-title); padding: var(--s-4) 0 var(--s-2); }
-.save { font-weight: 600; color: var(--fg); min-height: 44px; padding: 0 var(--s-1); }
+.page { width: 100%; }
+/* Scrolled content fades out under the status bar instead of sitting behind the clock. */
+.topFade {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 40; pointer-events: none;
+  height: calc(env(safe-area-inset-top, 0px) + var(--s-6));
+  background: linear-gradient(var(--bg) calc(100% - var(--s-5)), transparent);
+}
 
 @media (min-width: 900px) {
   .shell { padding-bottom: var(--s-12); padding-left: var(--rail-w); }
   .main { margin: 0; padding-top: var(--s-6); max-width: calc(var(--content-max) + 2 * var(--gutter)); }
+  .topFade { display: none; }
 }

@@ -12,7 +12,7 @@ from .api_admin import router as admin_router
 from .api_files import router as files_router
 from .engine import month_of
 
-app = FastAPI(title="Money")
+app = FastAPI(title="Tally")
 for r in (api_router, ops_router, admin_router, files_router):
     app.include_router(r)
 

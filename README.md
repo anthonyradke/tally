@@ -1,6 +1,7 @@
-# Money
+# Money (shown as **Tally**)
 
-Personal ledger that replaced `money.xlsx`. Same From/To model and balance rules, one SQLite file, now with a
+Personal ledger that replaced `money.xlsx`. The product name is Tally (manifest, home-screen icon, rail brand);
+the repo, service and database keep the `money` name. Same From/To model and balance rules, one SQLite file, now with a
 React PWA on top. Runs on x1 as `money.service`; open **https://x1.tailea62fa.ts.net:8443/** on the tailnet
 (iPhone: Share → Add to Home Screen — it installs as a standalone app with its own icon and works offline for
 reading).
