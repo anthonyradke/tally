@@ -14,9 +14,13 @@ interface Props {
   onSelect?: (t: Txn) => void
   /** Show a day total (spending) in each day header. */
   dayTotals?: boolean
+  /** Multi-select: the selected ids (present = selection mode) and toggle/enter handlers. */
+  selection?: Set<number>
+  onToggle?: (id: number) => void
+  onLongPress?: (id: number) => void
 }
 
-export function TxnList({ items, boot, lookups, onSelect, dayTotals = true }: Props) {
+export function TxnList({ items, boot, lookups, onSelect, dayTotals = true, selection, onToggle, onLongPress }: Props) {
   const groups = groupByDay(items, (t) => lookups.cat.get(t.category_id)?.type ?? 'Spending')
   let idx = 0
   return (
@@ -39,7 +43,9 @@ export function TxnList({ items, boot, lookups, onSelect, dayTotals = true }: Pr
                   <TxnRow t={t} cat={cat} today={boot.today}
                     from={t.from_id ? lookups.acct.get(t.from_id) : undefined}
                     to={t.to_id ? lookups.acct.get(t.to_id) : undefined}
-                    onClick={onSelect ? () => onSelect(t) : undefined} />
+                    selected={selection ? selection.has(t.id) : undefined}
+                    onLongPress={onLongPress ? () => onLongPress(t.id) : undefined}
+                    onClick={selection ? () => onToggle?.(t.id) : onSelect ? () => onSelect(t) : undefined} />
                 </motion.div>
               )
             })}
