@@ -1,6 +1,0 @@
-services:
-  money:
-    build: .
-    restart: unless-stopped
-    ports: ["8000:8000"]      # reach it over Tailscale at http://<server-tailname>:8000
-    volumes: ["./data:/srv/data"]
