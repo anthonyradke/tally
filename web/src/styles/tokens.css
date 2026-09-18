@@ -46,17 +46,17 @@
   --warn:   light-dark(oklch(66% .15 75),  oklch(78% .15 80));
   --focus:  light-dark(oklch(52% .15 250), oklch(72% .13 250));
 
-  /* identity ring — one lightness/chroma so category tints read as a family */
-  --tint-l: light-dark(55%, 72%); --tint-c: light-dark(.13, .14);
-  --tint-red:    oklch(var(--tint-l) var(--tint-c) 25);
-  --tint-orange: oklch(var(--tint-l) var(--tint-c) 55);
-  --tint-amber:  oklch(var(--tint-l) var(--tint-c) 85);
-  --tint-green:  oklch(var(--tint-l) var(--tint-c) 150);
-  --tint-teal:   oklch(var(--tint-l) var(--tint-c) 195);
-  --tint-blue:   oklch(var(--tint-l) var(--tint-c) 255);
-  --tint-violet: oklch(var(--tint-l) var(--tint-c) 300);
-  --tint-pink:   oklch(var(--tint-l) var(--tint-c) 345);
-  --tint-gray:   oklch(var(--tint-l) .015 80);
+  /* identity ring — 8 category tints. Lightness varies per hue on purpose: these values were searched to pass
+     the data-viz palette validator (CVD ΔE, normal-vision floor, chroma, contrast) in each mode. See DESIGN.md. */
+  --tint-red:    light-dark(oklch(76% .14 26),  oklch(66% .17 27));
+  --tint-orange: light-dark(oklch(60% .13 45),  oklch(52% .16 39));
+  --tint-amber:  light-dark(oklch(76% .15 91),  oklch(66% .12 70));
+  --tint-green:  light-dark(oklch(50% .14 143), oklch(49% .11 148));
+  --tint-teal:   light-dark(oklch(72% .12 186), oklch(66% .11 198));
+  --tint-blue:   light-dark(oklch(56% .14 254), oklch(55% .11 257));
+  --tint-violet: light-dark(oklch(72% .12 305), oklch(49% .17 306));
+  --tint-pink:   light-dark(oklch(56% .16 354), oklch(66% .12 359));
+  --tint-gray:   light-dark(oklch(55% .015 80), oklch(70% .015 80));
   --mark-bg-a: light-dark(14%, 22%);
 
   /* banks — the user's existing identities */

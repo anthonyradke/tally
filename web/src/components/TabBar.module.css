@@ -24,8 +24,10 @@
 .add:active { transform: scale(.94); }
 .plus { width: 26px; height: 26px; }
 .addLabel { display: none; }
+.railOnly { display: none; }
 
 @media (min-width: 900px) {
+  .railOnly { display: flex; order: 20; margin-top: auto; }
   .bar {
     top: 0; right: auto; width: var(--rail-w); height: 100dvh;
     display: flex; flex-direction: column; align-items: stretch; gap: 2px;

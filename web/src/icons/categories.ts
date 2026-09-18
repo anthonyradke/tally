@@ -1,40 +1,29 @@
-import {
-  ArrowLeftRight, Banknote, Car, CircleDollarSign, CreditCard, Fuel, GraduationCap, HandCoins, HeartHandshake,
-  HeartPulse, House, Landmark, PawPrint, PiggyBank, Popcorn, Repeat, ShoppingBag, ShoppingCart, Sparkles, Utensils,
-  type LucideIcon,
-} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { CatType } from '@/api/client'
+import { GLYPHS, isTint, tintVar, type Tint } from './glyphs'
 
-export interface Visual { Icon: LucideIcon; color: string }
+export interface Visual { Icon: LucideIcon; color: string; glyph: string; tint: Tint }
 
-// Defaults keyed by category name; Settings will let the user override icon + tint per category (phase 3).
-const BY_NAME: Record<string, Visual> = {
-  'Paycheck':                       { Icon: Banknote,       color: 'var(--tint-green)' },
-  'Other Income':                   { Icon: HandCoins,      color: 'var(--tint-green)' },
-  'Student Loan Payment':           { Icon: GraduationCap,  color: 'var(--tint-amber)' },
-  'Family / Personal Loan Payment': { Icon: HeartHandshake, color: 'var(--tint-amber)' },
-  'Roth IRA':                       { Icon: Landmark,       color: 'var(--tint-violet)' },
-  'HYSA Transfer':                  { Icon: PiggyBank,      color: 'var(--tint-teal)' },
-  'Credit Card Payment':            { Icon: CreditCard,     color: 'var(--tint-gray)' },
-  'Car':                            { Icon: Car,            color: 'var(--tint-blue)' },
-  'Gas':                            { Icon: Fuel,           color: 'var(--tint-amber)' },
-  'Home / Utilities':               { Icon: House,          color: 'var(--tint-teal)' },
-  'Groceries':                      { Icon: ShoppingCart,   color: 'var(--tint-green)' },
-  'Dining Out':                     { Icon: Utensils,       color: 'var(--tint-orange)' },
-  'Subscriptions':                  { Icon: Repeat,         color: 'var(--tint-violet)' },
-  'Shopping':                       { Icon: ShoppingBag,    color: 'var(--tint-pink)' },
-  'Health':                         { Icon: HeartPulse,     color: 'var(--tint-red)' },
-  'Entertainment':                  { Icon: Popcorn,        color: 'var(--tint-violet)' },
-  'Misc':                           { Icon: Sparkles,       color: 'var(--tint-gray)' },
-  'Pets':                           { Icon: PawPrint,       color: 'var(--tint-orange)' },
+// Defaults keyed by category name. A category's own icon/color (set in Settings) override these.
+const BY_NAME: Record<string, [string, Tint]> = {
+  'Paycheck': ['banknote', 'green'], 'Other Income': ['hand-coins', 'green'],
+  'Student Loan Payment': ['graduation-cap', 'amber'], 'Family / Personal Loan Payment': ['heart-handshake', 'amber'],
+  'Roth IRA': ['landmark', 'violet'], 'HYSA Transfer': ['piggy-bank', 'teal'], 'Credit Card Payment': ['credit-card', 'gray'],
+  'Car': ['car', 'blue'], 'Gas': ['fuel', 'amber'], 'Home / Utilities': ['house', 'teal'], 'Groceries': ['shopping-cart', 'green'],
+  'Dining Out': ['utensils', 'orange'], 'Subscriptions': ['repeat', 'violet'], 'Shopping': ['shopping-bag', 'pink'],
+  'Health': ['heart-pulse', 'red'], 'Entertainment': ['popcorn', 'blue'], 'Misc': ['sparkles', 'gray'], 'Pets': ['paw-print', 'orange'],
+}
+const BY_TYPE: Record<CatType, [string, Tint]> = {
+  'Money in': ['banknote', 'green'], 'Spending': ['circle-dollar', 'gray'], 'Saving': ['piggy-bank', 'teal'],
+  'Transfer': ['arrow-left-right', 'gray'], 'Loan': ['hand-coins', 'amber'],
 }
 
-const BY_TYPE: Record<CatType, Visual> = {
-  'Money in': { Icon: Banknote,         color: 'var(--tint-green)' },
-  'Spending': { Icon: CircleDollarSign, color: 'var(--tint-gray)' },
-  'Saving':   { Icon: PiggyBank,        color: 'var(--tint-teal)' },
-  'Transfer': { Icon: ArrowLeftRight,   color: 'var(--tint-gray)' },
-  'Loan':     { Icon: HandCoins,        color: 'var(--tint-amber)' },
-}
+interface CatLike { name: string; type: CatType; icon?: string | null; color?: string | null }
 
-export const categoryVisual = (name: string, type: CatType): Visual => BY_NAME[name] ?? BY_TYPE[type]
+/** Resolve a category's glyph + tint: explicit override → name default → type default. */
+export function categoryVisual(c: CatLike): Visual {
+  const [dGlyph, dTint] = BY_NAME[c.name] ?? BY_TYPE[c.type]
+  const glyph = c.icon && GLYPHS[c.icon] ? c.icon : dGlyph
+  const tint = isTint(c.color) ? c.color : dTint
+  return { Icon: GLYPHS[glyph], color: tintVar(tint), glyph, tint }
+}

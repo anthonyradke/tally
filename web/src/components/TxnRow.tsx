@@ -28,7 +28,7 @@ function AcctTag({ a }: { a: Account }) {
 
 export function TxnRow({ t, cat, from, to, today, onClick }: Props) {
   const merchant = merchantMark(t.what)
-  const vis = categoryVisual(cat.name, cat.type)
+  const vis = categoryVisual(cat)
   const amt = rowAmount(cat.type, t.amount)
   const future = isFuture(t.date, today)
   return (

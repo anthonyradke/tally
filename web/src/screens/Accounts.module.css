@@ -1,0 +1,14 @@
+.screen { display: flex; flex-direction: column; gap: var(--s-8); padding-bottom: var(--s-8); }
+.group { display: flex; flex-direction: column; gap: var(--s-2); }
+.groupHead { display: flex; align-items: baseline; justify-content: space-between; }
+.groupTotal { color: var(--fg-2); }
+.list { display: flex; flex-direction: column; }
+.row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: var(--s-3); min-height: 64px; width: 100%; text-align: left; border-top: 1px solid var(--line); transition: background var(--d-micro) var(--ease-out); }
+.row:first-child { border-top: 0; }
+.row:active { background: var(--surface-2); }
+.dot { display: inline-block; border-radius: 50%; border: 2px solid var(--c); flex: none; }
+.filled { background: var(--c); }
+.text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.name { font-weight: 500; }
+.right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.chev { width: 16px; height: 16px; color: var(--fg-3); }

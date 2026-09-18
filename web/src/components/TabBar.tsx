@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router'
-import { ChartColumn, House, Landmark, Plus, ReceiptText } from 'lucide-react'
+import { ChartColumn, House, Landmark, Plus, ReceiptText, Settings } from 'lucide-react'
 import { useAdd } from '@/lib/add'
 import s from './TabBar.module.css'
 
@@ -33,6 +33,9 @@ export function TabBar() {
         <span className={s.addLabel}>New entry</span>
       </button>
       {RIGHT.map((t) => <Tab key={t.to} {...t} />)}
+      <NavLink to="/settings" className={({ isActive }) => `${s.tab} ${s.railOnly} ${isActive ? s.on : ''}`}>
+        <Settings className={s.icon} strokeWidth={1.75} absoluteStrokeWidth /><span className={s.label}>Settings</span>
+      </NavLink>
     </nav>
   )
 }

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Settings as SettingsIcon } from 'lucide-react'
 import { useBootstrap, useLookups, useTransactions } from '@/lib/data'
 import { useAdd } from '@/lib/add'
 import { formatCents, pct } from '@/lib/money'
@@ -30,6 +30,7 @@ export function Home() {
 
   return (
     <div className={s.screen}>
+      <button type="button" className={s.gear} onClick={() => nav('/settings')} aria-label="Settings"><SettingsIcon strokeWidth={1.75} absoluteStrokeWidth /></button>
       <Hero
         label="Net worth"
         cents={cur.net_worth}
@@ -57,7 +58,7 @@ export function Home() {
           <ChipRow className={s.quick}>
             {b.favorites.map((f) => {
               const c = lookups.cat.get(f.category_id)
-              const v = c ? categoryVisual(c.name, c.type) : undefined
+              const v = c ? categoryVisual(c) : undefined
               return (
                 <Chip key={f.id} onClick={() => open({ favorite: f })} leading={v && <Mark Icon={v.Icon} color={v.color} size="sm" />}>
                   {f.label}{f.amount ? <span className={`tnum ${s.quickAmt}`}> {formatCents(f.amount)}</span> : null}
@@ -78,13 +79,13 @@ export function Home() {
           </button>
           <ul className={s.bars}>
             {spending.slice(0, 6).map((c) => {
-              const v = categoryVisual(c.name, c.type); const amt = cur.by_category[String(c.id)] ?? 0
+              const v = categoryVisual(c); const amt = cur.by_category[String(c.id)] ?? 0
               return (
                 <li key={c.id}>
                   <button type="button" className={s.bar} onClick={() => nav(`/activity?type=Spending&category=${c.id}`)}>
                     <Mark Icon={v.Icon} color={v.color} size="sm" />
                     <span className={s.barText}><span className={s.barName}>{c.name}</span>
-                      <span className={s.track}><i style={{ transform: `scaleX(${pct(amt, cur.spent)})`, background: v.color }} /></span></span>
+                      <span className={s.track} style={{ '--c': v.color } as React.CSSProperties}><i style={{ transform: `scaleX(${pct(amt, cur.spent)})`, background: v.color }} /></span></span>
                     <Amount cents={amt} size="small" />
                   </button>
                 </li>

@@ -5,6 +5,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MotionConfig } from 'motion/react'
 import App from './App'
 import { ToastProvider } from './components/Toast'
+import { applyTheme, getTheme } from './lib/theme'
+
+applyTheme(getTheme())
 import './styles/tokens.css'
 import './styles/global.css'
 
