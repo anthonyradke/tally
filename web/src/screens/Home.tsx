@@ -1,106 +1,59 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronRight, Settings as SettingsIcon } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Reorder } from 'motion/react'
+import { GripVertical, Settings as SettingsIcon, SlidersHorizontal } from 'lucide-react'
+import { api } from '@/api/client'
 import { useBootstrap, useLookups, useTransactions } from '@/lib/data'
 import { useAdd } from '@/lib/add'
-import { formatCents, pct } from '@/lib/money'
-import { monthLabel } from '@/lib/dates'
-import { categoryVisual } from '@/icons/categories'
-import { Hero } from '@/components/Hero'
-import { Amount } from '@/components/Amount'
-import { Chip, ChipRow } from '@/components/Chip'
-import { Mark } from '@/components/Mark'
-import { TxnList } from '@/components/TxnList'
+import { Sheet } from '@/components/Sheet'
+import { DEFAULT_LAYOUT, parseLayout, WIDGETS, type Layout, type WidgetId } from './HomeWidgets'
 import s from './Home.module.css'
+
+const LS = 'money.home_layout'
 
 export function Home() {
   const boot = useBootstrap()
   const lookups = useLookups(boot.data)
   const upcoming = useTransactions({ start: boot.data?.today, limit: 20 }, !!boot.data)
-  const { open } = useAdd()
+  const add = useAdd()
   const nav = useNavigate()
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  // Layout: server setting wins; localStorage makes the first paint match before bootstrap lands.
+  const [layout, setLayout] = useState<Layout>(() => parseLayout(localStorage.getItem(LS) ?? undefined))
+  useEffect(() => { if (boot.data?.settings.home_layout) setLayout(parseLayout(boot.data.settings.home_layout)) }, [boot.data?.settings.home_layout])
+  const persist = useMutation({ mutationFn: (l: Layout) => api.putSettings({ home_layout: l }), onSuccess: () => qc.invalidateQueries({ queryKey: ['bootstrap'] }) })
+  const update = (l: Layout) => { setLayout(l); localStorage.setItem(LS, JSON.stringify(l)); persist.mutate(l) }
+
   const b = boot.data
   if (!b) return <div className={s.screen} />
-
   const cur = b.months[b.months.length - 1]
   const prev = b.months[b.months.length - 2]
-  const delta = prev ? cur.net_worth - prev.net_worth : 0
-  const spending = b.categories.filter((c) => c.type === 'Spending' && (cur.by_category[String(c.id)] ?? 0) > 0)
-    .sort((a, c) => (cur.by_category[String(c.id)] ?? 0) - (cur.by_category[String(a.id)] ?? 0))
-  const future = (upcoming.data?.items ?? []).filter((t) => t.date > b.today)
+  const ctx = { b, lookups, cur, prev, nav, add, upcoming: (upcoming.data?.items ?? []).filter((t) => t.date > b.today) }
 
   return (
     <div className={s.screen}>
-      <button type="button" className={s.gear} onClick={() => nav('/settings')} aria-label="Settings"><SettingsIcon strokeWidth={1.75} absoluteStrokeWidth /></button>
-      <Hero
-        label="Net worth"
-        cents={cur.net_worth}
-        trailing={prev && (
-          <span className={`${s.delta} ${delta >= 0 ? 'pos' : 'neg'}`}>
-            {formatCents(delta, { sign: 'always', cents: false })} <span className={s.deltaLabel}>this month</span>
-          </span>
-        )}
-      />
+      <div className={s.tools}>
+        <button type="button" className={s.gear} onClick={() => setEditing(true)} aria-label="Edit Home"><SlidersHorizontal strokeWidth={1.75} absoluteStrokeWidth /></button>
+        <button type="button" className={`${s.gear} ${s.gearPhone}`} onClick={() => nav('/settings')} aria-label="Settings"><SettingsIcon strokeWidth={1.75} absoluteStrokeWidth /></button>
+      </div>
+      {layout.order.filter((id) => !layout.hidden.includes(id)).map((id) => <div key={id}>{WIDGETS[id].render(ctx)}</div>)}
 
-      <section className={s.stats}>
-        <button type="button" className={s.stat} onClick={() => nav('/insights')}>
-          <span className="caps">Left over · {monthLabel(cur.month)}</span>
-          <Amount cents={cur.left_over} size="title" tone={cur.left_over >= 0 ? 'pos' : 'neg'} roll />
-        </button>
-        <button type="button" className={s.stat} onClick={() => nav('/activity?type=Spending')}>
-          <span className="caps">Spent · {monthLabel(cur.month)}</span>
-          <Amount cents={cur.spent} size="title" roll />
-        </button>
-      </section>
-
-      {b.favorites.length > 0 && (
-        <section className={s.section}>
-          <h2 className="caps">Quick add</h2>
-          <ChipRow className={s.quick}>
-            {b.favorites.map((f) => {
-              const c = lookups.cat.get(f.category_id)
-              const v = c ? categoryVisual(c) : undefined
-              return (
-                <Chip key={f.id} onClick={() => open({ favorite: f })} leading={v && <Mark Icon={v.Icon} color={v.color} size="sm" />}>
-                  {f.label}{f.amount ? <span className={`tnum ${s.quickAmt}`}> {formatCents(f.amount)}</span> : null}
-                </Chip>
-              )
-            })}
-          </ChipRow>
-        </section>
-      )}
-
-      <Hero compact label="Emergency fund" cents={b.ef.progress} progress={pct(b.ef.progress, b.ef.goal)}
-        sub={<>of <span className="tnum">{formatCents(b.ef.goal, { cents: false })}</span> · {Math.round(pct(b.ef.progress, b.ef.goal) * 100)}%</>} />
-
-      {spending.length > 0 && (
-        <section className={s.section}>
-          <button type="button" className={s.sectionHead} onClick={() => nav('/insights')}>
-            <h2 className="caps">Spending · {monthLabel(cur.month)}</h2><ChevronRight className={s.chev} strokeWidth={2} absoluteStrokeWidth />
-          </button>
-          <ul className={s.bars}>
-            {spending.slice(0, 6).map((c) => {
-              const v = categoryVisual(c); const amt = cur.by_category[String(c.id)] ?? 0
-              return (
-                <li key={c.id}>
-                  <button type="button" className={s.bar} onClick={() => nav(`/activity?type=Spending&category=${c.id}`)}>
-                    <Mark Icon={v.Icon} color={v.color} size="sm" />
-                    <span className={s.barText}><span className={s.barName}>{c.name}</span>
-                      <span className={s.track} style={{ '--c': v.color } as React.CSSProperties}><i style={{ transform: `scaleX(${pct(amt, cur.spent)})`, background: v.color }} /></span></span>
-                    <Amount cents={amt} size="small" />
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </section>
-      )}
-
-      {future.length > 0 && (
-        <section className={s.section}>
-          <h2 className="caps">Upcoming</h2>
-          <TxnList items={future} boot={b} lookups={lookups} dayTotals={false} onSelect={(t) => open({ edit: t })} />
-        </section>
-      )}
+      <Sheet open={editing} onClose={() => setEditing(false)} title="Edit Home" action={<button type="button" className={s.done} onClick={() => setEditing(false)}>Done</button>}>
+        <p className={`secondary ${s.editHint}`}>Drag to reorder. Switch off what you don't want to see.</p>
+        <Reorder.Group axis="y" values={layout.order} onReorder={(order) => update({ ...layout, order: order as WidgetId[] })} className={s.reorder} as="div">
+          {layout.order.map((id) => (
+            <Reorder.Item key={id} value={id} as="div" className={s.dragRow}>
+              <GripVertical className={s.grip} strokeWidth={2} absoluteStrokeWidth />
+              <span className={s.dragText}><span>{WIDGETS[id].label}</span><span className="secondary">{WIDGETS[id].hint}</span></span>
+              <input type="checkbox" className={s.switch} checked={!layout.hidden.includes(id)} aria-label={`Show ${WIDGETS[id].label}`}
+                onChange={(e) => update({ ...layout, hidden: e.target.checked ? layout.hidden.filter((x) => x !== id) : [...layout.hidden, id] })} />
+            </Reorder.Item>
+          ))}
+        </Reorder.Group>
+        <button type="button" className={s.resetBtn} onClick={() => update(DEFAULT_LAYOUT)}>Reset to default</button>
+      </Sheet>
     </div>
   )
 }
