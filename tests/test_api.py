@@ -97,7 +97,10 @@ def test_budgets_and_receipts(client):
     assert r.status_code == 200
     name = r.json()["receipt"]
     assert client.get(f"/api/receipts/{name}").status_code == 200
-    assert client.get("/api/receipts/../../etc/passwd").status_code in (404, 422)
+    # Traversal: an encoded name stays inside the receipts route and must be rejected; a normalized one is
+    # answered by the SPA fallback (index.html), never by a file outside data/receipts.
+    assert client.get("/api/receipts/%2e%2e%2f%2e%2e%2fetc%2fpasswd").status_code == 404
+    assert b"root:" not in client.get("/api/receipts/../../etc/passwd").content
     assert client.post(f"/api/transactions/{t['id']}/receipt", files={"file": ("r.txt", b"x", "text/plain")}).status_code == 422
     client.delete(f"/api/transactions/{t['id']}")
     assert client.get(f"/api/receipts/{name}").status_code == 404

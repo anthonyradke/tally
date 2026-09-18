@@ -109,7 +109,7 @@ export function AccountDetail() {
         <button type="button" className={s.sectionHead} onClick={() => nav(`/activity?account=${aid}`)}>
           <h2 className="caps">Activity</h2><span className={`secondary ${s.more}`}>All entries <ChevronRight strokeWidth={2} absoluteStrokeWidth /></span>
         </button>
-        {txns.data && (txns.data.items.length ? <TxnList items={txns.data.items} boot={b} lookups={lk} onSelect={(t) => open({ edit: t })} /> : <p className="secondary">No entries touch this account yet.</p>)}
+        {txns.data && (txns.data.items.length ? <TxnList items={txns.data.items} boot={b} lookups={lk} onSelect={(t) => open({ edit: t })} swipe /> : <p className="secondary">No entries touch this account yet.</p>)}
       </section>
     </div>
   )

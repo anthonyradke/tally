@@ -68,7 +68,6 @@ function Index() {
       <FieldGroup title="Data">
         <FieldRow label="Export" value={<span className={s.links}><a href="/export/log.csv">log.csv</a><a href="/export/months.csv">months.csv</a></span>} />
         <FieldRow label="Backups" value={<span className="secondary">Nightly on x1 · 30 kept · mirrored to iCloud</span>} />
-        <FieldRow label="Legacy app" value={<a href="/" className="secondary">Open the old interface</a>} />
       </FieldGroup>
     </>
   )

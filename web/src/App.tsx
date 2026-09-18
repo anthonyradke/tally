@@ -3,6 +3,7 @@ import { Route, Routes, useLocation } from 'react-router'
 import { motion } from 'motion/react'
 import { AddContext, type AddApi } from './lib/add'
 import { TabBar } from './components/TabBar'
+import { Palette } from './components/Palette'
 import { Home } from './screens/Home'
 import { Activity } from './screens/Activity'
 import { AddSheet, type Seed } from './screens/AddSheet'
@@ -41,6 +42,7 @@ export default function App() {
         <TabBar />
       </div>
       <AddSheet open={add.open} seed={add.seed} onClose={close} />
+      <Palette />
     </AddContext.Provider>
   )
 }

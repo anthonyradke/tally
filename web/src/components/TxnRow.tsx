@@ -8,6 +8,7 @@ import { merchantMark } from '@/icons/merchants'
 import { bankColor } from '@/icons/banks'
 import { rowAmount } from '@/lib/txn'
 import { isFuture } from '@/lib/dates'
+import { useRecentIds } from '@/lib/recent'
 import s from './TxnRow.module.css'
 
 interface Props {
@@ -39,18 +40,23 @@ export function TxnRow({ t, cat, from, to, today, onClick, onLongPress, selected
   const future = isFuture(t.date, today)
   const timer = useRef<number | null>(null)
   const fired = useRef(false)
+  const origin = useRef<{ x: number; y: number } | null>(null)
+  const recent = useRecentIds()
 
-  const down = () => {
+  const down = (e: React.PointerEvent) => {
     if (!onLongPress) return
     fired.current = false
+    origin.current = { x: e.clientX, y: e.clientY }
     timer.current = window.setTimeout(() => { fired.current = true; onLongPress() }, 450)
   }
   const cancel = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null } }
+  // Moving more than a few px is a scroll or a swipe, not a press.
+  const move = (e: React.PointerEvent) => { if (origin.current && Math.hypot(e.clientX - origin.current.x, e.clientY - origin.current.y) > 8) cancel() }
   const click = () => { if (fired.current) { fired.current = false; return } onClick?.() }
 
   return (
-    <button type="button" className={`${s.row} ${future ? s.future : ''} ${selected ? s.selected : ''}`} onClick={click}
-      onPointerDown={down} onPointerUp={cancel} onPointerLeave={cancel} onPointerCancel={cancel}
+    <button type="button" className={`${s.row} ${future ? s.future : ''} ${selected ? s.selected : ''} ${recent.has(t.id) ? s.flash : ''}`} onClick={click}
+      onPointerDown={down} onPointerMove={move} onPointerUp={cancel} onPointerLeave={cancel} onPointerCancel={cancel}
       onContextMenu={(e) => { if (onLongPress) { e.preventDefault(); onLongPress() } }}
       aria-pressed={selected === undefined ? undefined : selected}>
       {selected !== undefined ? (
