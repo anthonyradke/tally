@@ -20,3 +20,9 @@
 .right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .muted { color: var(--fg-2); }
 .flag { font-size: 10px; }
+.selected { background: var(--surface-2); margin: 0 calc(-1 * var(--s-2)); padding-inline: var(--s-2); width: calc(100% + 2 * var(--s-2)); }
+.check { width: 40px; height: 40px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-2); display: inline-flex; align-items: center; justify-content: center; flex: none; color: var(--on-ink); transition: background var(--d-micro) var(--ease-out); }
+.checkOn { background: var(--ink); box-shadow: none; }
+.check svg { width: 18px; height: 18px; }
+.splitTag { font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-3); margin-left: 6px; vertical-align: 1px; }
+.tags { color: var(--fg-3); }
