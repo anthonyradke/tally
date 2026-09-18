@@ -26,3 +26,5 @@
 .check svg { width: 18px; height: 18px; }
 .splitTag { font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-3); margin-left: 6px; vertical-align: 1px; }
 .tags { color: var(--fg-3); }
+.flash { animation: flash 1.6s var(--ease-out) both; }
+@keyframes flash { 0%, 25% { background: color-mix(in oklch, var(--pos) 18%, transparent); } 100% { background: transparent; } }

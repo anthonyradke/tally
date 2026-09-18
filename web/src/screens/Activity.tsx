@@ -124,7 +124,7 @@ export function Activity() {
           <p className="secondary">{filtered ? 'Try a merchant, a category, an account, a #tag, or an amount like 53.67.' : 'Entries you add will show up here, newest first.'}</p>
         </div>
       ) : (
-        <TxnList items={txns.data.items} boot={b} lookups={lookups} onSelect={(t) => open({ edit: t })}
+        <TxnList items={txns.data.items} boot={b} lookups={lookups} onSelect={(t) => open({ edit: t })} swipe
           selection={selection ?? undefined} onToggle={toggle} onLongPress={(id) => setSelection((sel) => new Set([...(sel ?? []), id]))} />
       )}
 

@@ -3,8 +3,8 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath } from 'node:url'
 
-// Served by FastAPI from app/static/dist at /next/ while the old templates stay live at /.
-// Flip `base` to '/' when the new app replaces them (the PWA manifest and SW scope follow `base`).
+// Served by FastAPI from app/static/dist at / (the Jinja pages were retired 2026-09-18).
+// The PWA manifest and service-worker scope follow `base`.
 export default defineConfig({
   plugins: [
     react(),
@@ -25,9 +25,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // App shell for client routes; never intercept the API, exports, receipts or the legacy pages.
-        navigateFallback: '/next/index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/export\//, /^\/static\//, /^\/(?!next)/],
+        // App shell for client routes; never intercept the API or the CSV exports.
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//, /^\/export\//],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/receipts/'),
@@ -43,7 +43,7 @@ export default defineConfig({
       },
     }),
   ],
-  base: '/next/',
+  base: '/',
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   build: { outDir: '../app/static/dist', emptyOutDir: true, chunkSizeWarningLimit: 700 },
   server: { proxy: { '/api': 'http://127.0.0.1:8000' } },

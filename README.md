@@ -1,16 +1,16 @@
 # Money
 
 Personal ledger that replaced `money.xlsx`. Same From/To model and balance rules, one SQLite file, now with a
-React PWA on top. Runs on x1 as `money.service`; open **https://x1.tailea62fa.ts.net:8443/next/** on the tailnet
+React PWA on top. Runs on x1 as `money.service`; open **https://x1.tailea62fa.ts.net:8443/** on the tailnet
 (iPhone: Share → Add to Home Screen — it installs as a standalone app with its own icon and works offline for
-reading). The legacy Jinja pages are still at `/` until the new app takes over that path.
+reading).
 
 ## Layout
     app/engine.py      pure balance engine (no DB)          app/importer.py   xlsx import + cent-exact verification
     app/db.py          schema, cents as integers            app/migrate.py    additive columns/tables for the rebuild
     app/service.py     per-request state                    app/recurring.py  templates → future-dated rows
-    app/main.py        legacy routes + serves the SPA       app/api*.py       JSON API (core, ops, admin, files)
-    app/templates      legacy HTMX + Jinja pages            web/              Vite + React + TypeScript frontend
+    app/main.py        routers, CSV exports, SPA handler    app/api*.py       JSON API (core, ops, admin, files)
+    web/               Vite + React + TypeScript frontend   web/scripts       icons.mjs (PWA icons)
     tests/             engine + API tests                   scripts/          backup-x1.sh (x1), pull-backup-mac.sh (Mac)
     DESIGN.md          the locked design spec ("Paper Ledger") — read before UI work
 

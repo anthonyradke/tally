@@ -8,6 +8,7 @@ import { SHAPES, HINT } from '@/lib/shapes'
 import { todayISO, addDays, dayLabel } from '@/lib/dates'
 import { formatCents, parseDollars } from '@/lib/money'
 import { shrinkImage } from '@/lib/image'
+import { markRecent } from '@/lib/recent'
 import { categoryVisual } from '@/icons/categories'
 import { bankColor } from '@/icons/banks'
 import { Sheet } from '@/components/Sheet'
@@ -20,7 +21,7 @@ import { Mark } from '@/components/Mark'
 import { useToast } from '@/components/Toast'
 import s from './AddSheet.module.css'
 
-export interface Seed { favorite?: Favorite; edit?: Txn }
+export interface Seed { favorite?: Favorite; edit?: Txn; duplicate?: Txn }
 interface Props { open: boolean; seed: Seed; onClose: () => void }
 
 const toDigits = (cents: number) => (cents === 0 ? '' : String(Math.abs(cents)))
@@ -55,23 +56,23 @@ export function AddSheet({ open, seed, onClose }: Props) {
   // Reset from the seed each time the sheet opens.
   useEffect(() => {
     if (!open || !boot.data) return
-    const e = seed.edit, f = seed.favorite
+    const e = seed.edit, f = seed.favorite, src = seed.edit ?? seed.duplicate  // duplicate prefills like edit but saves as new, dated today
     // Default to the spending category used most in the last 300 entries, else the first spending category.
     const counts = new Map<number, number>()
     for (const t of recent.data?.items ?? []) counts.set(t.category_id, (counts.get(t.category_id) ?? 0) + 1)
     const spendingIds = new Set(boot.data.categories.filter((c) => c.type === 'Spending').map((c) => c.id))
     const top = [...counts.entries()].filter(([id]) => spendingIds.has(id)).sort((a, b) => b[1] - a[1])[0]?.[0]
     const defaultCat = top ?? boot.data.categories.find((c) => c.type === 'Spending')?.id ?? boot.data.categories[0]?.id ?? null
-    setDigits(e ? toDigits(e.amount) : f?.amount ? toDigits(f.amount) : '')
-    setNeg(!!e && e.amount < 0)
-    setCat(e?.category_id ?? f?.category_id ?? defaultCat)
-    setFrom(e?.from_id ?? f?.from_account_id ?? null)
-    setTo(e?.to_id ?? f?.to_account_id ?? null)
-    setWhat(e?.what ?? (f ? f.label.split(' · ')[0] : ''))
+    setDigits(src ? toDigits(src.amount) : f?.amount ? toDigits(f.amount) : '')
+    setNeg(!!src && src.amount < 0)
+    setCat(src?.category_id ?? f?.category_id ?? defaultCat)
+    setFrom(src?.from_id ?? f?.from_account_id ?? null)
+    setTo(src?.to_id ?? f?.to_account_id ?? null)
+    setWhat(src?.what ?? (f ? f.label.split(' · ')[0] : ''))
     setDate(e?.date ?? todayISO())
-    setNote(e?.note ?? ''); setTags(e?.tags.join(' ') ?? ''); setFile(null)
-    setMore(!!(e?.note || e?.tags.length || e?.receipt))
-    setPad(!(e || f?.amount)); setErrors([]); setSplits(null); touchedCat.current = !!(e || f)
+    setNote(src?.note ?? ''); setTags(src?.tags.join(' ') ?? ''); setFile(null)
+    setMore(!!(src?.note || src?.tags.length || e?.receipt))
+    setPad(!(src || f?.amount)); setErrors([]); setSplits(null); touchedCat.current = !!(src || f)
   }, [open, seed, boot.data])
 
   const category = cat ? lk.cat.get(cat) : undefined
@@ -126,7 +127,7 @@ export function AddSheet({ open, seed, onClose }: Props) {
       return saved
     },
     onSuccess: (saved) => {
-      refresh(); onClose()
+      refresh(); onClose(); markRecent(savedIds.current)
       const label = `${formatCents(Math.abs(saved.amount))} · ${saved.what || category?.name}${savedIds.current.length > 1 ? ` · ${savedIds.current.length} lines` : ''}`
       const before = seed.edit
       const ids = [...savedIds.current]
