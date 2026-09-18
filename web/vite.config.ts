@@ -12,9 +12,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon-180.png'],
       manifest: {
-        name: 'Money',
-        short_name: 'Money',
-        description: 'Personal ledger',
+        name: 'Tally',
+        short_name: 'Tally',
+        description: 'Personal ledger. Every dollar, tallied.',
         display: 'standalone',
         background_color: '#000000',
         theme_color: '#000000',

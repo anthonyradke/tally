@@ -9,12 +9,15 @@
 }
 .brand { display: none; }
 .tab {
+  position: relative; isolation: isolate;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   height: var(--tabbar-h); color: var(--fg-3); font-size: 10px; font-weight: 600; letter-spacing: .02em;
   transition: color var(--d-micro) var(--ease-out);
 }
 .tab.on { color: var(--fg); }
+.iconWrap { display: inline-flex; }
 .icon { width: 24px; height: 24px; }
+.highlight { position: absolute; z-index: -1; top: 6px; left: 50%; width: 52px; height: 32px; margin-left: -26px; border-radius: 16px; background: var(--surface-2); }
 .add {
   width: 52px; height: 52px; border-radius: 50%; margin: 0 var(--s-2) 12px;
   background: var(--ink); color: var(--on-ink);
@@ -37,7 +40,8 @@
   .brand { display: block; font-family: var(--font-display); font-weight: 700; font-size: var(--t-21); letter-spacing: var(--track-title); padding: 0 var(--s-3) var(--s-6); }
   .tab { flex-direction: row; justify-content: flex-start; gap: var(--s-3); height: 40px; padding: 0 var(--s-3); border-radius: var(--r-control); font-size: var(--t-16); font-weight: 500; letter-spacing: 0; color: var(--fg-2); }
   .tab:hover { background: var(--surface-2); color: var(--fg); }
-  .tab.on { background: var(--surface-2); color: var(--fg); }
+  .tab.on { color: var(--fg); }
+  .highlight { inset: 0; width: auto; height: auto; margin: 0; border-radius: var(--r-control); }
   .icon { width: 20px; height: 20px; }
   .add { order: 10; margin: var(--s-6) 0 0; width: auto; height: 44px; border-radius: var(--r-control); gap: var(--s-2); }
   .plus { width: 18px; height: 18px; }

@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router'
+import { motion } from 'motion/react'
 import { ChartColumn, House, Landmark, Plus, ReceiptText, Settings } from 'lucide-react'
 import { useAdd } from '@/lib/add'
 import s from './TabBar.module.css'
@@ -11,12 +12,20 @@ const RIGHT = [
   { to: '/accounts', label: 'Accounts', Icon: Landmark, end: false },
   { to: '/insights', label: 'Insights', Icon: ChartColumn, end: false },
 ]
+const SPRING = { type: 'spring' as const, stiffness: 520, damping: 44, mass: 0.8 }
 
-function Tab({ to, label, Icon, end }: (typeof LEFT)[number]) {
+function Tab({ to, label, Icon, end, className }: (typeof LEFT)[number] & { className?: string }) {
   return (
-    <NavLink to={to} end={end} className={({ isActive }) => `${s.tab} ${isActive ? s.on : ''}`}>
-      <Icon className={s.icon} strokeWidth={1.75} absoluteStrokeWidth />
-      <span className={s.label}>{label}</span>
+    <NavLink to={to} end={end} className={({ isActive }) => `${s.tab} ${className ?? ''} ${isActive ? s.on : ''}`}>
+      {({ isActive }) => (
+        <>
+          {isActive && <motion.span layoutId="tab-highlight" className={s.highlight} transition={SPRING} aria-hidden />}
+          <motion.span className={s.iconWrap} whileTap={{ scale: 0.86 }} transition={SPRING}>
+            <Icon className={s.icon} strokeWidth={1.75} absoluteStrokeWidth />
+          </motion.span>
+          <span className={s.label}>{label}</span>
+        </>
+      )}
     </NavLink>
   )
 }
@@ -26,16 +35,14 @@ export function TabBar() {
   const { open } = useAdd()
   return (
     <nav className={s.bar} aria-label="Primary">
-      <div className={s.brand} aria-hidden>Money</div>
+      <div className={s.brand} aria-hidden>Tally</div>
       {LEFT.map((t) => <Tab key={t.to} {...t} />)}
-      <button type="button" className={s.add} onClick={() => open()} aria-label="Add entry">
+      <motion.button type="button" className={s.add} onClick={() => open()} aria-label="Add entry" whileTap={{ scale: 0.92 }} transition={SPRING}>
         <Plus className={s.plus} strokeWidth={2.25} absoluteStrokeWidth />
         <span className={s.addLabel}>New entry</span>
-      </button>
+      </motion.button>
       {RIGHT.map((t) => <Tab key={t.to} {...t} />)}
-      <NavLink to="/settings" className={({ isActive }) => `${s.tab} ${s.railOnly} ${isActive ? s.on : ''}`}>
-        <Settings className={s.icon} strokeWidth={1.75} absoluteStrokeWidth /><span className={s.label}>Settings</span>
-      </NavLink>
+      <Tab to="/settings" label="Settings" Icon={Settings} end={false} className={s.railOnly} />
     </nav>
   )
 }

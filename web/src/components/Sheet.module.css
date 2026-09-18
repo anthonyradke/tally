@@ -21,7 +21,7 @@
 .title { font-size: var(--t-16); font-weight: 600; text-align: center; }
 .close { justify-self: start; color: var(--fg-2); font-size: var(--t-16); min-height: 44px; padding: 0 var(--s-1); }
 .action { justify-self: end; display: flex; align-items: center; min-height: 44px; }
-.body { overflow: auto; overscroll-behavior: contain; padding: 0 var(--s-4) var(--s-4); flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; }
+.body { --gutter: var(--s-4); overflow: auto; overscroll-behavior: contain; padding: 0 var(--s-4) var(--s-4); flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; }
 .footer { flex: none; }
 
 @media (min-width: 720px) {
