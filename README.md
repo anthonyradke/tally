@@ -8,11 +8,21 @@ Needs uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
     uv run python -m app.importer ~/path/to/money.xlsx      # empty DB only; prints a cent-exact verification
     uv run uvicorn app.main:app --port 8000                  # open http://localhost:8000
 
-## Run on the server
-    docker compose up -d --build
-Copy `data/money.db` into `./data/` first if you imported on the Mac. Reach it over Tailscale;
-never publish port 8000 beyond the tailnet. On the iPhone open the Tailscale URL in Safari,
-Share, Add to Home Screen.
+## Deployed on x1 (no Docker)
+Runs as `money.service` (systemd, User=tony) from `~/projects/money` with its own uv-managed `.venv`,
+bound to `127.0.0.1:8000` and published tailnet-only by Tailscale Serve at
+**https://x1.tailea62fa.ts.net:8443**. On the iPhone: open that URL in Safari, Share, Add to Home Screen.
+
+    ssh x1 "systemctl status money"; ssh x1 "journalctl -u money -f"
+    # deploy a change from the Mac:
+    rsync -a --exclude .venv --exclude data --exclude __pycache__ ~/code/money/ x1:projects/money/ && ssh x1 "cd projects/money && ~/.local/bin/uv sync --frozen && sudo systemctl restart money"
+
+Database lives only on x1 at `~/projects/money/data/money.db` (never rsync `data/` over it).
+
+## Backup
+x1 cron (03:15) runs `scripts/backup-x1.sh`: SQLite snapshot to `x1:~/backups/money/`, 30 kept.
+The Mac launchd job `com.ar.money-backup` (09:00 daily) runs `scripts/pull-backup-mac.sh`, which rsyncs that
+folder into iCloud `Financial/money-backups/`. Export anytime: `/export/log.csv`, `/export/months.csv`.
 
 ## Tests
     uv run pytest -q                              # engine
@@ -26,10 +36,6 @@ phone, full table on desktop) · Month end (typed balances, HYSA interest, recon
 Money in: To only. Spending: From only. Transfer: both. Saving and Loan: From, To optional.
 Loans: add as kind `loan` with balance on the log start date and annual rate; log payments with To = the loan.
 HSA: typed balance, but usable as From so card swipes land in Health.
-
-## Backup
-`scripts/backup.sh` snapshots the DB and a log CSV to the iCloud Financial folder (or `DEST=`).
-Export anytime: `/export/log.csv`, `/export/months.csv`.
 
 ## Layout
     app/engine.py    pure balance engine (no DB)      app/importer.py  xlsx import + verify
