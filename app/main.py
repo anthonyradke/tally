@@ -1,16 +1,36 @@
-"""FastAPI routes. HTMX + Jinja, no build step. Run: uvicorn app.main:app --host 0.0.0.0"""
+"""FastAPI routes. HTMX + Jinja templates at / (legacy) and the React app (web/, built to app/static/dist)
+at /next/ with its JSON API in api.py. Run: uvicorn app.main:app --host 0.0.0.0"""
 from __future__ import annotations
-import csv, io
+import csv, io, os
 from datetime import date
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from . import db, service
+from .api import router as api_router
+from .api_ops import router as ops_router
+from .api_admin import router as admin_router
+from .api_files import router as files_router
 from .engine import dollars, month_of, cents, Txn
 
 app = FastAPI(title="Money")
+for r in (api_router, ops_router, admin_router, files_router):
+    app.include_router(r)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+DIST = "app/static/dist"
+
+
+@app.get("/next{path:path}", include_in_schema=False)
+def spa(path: str):
+    """Serve the built React app; unknown paths fall back to index.html so client-side routes deep-link."""
+    file = os.path.normpath(os.path.join(DIST, path.lstrip("/")))
+    if path and file.startswith(DIST) and os.path.isfile(file):
+        return FileResponse(file)
+    if not os.path.isfile(f"{DIST}/index.html"):
+        return HTMLResponse("<p>Frontend not built. Run <code>cd web && npm run build</code>.</p>", 503)
+    return FileResponse(f"{DIST}/index.html", headers={"Cache-Control": "no-cache"})
 tpl = Jinja2Templates(directory="app/templates")
 tpl.env.add_extension("jinja2.ext.do")
 tpl.env.filters["money"] = dollars

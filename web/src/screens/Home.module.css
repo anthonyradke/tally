@@ -1,0 +1,19 @@
+.screen { display: flex; flex-direction: column; gap: var(--s-8); padding-bottom: var(--s-8); }
+.delta { font-size: var(--t-13); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.deltaLabel { color: var(--fg-3); font-weight: 500; }
+
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-6); margin-top: calc(-1 * var(--s-3)); }
+.stat { display: flex; flex-direction: column; gap: var(--s-2); text-align: left; padding: var(--s-1) 0; }
+
+.section { display: flex; flex-direction: column; gap: var(--s-3); }
+.sectionHead { display: flex; align-items: center; justify-content: space-between; text-align: left; }
+.chev { width: 16px; height: 16px; color: var(--fg-3); }
+.quick { margin-top: calc(-1 * var(--s-1)); }
+.quickAmt { color: var(--fg-3); font-weight: 500; }
+
+.bars { list-style: none; padding: 0; display: flex; flex-direction: column; }
+.bar { display: grid; grid-template-columns: auto 1fr auto; gap: var(--s-3); align-items: center; width: 100%; min-height: 48px; text-align: left; }
+.barText { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.barName { font-size: var(--t-13); font-weight: 500; }
+.track { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+.track i { display: block; height: 100%; border-radius: 2px; transform-origin: left center; transition: transform var(--d-large) var(--ease-out); }
