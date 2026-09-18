@@ -1,0 +1,74 @@
+/* Design tokens — the single source of raw values. Semantics live in DESIGN.md ("Paper Ledger").
+   light-dark() picks per color-scheme; Settings can force a scheme with data-theme on <html>. */
+:root {
+  color-scheme: light dark;
+
+  /* type */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --t-11: 11px; --t-13: 13px; --t-16: 16px; --t-21: 21px; --t-28: 28px; --t-36: 36px; --t-48: 48px; --t-64: 64px;
+  --track-caps: .08em; --track-title: -.02em; --track-display: -.03em;
+
+  /* space */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px; --s-16: 64px;
+
+  /* shape */
+  --r-control: 10px; --r-key: 12px; --r-mark: 10px; --r-sheet: 20px; --r-pill: 999px;
+  --rule: 2px;
+
+  /* motion */
+  --d-micro: 120ms; --d-std: 240ms; --d-large: 400ms;
+  --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-in: cubic-bezier(.4, 0, 1, 1); --ease-inout: cubic-bezier(.65, 0, .35, 1);
+
+  /* layout */
+  --tabbar-h: 56px; --rail-w: 224px; --content-max: 640px; --gutter: 16px;
+
+  /* neutrals — warm paper by day, true black by night */
+  --bg:        light-dark(oklch(97.5% .004 80), oklch(0% 0 0));
+  --surface:   light-dark(oklch(100% 0 0),      oklch(18% .005 80));
+  --surface-2: light-dark(oklch(95.5% .005 80), oklch(23% .006 80));
+  --surface-3: light-dark(oklch(92.5% .006 80), oklch(28% .006 80));
+  --line:      light-dark(oklch(90% .005 80),   oklch(27% .006 80));
+  --line-2:    light-dark(oklch(84% .006 80),   oklch(34% .006 80));
+  --fg:        light-dark(oklch(17% .01 80),    oklch(96% .003 80));
+  --fg-2:      light-dark(oklch(46% .01 80),    oklch(70% .006 80));
+  --fg-3:      light-dark(oklch(62% .01 80),    oklch(55% .006 80));
+  --ink: var(--fg); --on-ink: var(--bg);
+  --scrim:     light-dark(oklch(20% .01 80 / .35), oklch(0% 0 0 / .6));
+  --shadow-sheet: light-dark(0 -8px 40px oklch(30% .02 80 / .18), 0 -8px 40px oklch(0% 0 0 / .6));
+  --blur-bar:  light-dark(oklch(97.5% .004 80 / .82), oklch(8% .004 80 / .78));
+
+  /* semantic */
+  --pos:    light-dark(oklch(52% .15 150), oklch(76% .16 150));
+  --pos-bg: light-dark(oklch(94% .05 150), oklch(26% .06 150));
+  --neg:    light-dark(oklch(54% .19 27),  oklch(72% .17 27));
+  --neg-bg: light-dark(oklch(94% .04 27),  oklch(26% .05 27));
+  --warn:   light-dark(oklch(66% .15 75),  oklch(78% .15 80));
+  --focus:  light-dark(oklch(52% .15 250), oklch(72% .13 250));
+
+  /* identity ring — one lightness/chroma so category tints read as a family */
+  --tint-l: light-dark(55%, 72%); --tint-c: light-dark(.13, .14);
+  --tint-red:    oklch(var(--tint-l) var(--tint-c) 25);
+  --tint-orange: oklch(var(--tint-l) var(--tint-c) 55);
+  --tint-amber:  oklch(var(--tint-l) var(--tint-c) 85);
+  --tint-green:  oklch(var(--tint-l) var(--tint-c) 150);
+  --tint-teal:   oklch(var(--tint-l) var(--tint-c) 195);
+  --tint-blue:   oklch(var(--tint-l) var(--tint-c) 255);
+  --tint-violet: oklch(var(--tint-l) var(--tint-c) 300);
+  --tint-pink:   oklch(var(--tint-l) var(--tint-c) 345);
+  --tint-gray:   oklch(var(--tint-l) .015 80);
+  --mark-bg-a: light-dark(14%, 22%);
+
+  /* banks — the user's existing identities */
+  --bank-chase: light-dark(oklch(55% .17 255), oklch(70% .15 255));
+  --bank-amex:  light-dark(oklch(55% .15 155), oklch(72% .15 155));
+  --bank-sofi:  light-dark(oklch(62% .17 50),  oklch(74% .16 50));
+  --bank-hsa:   light-dark(oklch(55% .03 80),  oklch(70% .03 80));
+  --bank-roth:  light-dark(oklch(55% .12 300), oklch(70% .12 300));
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }
+
+@media (min-width: 900px) {
+  :root { --gutter: 32px; }
+}

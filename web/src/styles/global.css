@@ -1,0 +1,34 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+html { -webkit-text-size-adjust: 100%; height: 100%; background: var(--bg); }
+body {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+  font: var(--t-16) / 1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 0;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#root { min-height: 100dvh; }
+
+/* text roles */
+.caps { font-size: var(--t-11); font-weight: 600; letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--fg-2); }
+.secondary { font-size: var(--t-13); line-height: 1.4; color: var(--fg-2); }
+.tnum { font-variant-numeric: tabular-nums; }
+.pos { color: var(--pos); } .neg { color: var(--neg); }
+
+/* controls reset */
+button, input, textarea, select { font: inherit; color: inherit; }
+button { appearance: none; background: none; border: 0; padding: 0; cursor: pointer; touch-action: manipulation; }
+a { color: inherit; text-decoration: none; }
+input[type=number] { -moz-appearance: textfield; }
+input::-webkit-inner-spin-button, input::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+
+.no-scrollbar { scrollbar-width: none; } .no-scrollbar::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

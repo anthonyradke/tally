@@ -4,6 +4,7 @@ import os, sqlite3
 from datetime import date
 from typing import Optional
 from .engine import Account, Category, Txn
+from .migrate import migrate
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts(
@@ -52,6 +53,7 @@ def connect(path: Optional[str] = None) -> sqlite3.Connection:
     con.execute("PRAGMA foreign_keys=ON")
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript(SCHEMA)
+    migrate(con)  # additive 2026-09 columns/tables; idempotent
     for k, v in DEFAULT_SETTINGS.items():
         con.execute("INSERT OR IGNORE INTO settings VALUES(?,?)", (k, v))
     con.commit()

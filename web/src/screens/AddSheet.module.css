@@ -1,0 +1,27 @@
+.body { display: flex; flex-direction: column; gap: var(--s-4); padding-bottom: var(--s-4); }
+.quick { margin-top: var(--s-1); }
+.amount { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); padding: var(--s-4) 0 var(--s-2); width: 100%; }
+.negLabel { color: var(--pos); }
+.errors { background: var(--neg-bg); color: var(--neg); border-radius: var(--r-control); padding: var(--s-3) var(--s-4); font-size: var(--t-13); font-weight: 500; }
+.errors div + div { margin-top: 4px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dateRow { border-top: 1px solid var(--line); }
+.dateChips { display: flex; gap: var(--s-2); overflow-x: auto; padding: 0 var(--s-4) var(--s-3); }
+.moreBtn { align-self: flex-start; color: var(--fg-2); font-size: var(--t-13); font-weight: 600; min-height: 40px; padding: 0 var(--s-3); }
+.delete { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); min-height: 48px; border-radius: var(--r-control); color: var(--neg); font-weight: 600; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.delete svg { width: 18px; height: 18px; }
+.save { font-weight: 700; color: var(--fg); min-height: 44px; padding: 0 var(--s-1); }
+.saveOff { color: var(--fg-3); }
+
+.receiptRow { display: flex; align-items: center; gap: var(--s-3); min-height: 50px; padding: var(--s-2) var(--s-4); border-top: 1px solid var(--line); }
+.receiptLabel { min-width: 84px; font-weight: 500; }
+.thumbWrap { display: inline-flex; margin-left: auto; }
+.thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; }
+.fileName { margin-left: auto; display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--t-13); color: var(--fg-2); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clearFile { width: 22px; height: 22px; border-radius: 50%; background: var(--line-2); color: var(--surface); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.clearFile svg { width: 12px; height: 12px; }
+.camera { margin-left: auto; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-2); color: var(--fg); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.fileName + .camera, .thumbWrap + .camera { margin-left: 0; }
+.camera svg { width: 20px; height: 20px; }
+
+.padDock { flex: none; padding: var(--s-2) var(--s-4) var(--s-3); border-top: 1px solid var(--line); background: var(--surface); }

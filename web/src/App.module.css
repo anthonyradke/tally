@@ -1,0 +1,12 @@
+.shell { min-height: 100dvh; padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--s-4)); }
+.main {
+  max-width: var(--content-max); margin: 0 auto;
+  padding: max(var(--s-2), env(safe-area-inset-top)) var(--gutter) 0;
+}
+.stubTitle { font-family: var(--font-display); font-size: var(--t-28); font-weight: 700; letter-spacing: var(--track-title); padding: var(--s-4) 0 var(--s-2); }
+.save { font-weight: 600; color: var(--fg); min-height: 44px; padding: 0 var(--s-1); }
+
+@media (min-width: 900px) {
+  .shell { padding-bottom: var(--s-12); padding-left: var(--rail-w); }
+  .main { margin: 0; padding-top: var(--s-6); max-width: calc(var(--content-max) + 2 * var(--gutter)); }
+}

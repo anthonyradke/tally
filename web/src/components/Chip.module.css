@@ -1,0 +1,15 @@
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  border: 1px solid var(--line-2); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--fg);
+  font-size: var(--t-13); font-weight: 500; white-space: nowrap;
+  transition: background var(--d-micro) var(--ease-out), border-color var(--d-micro) var(--ease-out), transform var(--d-micro) var(--ease-out);
+}
+.md { min-height: 36px; padding: 0 12px; }
+.sm { min-height: 30px; padding: 0 10px; font-size: var(--t-11); font-weight: 600; letter-spacing: .02em; }
+@media (hover: hover) { .chip:hover { border-color: var(--fg-3); } }
+.chip:active { transform: scale(.97); }
+.on { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.lead, .trail { display: inline-flex; align-items: center; }
+.trail { color: var(--fg-3); margin-right: -2px; } .on .trail { color: inherit; opacity: .7; }
+.row { display: flex; gap: var(--s-2); overflow-x: auto; padding: 2px; margin: 0 -2px; }
