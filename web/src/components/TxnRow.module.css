@@ -3,6 +3,7 @@
   width: 100%; min-height: 64px; padding: var(--s-2) 0; text-align: left;
   transition: background var(--d-micro) var(--ease-out);
   border-radius: var(--r-control);
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
 @media (hover: hover) { .row:hover { background: var(--surface-2); margin: 0 calc(-1 * var(--s-2)); padding-inline: var(--s-2); width: calc(100% + 2 * var(--s-2)); } }
 .row:active { background: var(--surface-3); }
