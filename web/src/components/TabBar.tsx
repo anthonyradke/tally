@@ -34,7 +34,7 @@ function Tab({ to, label, Icon, end, className }: (typeof LEFT)[number] & { clas
 export function TabBar() {
   const { open } = useAdd()
   return (
-    <nav className={s.bar} aria-label="Primary">
+    <nav className={`glass ${s.bar}`} aria-label="Primary">
       <div className={s.brand} aria-hidden>Tally</div>
       {LEFT.map((t) => <Tab key={t.to} {...t} />)}
       <motion.button type="button" className={s.add} onClick={() => open()} aria-label="Add entry" whileTap={{ scale: 0.92 }} transition={SPRING}>

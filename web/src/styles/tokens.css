@@ -1,4 +1,4 @@
-/* Design tokens — the single source of raw values. Semantics live in DESIGN.md ("Paper Ledger").
+/* Design tokens — the single source of raw values. Semantics live in DESIGN.md ("Tally Glass").
    light-dark() picks per color-scheme; Settings can force a scheme with data-theme on <html>. */
 :root {
   color-scheme: light dark;
@@ -6,14 +6,14 @@
   /* type */
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
-  --t-11: 11px; --t-13: 13px; --t-16: 16px; --t-21: 21px; --t-28: 28px; --t-36: 36px; --t-48: 48px; --t-64: 64px;
+  --t-11: 11px; --t-13: 13px; --t-15: 15px; --t-16: 16px; --t-17: 17px; --t-20: 20px; --t-21: 21px; --t-28: 28px; --t-34: 34px; --t-36: 36px; --t-48: 48px; --t-64: 64px;
   --track-caps: .08em; --track-title: -.02em; --track-display: -.03em;
 
   /* space */
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px; --s-16: 64px;
 
   /* shape */
-  --r-control: 10px; --r-key: 12px; --r-mark: 10px; --r-sheet: 20px; --r-pill: 999px;
+  --r-control: 12px; --r-key: 12px; --r-mark: 10px; --r-panel: 22px; --r-sheet: 28px; --r-pill: 999px;
   --rule: 2px;
 
   /* motion */
@@ -21,22 +21,30 @@
   --ease-out: cubic-bezier(.2, .8, .2, 1); --ease-in: cubic-bezier(.4, 0, 1, 1); --ease-inout: cubic-bezier(.65, 0, .35, 1);
 
   /* layout */
-  --tabbar-h: 56px; --rail-w: 224px; --content-max: 640px; --gutter: 16px;
+  --tabbar-h: 64px; --tabbar-bottom: max(12px, calc(env(safe-area-inset-bottom, 0px) - 10px)); --rail-w: 224px; --content-max: 640px; --gutter: 16px;
 
-  /* neutrals — warm paper by day, true black by night */
-  --bg:        light-dark(oklch(97.5% .004 80), oklch(0% 0 0));
-  --surface:   light-dark(oklch(100% 0 0),      oklch(18% .005 80));
-  --surface-2: light-dark(oklch(95.5% .005 80), oklch(23% .006 80));
-  --surface-3: light-dark(oklch(92.5% .006 80), oklch(28% .006 80));
-  --line:      light-dark(oklch(90% .005 80),   oklch(27% .006 80));
-  --line-2:    light-dark(oklch(84% .006 80),   oklch(34% .006 80));
-  --fg:        light-dark(oklch(17% .01 80),    oklch(96% .003 80));
-  --fg-2:      light-dark(oklch(46% .01 80),    oklch(70% .006 80));
-  --fg-3:      light-dark(oklch(62% .01 80),    oklch(55% .006 80));
-  --ink: var(--fg); --on-ink: var(--bg);
-  --scrim:     light-dark(oklch(20% .01 80 / .35), oklch(0% 0 0 / .6));
-  --shadow-sheet: light-dark(0 -8px 40px oklch(30% .02 80 / .18), 0 -8px 40px oklch(0% 0 0 / .6));
-  --blur-bar:  light-dark(oklch(97.5% .004 80 / .82), oklch(8% .004 80 / .78));
+  /* neutrals — Apple system grouped palette */
+  --bg:        light-dark(#F2F2F7, #000000);
+  --surface:   light-dark(#FFFFFF, #1C1C1E);
+  --surface-2: light-dark(#E9E9EE, #2C2C2E);
+  --surface-3: light-dark(#DEDEE3, #3A3A3C);
+  --line:      light-dark(#E2E2E7, #2C2C2E);
+  --line-2:    light-dark(#C7C7CC, #48484A);
+  --fg:        light-dark(#000000, #FFFFFF);
+  --fg-2:      light-dark(#6C6C70, #98989F);
+  --fg-3:      light-dark(#AEAEB2, #636366);
+  --ink: var(--fg); --on-ink: light-dark(#FFFFFF, #000000);
+  --scrim:     light-dark(rgb(0 0 0 / .22), rgb(0 0 0 / .55));
+  --shadow-sheet: light-dark(0 -10px 40px rgb(0 0 0 / .12), 0 -10px 40px rgb(0 0 0 / .6));
+  --blur-bar:  light-dark(rgb(242 242 247 / .8), rgb(0 0 0 / .72));
+
+  /* glass — floating chrome only (DESIGN.md) */
+  --glass-bg:     light-dark(rgb(255 255 255 / .66), rgb(36 36 38 / .62));
+  --glass-strong: light-dark(rgb(242 242 247 / .88), rgb(28 28 30 / .86));
+  --glass-edge:   light-dark(rgb(0 0 0 / .08), rgb(255 255 255 / .1));
+  --glass-shine:  light-dark(rgb(255 255 255 / .9), rgb(255 255 255 / .14));
+  --glass-blur:   blur(24px) saturate(190%);
+  --shadow-float: light-dark(0 8px 32px rgb(0 0 0 / .12), 0 8px 32px rgb(0 0 0 / .55));
 
   /* semantic */
   --pos:    light-dark(oklch(52% .15 150), oklch(76% .16 150));

@@ -1,8 +1,7 @@
-.hero { padding: var(--s-6) 0 0; }
-.compact { padding-top: var(--s-4); }
-.row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); margin-top: var(--s-2); }
-.trailing { padding-bottom: .35em; flex: none; }
+.hero { padding: var(--s-4) 0 0; }
+.compact { padding-top: 0; }
+.label { font-size: var(--t-15); font-weight: 500; color: var(--fg-2); }
+.row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); margin-top: var(--s-1); }
+.trailing { padding-bottom: .3em; flex: none; }
 .sub { margin-top: var(--s-2); }
-.rule { height: var(--rule); background: var(--ink); margin-top: var(--s-4); border-radius: 1px; }
-.track { background: var(--line-2); position: relative; overflow: hidden; }
-.fill { position: absolute; inset: 0; background: var(--ink); transform-origin: left center; display: block; }
+.meter { margin-top: var(--s-3); }

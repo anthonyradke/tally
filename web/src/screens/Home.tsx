@@ -6,6 +6,7 @@ import { GripVertical, Settings as SettingsIcon, SlidersHorizontal } from 'lucid
 import { api } from '@/api/client'
 import { useBootstrap, useLookups, useTransactions } from '@/lib/data'
 import { useAdd } from '@/lib/add'
+import { usePace } from '@/lib/pace'
 import { Sheet } from '@/components/Sheet'
 import { DEFAULT_LAYOUT, parseLayout, WIDGETS, type Layout, type WidgetId } from './HomeWidgets'
 import s from './Home.module.css'
@@ -15,7 +16,9 @@ const LS = 'money.home_layout'
 export function Home() {
   const boot = useBootstrap()
   const lookups = useLookups(boot.data)
-  const upcoming = useTransactions({ start: boot.data?.today, limit: 20 }, !!boot.data)
+  const upcoming = useTransactions({ start: boot.data?.today, dir: 'asc', limit: 20 }, !!boot.data)
+  const recent = useTransactions({ end: boot.data?.today, limit: 5 }, !!boot.data)
+  const pace = usePace(boot.data)
   const add = useAdd()
   const nav = useNavigate()
   const qc = useQueryClient()
@@ -30,7 +33,7 @@ export function Home() {
   if (!b) return <div className={s.screen} />
   const cur = b.months[b.months.length - 1]
   const prev = b.months[b.months.length - 2]
-  const ctx = { b, lookups, cur, prev, nav, add, upcoming: (upcoming.data?.items ?? []).filter((t) => t.date > b.today) }
+  const ctx = { b, lookups, cur, prev, nav, add, upcoming: (upcoming.data?.items ?? []).filter((t) => t.date > b.today).slice(0, 5), recent: recent.data?.items ?? [], pace }
 
   return (
     <div className={s.screen}>
@@ -38,7 +41,7 @@ export function Home() {
         <button type="button" className={s.gear} onClick={() => setEditing(true)} aria-label="Edit Home"><SlidersHorizontal strokeWidth={1.75} absoluteStrokeWidth /></button>
         <button type="button" className={`${s.gear} ${s.gearPhone}`} onClick={() => nav('/settings')} aria-label="Settings"><SettingsIcon strokeWidth={1.75} absoluteStrokeWidth /></button>
       </div>
-      {layout.order.filter((id) => !layout.hidden.includes(id)).map((id) => <div key={id}>{WIDGETS[id].render(ctx)}</div>)}
+      {layout.order.filter((id) => !layout.hidden.includes(id)).map((id) => [id, WIDGETS[id].render(ctx)] as const).filter(([, node]) => node).map(([id, node]) => <div key={id}>{node}</div>)}
 
       <Sheet open={editing} onClose={() => setEditing(false)} title="Edit Home" action={<button type="button" className={s.done} onClick={() => setEditing(false)}>Done</button>}>
         <p className={`secondary ${s.editHint}`}>Drag to reorder. Switch off what you don't want to see.</p>
