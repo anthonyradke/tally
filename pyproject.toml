@@ -1,5 +1,5 @@
 [project]
-name = "money"
+name = "tally"
 version = "0.1.0"
 description = "Personal finance tracker: From/To ledger with derived balances"
 requires-python = ">=3.13"
