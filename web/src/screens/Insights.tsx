@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { motion } from 'motion/react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check } from 'lucide-react'
@@ -6,11 +7,15 @@ import { api } from '@/api/client'
 import { useBootstrap } from '@/lib/data'
 import { useToast } from '@/components/Toast'
 import { formatCents, parseDollars, pct } from '@/lib/money'
-import { monthLabel } from '@/lib/dates'
+import { fromISO, monthLabel } from '@/lib/dates'
 import { categoryVisual } from '@/icons/categories'
 import { Hero } from '@/components/Hero'
 import { Amount } from '@/components/Amount'
-import { Chip, ChipRow } from '@/components/Chip'
+import { Panel, Section } from '@/components/Panel'
+import { ProgressBar } from '@/components/ProgressBar'
+import { Ring } from '@/components/Ring'
+import { Segmented } from '@/components/Segmented'
+import { Delta } from './HomeMonth'
 import { Mark } from '@/components/Mark'
 import { LineChart } from '@/components/LineChart'
 import s from './Insights.module.css'
@@ -19,6 +24,7 @@ export function Insights() {
   const boot = useBootstrap()
   const nav = useNavigate()
   const [params, setParams] = useSearchParams()
+  const [table, setTable] = useState(false)
   const b = boot.data
   if (!b) return null
   const months = b.months
@@ -34,76 +40,110 @@ export function Insights() {
   const budgetTotal = budgeted.reduce((n, r) => n + (r.budget ?? 0), 0)
   const budgetSpent = budgeted.reduce((n, r) => n + r.amt, 0)
 
+  const flow = [
+    { key: 'spent', label: 'Spent', cents: m.spent, color: 'var(--fg)' },
+    { key: 'saved', label: 'Saved', cents: m.saving, color: 'var(--tint-teal)' },
+    { key: 'loan', label: 'Loan payments', cents: m.loan, color: 'var(--tint-amber)' },
+    { key: 'left', label: 'Left over', cents: Math.max(0, m.left_over), color: 'var(--pos)' },
+  ]
+  const flowTotal = Math.max(m.money_in, flow.reduce((n, f) => n + Math.max(0, f.cents), 0), 1)
+  const monthName = fromISO(m.month).toLocaleDateString('en-US', { month: 'long' })
+  const spentRows = rows.filter((r) => r.amt > 0)
+
   return (
     <div className={s.screen}>
-      <h1 className={s.title}>Insights</h1>
-      <ChipRow>
-        {[...months].reverse().map((r) => <Chip key={r.month} selected={r.month === m.month} onClick={() => setParams({ m: r.month.slice(0, 7) }, { replace: true })}>{monthLabel(r.month)}</Chip>)}
-      </ChipRow>
+      <h1 className={`large-title ${s.title}`}>Insights</h1>
+      <Segmented id="month" label="Month" value={ym} onChange={(v) => setParams({ m: v }, { replace: true })}
+        options={months.map((r) => ({ value: r.month.slice(0, 7), label: shortMonth(r.month, months) }))} />
 
-      <Hero label={`Left over · ${monthLabel(m.month)}`} cents={m.left_over} tone={m.left_over >= 0 ? 'pos' : 'neg'}
-        trailing={prev ? <span className={`secondary tnum ${s.trail}`}>{formatCents(prev.left_over, { cents: false })} <span className={s.trailLabel}>in {monthLabel(prev.month)}</span></span> : undefined}
-        sub={<>Money in <span className="tnum">{formatCents(m.money_in)}</span> − spent <span className="tnum">{formatCents(m.spent)}</span>{m.saving ? <> − saved <span className="tnum">{formatCents(m.saving)}</span></> : null}{m.loan ? <> − loans <span className="tnum">{formatCents(m.loan)}</span></> : null}</>} />
+      <Hero label={`Left over in ${monthName}`} cents={m.left_over} tone={m.left_over >= 0 ? 'pos' : 'neg'}
+        sub={prev && <span className={s.deltaRow}><Delta cents={m.left_over - prev.left_over} /><span>vs {fromISO(prev.month).toLocaleDateString('en-US', { month: 'long' })}</span></span>} />
 
-      <section className={s.stats}>
-        {[['Money in', m.money_in, 'pos'], ['Spent', m.spent, 'neutral'], ['Saved', m.saving, 'neutral'], ['Loan payments', m.loan, 'neutral']].map(([l, v, t]) => (
-          <div key={l as string} className={s.stat}><span className="caps">{l}</span><Amount cents={v as number} size="title" tone={t as 'pos' | 'neutral'} roll /></div>
-        ))}
-      </section>
+      <Section title="Where the money went">
+        <Panel>
+          <div className="label">Money in</div>
+          <Amount cents={m.money_in} size="title" tone="pos" roll />
+          <div className={s.flow} role="img" aria-label={flow.map((f) => `${f.label} ${formatCents(f.cents)}`).join(', ')}>
+            {flow.filter((f) => f.cents > 0).map((f) => <motion.i key={f.key} layout style={{ flexGrow: f.cents / flowTotal, background: f.color }} transition={{ type: 'spring', stiffness: 300, damping: 34 }} />)}
+          </div>
+          <div className={s.tiles}>
+            {flow.map((f) => (
+              <div key={f.key} className={s.tile}>
+                <span className="label"><i className={s.key} style={{ background: f.color }} />{f.label}</span>
+                <Amount cents={f.key === 'left' ? m.left_over : f.cents} size="body" tone={f.key === 'left' ? (m.left_over >= 0 ? 'pos' : 'neg') : 'neutral'} roll />
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </Section>
 
-      <section className={s.section}>
-        <header className={s.head}>
-          <h2 className="caps">Spending · {monthLabel(m.month)}</h2>
-          {budgeted.length > 0 && <span className={`secondary tnum ${budgetSpent > budgetTotal ? 'neg' : ''}`}>{formatCents(budgetSpent, { cents: false })} of {formatCents(budgetTotal, { cents: false })} budgeted</span>}
-        </header>
-        <ul className={s.bars}>
-          {rows.map(({ c, amt, budget }) => {
-            const v = categoryVisual(c)
-            const share = budget ? pct(amt, budget) : pct(amt, m.spent)
-            const over = budget !== null && amt > budget
-            return (
-              <li key={c.id}>
-                <button type="button" className={s.bar} onClick={() => nav(`/activity?type=Spending&category=${c.id}&start=${m.month}&end=${endOf(m.month)}`)}>
-                  <Mark Icon={v.Icon} color={v.color} size="sm" />
-                  <span className={s.barText}>
-                    <span className={s.barHead}><span className={s.barName}>{c.name}</span>{budget !== null && <span className={`secondary tnum ${over ? 'neg' : ''}`}>{over ? 'over by ' + formatCents(amt - budget, { cents: false }) : formatCents(budget - amt, { cents: false }) + ' left'}</span>}</span>
-                    <span className={`${s.track} ${budget !== null ? s.budgetTrack : ''}`} style={{ '--c': v.color } as React.CSSProperties}><i style={{ transform: `scaleX(${share})`, background: over ? 'var(--neg)' : v.color }} /></span>
-                  </span>
-                  <span className={s.barAmt}><Amount cents={amt} size="small" />{budget !== null && <span className={`secondary tnum ${s.of}`}>of {formatCents(budget, { cents: false })}</span>}</span>
-                </button>
-              </li>
-            )
-          })}
-          {rows.length === 0 && <p className="secondary">Nothing spent this month yet.</p>}
-        </ul>
-        <button type="button" className={s.link} onClick={() => nav('/settings/categories')}>Set budgets in Settings</button>
-      </section>
+      <Section title="Spending" action="Set budgets" onAction={() => nav('/settings/categories')}>
+        <Panel>
+          {spentRows.length > 0 ? (
+            <div className={s.ringWrap}>
+              <Ring key={ym} label={`Spending by category in ${monthName}`} slices={spentRows.map(({ c, amt }) => ({ key: String(c.id), value: amt, color: categoryVisual(c).color }))}>
+                <Amount cents={m.spent} size="title" showCents={false} roll />
+                <span className="secondary">{spentRows.length} {spentRows.length === 1 ? 'category' : 'categories'}</span>
+              </Ring>
+              {budgeted.length > 0 && <p className={`secondary tnum ${budgetSpent > budgetTotal ? 'neg' : ''}`}>{formatCents(budgetSpent, { cents: false })} of {formatCents(budgetTotal, { cents: false })} budgeted</p>}
+            </div>
+          ) : <p className="secondary">Nothing spent this month yet.</p>}
+          <ul className={s.bars}>
+            {rows.map(({ c, amt, budget }) => {
+              const v = categoryVisual(c)
+              const over = budget !== null && amt > budget
+              return (
+                <li key={c.id}>
+                  <button type="button" className={s.bar} onClick={() => nav(`/activity?type=Spending&category=${c.id}&start=${m.month}&end=${endOf(m.month)}`)}>
+                    <Mark Icon={v.Icon} color={v.color} size="sm" />
+                    <span className={s.barText}>
+                      <span className={s.barHead}><span className={s.barName}>{c.name}</span><Amount cents={amt} size="small" /></span>
+                      {budget !== null
+                        ? <><ProgressBar value={pct(amt, budget)} color={over ? 'var(--neg)' : v.color} label={`${c.name} budget`} />
+                            <span className={`secondary tnum ${over ? 'neg' : ''}`}>{over ? `${formatCents(amt - budget, { cents: false })} over` : `${formatCents(budget - amt, { cents: false })} left of ${formatCents(budget, { cents: false })}`}</span></>
+                        : <span className="secondary tnum">{Math.round(pct(amt, m.spent) * 100)}% of spending</span>}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </Panel>
+      </Section>
 
-      <section className={s.section}>
-        <h2 className="caps">Net worth</h2>
-        <LineChart points={months.map((r) => ({ x: r.month, y: r.net_worth }))} xLabel={(x) => monthLabel(x)} ariaLabel="Net worth by month" />
-      </section>
+      <Section title="Net worth">
+        <Panel><LineChart points={months.map((r) => ({ x: r.month, y: r.net_worth }))} xLabel={(x) => monthLabel(x)} ariaLabel="Net worth by month" /></Panel>
+      </Section>
 
       <MonthEnd ym={ym} />
 
-      <section className={s.section}>
-        <h2 className="caps">Every month</h2>
-        <div className={s.tableWrap}>
-          <table className={`tnum ${s.table}`}>
-            <thead><tr><th>Month</th><th>Money in</th>{spending.map((c) => <th key={c.id}>{c.name}</th>)}<th>Spent</th><th>Loans</th><th>Saved</th><th>Left over</th>{b.accounts.map((a) => <th key={a.id}>{a.name}</th>)}<th>Net worth</th></tr></thead>
-            <tbody>{[...months].reverse().map((r) => (
-              <tr key={r.month} className={r.month === m.month ? s.on : ''}>
-                <th scope="row">{monthLabel(r.month)}</th><td className="pos">{formatCents(r.money_in)}</td>
-                {spending.map((c) => <td key={c.id} className={r.by_category[String(c.id)] ? '' : s.dim}>{formatCents(r.by_category[String(c.id)] ?? 0)}</td>)}
-                <td><b>{formatCents(r.spent)}</b></td><td>{formatCents(r.loan)}</td><td>{formatCents(r.saving)}</td><td className={r.left_over >= 0 ? 'pos' : 'neg'}><b>{formatCents(r.left_over)}</b></td>
-                {b.accounts.map((a) => <td key={a.id}>{formatCents(r.balances[String(a.id)] ?? 0)}</td>)}<td><b>{formatCents(r.net_worth)}</b></td>
-              </tr>))}</tbody>
-          </table>
-        </div>
-        <p className="secondary">Download <a className={s.a} href="/export/months.csv">months.csv</a> · <a className={s.a} href="/export/log.csv">log.csv</a></p>
-      </section>
+      <Section title="Every month" action={table ? 'Hide table' : 'Show table'} onAction={() => setTable(!table)}>
+        {table && (
+          <Panel flush>
+            <div className={s.tableWrap}>
+              <table className={`tnum ${s.table}`}>
+                <thead><tr><th>Month</th><th>Money in</th>{spending.map((c) => <th key={c.id}>{c.name}</th>)}<th>Spent</th><th>Loans</th><th>Saved</th><th>Left over</th>{b.accounts.map((a) => <th key={a.id}>{a.name}</th>)}<th>Net worth</th></tr></thead>
+                <tbody>{[...months].reverse().map((r) => (
+                  <tr key={r.month} className={r.month === m.month ? s.on : ''}>
+                    <th scope="row">{monthLabel(r.month)}</th><td className="pos">{formatCents(r.money_in)}</td>
+                    {spending.map((c) => <td key={c.id} className={r.by_category[String(c.id)] ? '' : s.dim}>{formatCents(r.by_category[String(c.id)] ?? 0)}</td>)}
+                    <td><b>{formatCents(r.spent)}</b></td><td>{formatCents(r.loan)}</td><td>{formatCents(r.saving)}</td><td className={r.left_over >= 0 ? 'pos' : 'neg'}><b>{formatCents(r.left_over)}</b></td>
+                    {b.accounts.map((a) => <td key={a.id}>{formatCents(r.balances[String(a.id)] ?? 0)}</td>)}<td><b>{formatCents(r.net_worth)}</b></td>
+                  </tr>))}</tbody>
+              </table>
+            </div>
+          </Panel>
+        )}
+        <p className={`secondary ${s.csv}`}>Download <a className={s.a} href="/export/months.csv">months.csv</a> or <a className={s.a} href="/export/log.csv">log.csv</a></p>
+      </Section>
     </div>
   )
+}
+
+/** "Sep", or "Sep 2025" when the months span more than one year. */
+const shortMonth = (iso: string, all: { month: string }[]) => {
+  const multi = all.length > 0 && all[0].month.slice(0, 4) !== all[all.length - 1].month.slice(0, 4)
+  return fromISO(iso).toLocaleDateString('en-US', multi ? { month: 'short', year: '2-digit' } : { month: 'short' })
 }
 
 const endOf = (month: string) => { const [y, mo] = month.split('-').map(Number); const d = new Date(y, mo, 0); return `${y}-${String(mo).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -135,8 +175,8 @@ function MonthEnd({ ym }: { ym: string }) {
     <div className={s.step}><span className={`${s.n} ${done ? s.done : ''}`}>{done ? <Check strokeWidth={2.5} absoluteStrokeWidth /> : n}</span><div className={s.stepBody}><h3 className={s.stepTitle}>{title}</h3>{children}</div></div>
   )
   return (
-    <section className={s.section}>
-      <h2 className="caps">Month end · {monthLabel(ym + '-01')}</h2>
+    <Section title={`Month end, ${fromISO(ym + '-01').toLocaleDateString('en-US', { month: 'long' })}`}>
+      <Panel>
       <Step n={1} done={me.typed_done} title="Investment balances">
         <form className={s.form} onSubmit={(e) => { e.preventDefault(); saveTyped.mutate() }}>
           {inv.map((a) => (
@@ -166,6 +206,7 @@ function MonthEnd({ ym }: { ym: string }) {
             </button>) })}
         </div>
       </Step>
-    </section>
+      </Panel>
+    </Section>
   )
 }

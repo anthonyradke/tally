@@ -25,7 +25,7 @@ export function Accounts() {
 
   return (
     <div className={s.screen}>
-      <Hero label="Net worth" cents={cur.net_worth}
+      <Hero label="Net worth" cents={cur.net_worth} tone="neutral"
         sub={<>Cash <span className="tnum">{fmt(cur.cash)}</span> + investments <span className="tnum">{fmt(cur.invested)}</span> − cards <span className="tnum">{fmt(cur.cards)}</span>{cur.loans ? <> − loans <span className="tnum">{fmt(cur.loans)}</span></> : null}</>} />
 
       {groups.map((g) => (
