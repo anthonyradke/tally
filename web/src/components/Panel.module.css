@@ -9,4 +9,5 @@
   --day-bg: transparent; --day-pos: static;
 }
 .flush { padding: var(--s-1) var(--s-4); }
-.press { cursor: pointer; }
+.press { cursor: pointer; transition: transform 140ms var(--ease-out); }
+.press:active { transform: scale(.98); }

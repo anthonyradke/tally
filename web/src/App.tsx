@@ -1,4 +1,6 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { api as client } from './api/client'
 import { Route, Routes, useLocation, useNavigationType } from 'react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { AddContext, type AddApi } from './lib/add'
@@ -21,16 +23,26 @@ const EASE = [0.2, 0.8, 0.2, 1] as const
 
 // Tab switches crossfade in place; going deeper (account, settings section) slides in from the right and
 // coming back slides out to it, like a navigation stack. The exiting page uses the same direction.
+// `transform` strings (not x/y) let Motion run these on the compositor, so they stay smooth while React mounts the page.
+const t3d = (x: number, y: number) => `translate3d(${x}px, ${y}px, 0)`
 const page = {
-  enter: (d: Dir) => ({ opacity: 0, x: d === 'push' ? 56 : d === 'pop' ? -32 : 0, y: d === 'tab' ? 10 : 0 }),
-  show: { opacity: 1, x: 0, y: 0, transition: { duration: 0.34, ease: EASE } },
-  exit: (d: Dir) => ({ opacity: 0, x: d === 'push' ? -32 : d === 'pop' ? 56 : 0, y: d === 'tab' ? -6 : 0, transition: { duration: 0.18, ease: EASE } }),
+  enter: (d: Dir) => ({ opacity: 0, transform: t3d(d === 'push' ? 56 : d === 'pop' ? -32 : 0, d === 'tab' ? 10 : 0) }),
+  show: { opacity: 1, transform: t3d(0, 0), transition: { duration: 0.34, ease: EASE } },
+  exit: (d: Dir) => ({ opacity: 0, transform: t3d(d === 'push' ? -32 : d === 'pop' ? 56 : 0, d === 'tab' ? -6 : 0), transition: { duration: 0.18, ease: EASE } }),
 }
 
 export default function App() {
   const location = useLocation()
   const navType = useNavigationType()
   const boot = useBootstrap()
+  const qc = useQueryClient()
+  // Warm the Add sheet's merchant memory while idle, so its first open doesn't parse 300 rows mid-animation.
+  const booted = !!boot.data
+  useEffect(() => {
+    if (!booted) return
+    const id = window.setTimeout(() => qc.prefetchQuery({ queryKey: ['transactions', { limit: 300 }], queryFn: () => client.transactions({ limit: 300 }), staleTime: 30_000 }), 1500)
+    return () => window.clearTimeout(id)
+  }, [booted, qc])
   const [add, setAdd] = useState<{ open: boolean; seed: Seed }>({ open: false, seed: {} })
   const api = useMemo<AddApi>(() => ({
     open: (seed) => setAdd({ open: true, seed: seed ?? {} }),

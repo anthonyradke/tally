@@ -1,5 +1,7 @@
 .list { display: flex; flex-direction: column; }
 .group { padding-bottom: var(--s-3); }
+/* Offscreen day groups skip layout and paint until scrolled near. */
+.lazy { content-visibility: auto; contain-intrinsic-size: auto 240px; }
 .day {
   position: var(--day-pos, sticky); top: env(safe-area-inset-top, 0px); z-index: 2;
   display: flex; align-items: baseline; justify-content: space-between;

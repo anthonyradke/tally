@@ -16,7 +16,8 @@
   transition: color var(--d-micro) var(--ease-out);
 }
 .tab.on { color: var(--fg); }
-.iconWrap { display: inline-flex; }
+.iconWrap { display: inline-flex; transition: transform 120ms var(--ease-out); }
+.tab:active .iconWrap { transform: scale(.86); }
 .icon { width: 23px; height: 23px; }
 .highlight { position: absolute; z-index: -1; inset: 0 2px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--fg) 8%, transparent); }
 .add {
@@ -24,7 +25,9 @@
   background: var(--ink); color: var(--on-ink);
   display: inline-flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 14px rgb(0 0 0 / .22), inset 0 1px 0 rgb(255 255 255 / .18);
+  transition: transform 120ms var(--ease-out);
 }
+.add:active { transform: scale(.9); }
 .plus { width: 24px; height: 24px; }
 .addLabel { display: none; }
 .railOnly { display: none; }
