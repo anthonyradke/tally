@@ -31,15 +31,16 @@ export function FieldRow({ label, value, placeholder = 'Choose', mark, onClick, 
   )
 }
 
-interface TextProps extends InputHTMLAttributes<HTMLInputElement> { label: string; suggestions?: string[]; onPick?: (v: string) => void }
+interface TextProps extends InputHTMLAttributes<HTMLInputElement> { label: string; suggestions?: string[]; onPick?: (v: string) => void; trailing?: ReactNode }
 
 /** Label + inline text input. */
-export function TextRow({ label, suggestions, onPick, className, ...rest }: TextProps) {
+export function TextRow({ label, suggestions, onPick, className, trailing, ...rest }: TextProps) {
   return (
     <div className={s.rowWrap}>
       <label className={s.row}>
         <span className={s.label}>{label}</span>
         <input className={`${s.input} ${className ?? ''}`} {...rest} />
+        {trailing}
       </label>
       {suggestions && suggestions.length > 0 && (
         <div className={`${s.suggest} no-scrollbar`}>

@@ -4,11 +4,11 @@ import type { Account, Category, Txn } from '@/api/client'
 import { Amount } from './Amount'
 import { Mark } from './Mark'
 import { categoryVisual } from '@/icons/categories'
-import { merchantMark } from '@/icons/merchants'
 import { bankColor } from '@/icons/banks'
 import { rowAmount } from '@/lib/txn'
 import { isFuture } from '@/lib/dates'
 import { useRecentIds } from '@/lib/recent'
+import { useMarkFor } from '@/lib/data'
 import s from './TxnRow.module.css'
 
 interface Props {
@@ -34,7 +34,7 @@ function AcctTag({ a }: { a: Account }) {
 }
 
 export function TxnRow({ t, cat, from, to, today, onClick, onLongPress, selected }: Props) {
-  const merchant = merchantMark(t.what)
+  const merchant = useMarkFor()(t.what)
   const vis = categoryVisual(cat)
   const amt = rowAmount(cat.type, t.amount)
   const future = isFuture(t.date, today)

@@ -11,7 +11,7 @@ from .engine import KINDS, TYPES, cents
 
 router = APIRouter(prefix="/api")
 FREQS = ("weekly", "biweekly", "monthly", "yearly")
-SETTING_KEYS = {"start_month", "ef_months", "roth_limit", "home_layout", "theme"}
+SETTING_KEYS = {"start_month", "ef_months", "roth_limit", "home_layout", "theme", "merchant_marks"}
 
 
 def _pct(v):
@@ -283,7 +283,7 @@ def delete_view(id: int):
 # ---------- settings ----------
 @router.put("/settings")
 async def put_settings(request: Request):
-    """Body: {key: value}. roth_limit arrives in dollars; home_layout may be an object (stored as JSON)."""
+    """Body: {key: value}. roth_limit arrives in dollars; home_layout and merchant_marks may be objects (stored as JSON)."""
     con = db.connect()
     for k, v in (await request.json()).items():
         if k not in SETTING_KEYS:
@@ -292,7 +292,7 @@ async def put_settings(request: Request):
             v = str(cents(v or 0))
         elif k == "ef_months":
             v = str(int(v))
-        elif k == "home_layout" and not isinstance(v, str):
+        elif k in ("home_layout", "merchant_marks") and not isinstance(v, str):
             v = json.dumps(v)
         db.set_setting(con, k, str(v))
     con.commit()
