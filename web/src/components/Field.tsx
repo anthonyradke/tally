@@ -19,7 +19,7 @@ export function FieldRow({ label, value, placeholder = 'Choose', mark, onClick, 
   const body = (
     <>
       <span className={s.label}>{label}</span>
-      <span className={`${s.value} ${value ? '' : s.placeholder}`}>{mark}{value ?? placeholder}</span>
+      <span className={`${s.value} ${value ? '' : s.placeholder}`}>{mark}<span className={s.valueText}>{value ?? placeholder}</span></span>
       {trailing ?? (onClick && <ChevronRight className={s.chev} strokeWidth={2} absoluteStrokeWidth />)}
     </>
   )
