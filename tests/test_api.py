@@ -1,4 +1,4 @@
-"""End-to-end checks for the JSON API against a throwaway database (MONEY_DB points at tmp_path)."""
+"""End-to-end checks for the JSON API against a throwaway database (TALLY_DB points at tmp_path)."""
 from datetime import date, timedelta
 import pytest
 from fastapi.testclient import TestClient
@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("MONEY_DB", str(tmp_path / "t.db"))
-    monkeypatch.setenv("MONEY_RECEIPTS", str(tmp_path / "receipts"))
+    monkeypatch.setenv("TALLY_DB", str(tmp_path / "t.db"))
+    monkeypatch.setenv("TALLY_RECEIPTS", str(tmp_path / "receipts"))
     from app.main import app
     return TestClient(app)
 

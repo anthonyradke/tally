@@ -45,7 +45,7 @@ DEFAULT_SETTINGS = {"start_month": "2026-08-01", "ef_months": "6", "roth_limit":
 
 
 def connect(path: Optional[str] = None) -> sqlite3.Connection:
-    path = path or os.environ.get("MONEY_DB", "data/money.db")
+    path = path or os.environ.get("TALLY_DB", "data/tally.db")
     if path != ":memory:":
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     con = sqlite3.connect(path, detect_types=0)

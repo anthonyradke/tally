@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, Response
 from . import db
 
 router = APIRouter(prefix="/api")
-RECEIPTS = Path(os.environ.get("MONEY_RECEIPTS", "data/receipts"))
+RECEIPTS = Path(os.environ.get("TALLY_RECEIPTS", "data/receipts"))
 EXT = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "application/pdf": "pdf"}
 SAFE = re.compile(r"^[\w-]+\.[a-z0-9]{2,5}$")
 MAX_BYTES = 12 * 1024 * 1024
