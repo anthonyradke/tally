@@ -13,13 +13,15 @@ interface Props {
   tone?: Tone
   /** Roll digits on change (the hero moment). Off for dense lists. */
   roll?: boolean
+  /** Also roll up from zero on mount. */
+  rollIn?: boolean
   className?: string
 }
 
 const DIGITS = '0123456789'
 
 /** Tabular figures; optional rolling-digit animation. Each digit is a 10-row column translated by transform. */
-export function Amount({ cents, size = 'body', showCents = true, sign = 'auto', tone = 'auto', roll = false, className }: Props) {
+export function Amount({ cents, size = 'body', showCents = true, sign = 'auto', tone = 'auto', roll = false, rollIn = false, className }: Props) {
   const reduce = useReducedMotion()
   const text = formatCents(cents, { cents: showCents, sign })
   const toneCls = tone === 'auto' ? (cents < 0 ? s.neg : '') : tone === 'pos' ? s.pos : tone === 'neg' ? s.neg : ''
@@ -36,9 +38,9 @@ export function Amount({ cents, size = 'body', showCents = true, sign = 'auto', 
           <span key={key} className={s.col} aria-hidden>
             <motion.span
               className={s.stack}
-              initial={false}
+              initial={rollIn ? { y: '0%' } : false}
               animate={{ y: `-${d * 10}%` }}
-              transition={{ type: 'spring', stiffness: 320, damping: 38, mass: 0.8 }}
+              transition={{ type: 'spring', stiffness: rollIn ? 140 : 320, damping: rollIn ? 22 : 38, mass: 0.8, delay: rollIn ? 0.05 * i : 0 }}
             >
               {[...DIGITS].map((n) => <span key={n} className={s.digit}>{n}</span>)}
             </motion.span>

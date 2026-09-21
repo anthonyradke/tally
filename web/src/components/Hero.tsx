@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Amount, type Tone } from './Amount'
 import { ProgressBar } from './ProgressBar'
 import s from './Hero.module.css'
@@ -17,13 +17,18 @@ interface Props {
   compact?: boolean
 }
 
+// Hero figures roll up from zero once per app launch (the first screen shown), then only on change.
+let launched = false
+
 /** One big live figure: sentence-case label, rolling digits, optional delta and meter. */
 export function Hero({ label, cents, tone = 'auto', showCents = true, trailing, sub, progress, compact }: Props) {
+  const rollIn = !launched
+  useEffect(() => { launched = true }, [])
   return (
     <header className={`${s.hero} ${compact ? s.compact : ''}`}>
       <div className={s.label}>{label}</div>
       <div className={s.row}>
-        <Amount cents={cents} size={compact ? 'title' : 'display'} tone={tone} showCents={showCents} roll />
+        <Amount cents={cents} size={compact ? 'title' : 'display'} tone={tone} showCents={showCents} roll rollIn={rollIn} />
         {trailing && <div className={s.trailing}>{trailing}</div>}
       </div>
       {sub && <div className={`secondary ${s.sub}`}>{sub}</div>}
