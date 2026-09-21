@@ -58,7 +58,7 @@ export default function App() {
       <div className={s.shell}>
         <div className={s.topFade} aria-hidden />
         <main className={s.main}>
-          {!boot.data ? <Skeleton /> : <AnimatePresence mode="popLayout" initial={false} custom={dir}>
+          {!boot.data ? <Skeleton /> : <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}><AnimatePresence mode="popLayout" initial={false} custom={dir}>
             <motion.div key={location.pathname} className={s.page} custom={dir} variants={page} initial="enter" animate="show" exit="exit">
               <Routes location={location}>
                 <Route path="/" element={<Home />} />
@@ -71,7 +71,7 @@ export default function App() {
                 <Route path="*" element={<Home />} />
               </Routes>
             </motion.div>
-          </AnimatePresence>}
+          </AnimatePresence></motion.div>}
         </main>
         <TabBar />
       </div>
