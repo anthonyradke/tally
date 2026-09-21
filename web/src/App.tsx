@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from 'motion/react'
 import { AddContext, type AddApi } from './lib/add'
 import { TabBar } from './components/TabBar'
 import { Palette } from './components/Palette'
+import { Skeleton } from './components/Skeleton'
+import { useBootstrap } from './lib/data'
 import { Home } from './screens/Home'
 import { Activity } from './screens/Activity'
 import { AddSheet, type Seed } from './screens/AddSheet'
@@ -28,6 +30,7 @@ const page = {
 export default function App() {
   const location = useLocation()
   const navType = useNavigationType()
+  const boot = useBootstrap()
   const [add, setAdd] = useState<{ open: boolean; seed: Seed }>({ open: false, seed: {} })
   const api = useMemo<AddApi>(() => ({
     open: (seed) => setAdd({ open: true, seed: seed ?? {} }),
@@ -55,7 +58,7 @@ export default function App() {
       <div className={s.shell}>
         <div className={s.topFade} aria-hidden />
         <main className={s.main}>
-          <AnimatePresence mode="popLayout" initial={false} custom={dir}>
+          {!boot.data ? <Skeleton /> : <AnimatePresence mode="popLayout" initial={false} custom={dir}>
             <motion.div key={location.pathname} className={s.page} custom={dir} variants={page} initial="enter" animate="show" exit="exit">
               <Routes location={location}>
                 <Route path="/" element={<Home />} />
@@ -68,7 +71,7 @@ export default function App() {
                 <Route path="*" element={<Home />} />
               </Routes>
             </motion.div>
-          </AnimatePresence>
+          </AnimatePresence>}
         </main>
         <TabBar />
       </div>

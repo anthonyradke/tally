@@ -1,0 +1,10 @@
+.root { display: flex; flex-direction: column; gap: var(--s-4); min-height: 100dvh; padding-top: var(--s-8); }
+.root i { display: block; border-radius: var(--r-control); background: var(--surface-2); animation: pulse 1.4s var(--ease-out) infinite alternate; }
+.label { width: 96px; height: 12px; }
+.hero { width: 220px; height: 52px; }
+.rule { height: 2px; border-radius: 0 !important; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4); margin: var(--s-4) 0 var(--s-6); }
+.pair i { height: 56px; }
+.row { height: 44px; }
+@keyframes pulse { from { opacity: 1; } to { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .root i { animation: none; } }
