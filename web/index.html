@@ -12,8 +12,41 @@
 <title>Tally</title>
 <link rel="icon" href="/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="/icon-180.png">
+<script>/* Apply the Settings theme before first paint so the splash matches it (same key as lib/theme.ts). */
+try { var t = localStorage.getItem('money.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t } catch (e) {}</script>
+<style>
+/* Launch splash: painted from the HTML alone, before any JS loads. The four strokes draw, the fifth crosses
+   them, then the wordmark slides in. lib/splash.ts removes it once the data is ready. Final states are the
+   base styles, so reduced motion just shows the finished mark. */
+#splash { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: #F2F2F7; color: #000;
+  transition: opacity 320ms cubic-bezier(.2,.8,.2,1); }
+@media (prefers-color-scheme: dark) { #splash { background: #000; color: #fff; } }
+[data-theme=light] #splash { background: #F2F2F7; color: #000; }
+[data-theme=dark] #splash { background: #000; color: #fff; }
+#splash .row { display: flex; align-items: center; gap: .3em; font: 700 44px/1 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  letter-spacing: -.03em; animation: sp-center 420ms 720ms cubic-bezier(.2,.8,.2,1) backwards; transition: transform 320ms cubic-bezier(.2,.8,.2,1), opacity 240ms; }
+#splash svg { height: 1.1em; overflow: visible; animation: sp-tick 260ms 660ms cubic-bezier(.2,.8,.2,1) backwards; }
+#splash path { fill: none; stroke: currentColor; stroke-width: 78; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0;
+  animation: sp-draw 240ms cubic-bezier(.3,.7,.3,1) backwards; }
+#splash path:nth-child(2) { animation-delay: 70ms; }
+#splash path:nth-child(3) { animation-delay: 140ms; }
+#splash path:nth-child(4) { animation-delay: 210ms; }
+#splash path:nth-child(5) { animation: sp-draw 280ms 430ms cubic-bezier(.6,0,.3,1) backwards; }
+#splash span { animation: sp-word 380ms 760ms cubic-bezier(.2,.8,.2,1) backwards; }
+#splash.out { opacity: 0; pointer-events: none; }
+#splash.out .row { transform: scale(1.06); opacity: 0; }
+@keyframes sp-draw { 0% { stroke-dashoffset: 1; opacity: 0; } 12% { opacity: 1; } 100% { stroke-dashoffset: 0; } }
+@keyframes sp-tick { 0% { transform: scale(1); } 35% { transform: scale(.94); } 100% { transform: scale(1); } }
+@keyframes sp-center { from { transform: translateX(1.32em); } }
+@keyframes sp-word { from { opacity: 0; transform: translateX(-.35em); clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@media (prefers-reduced-motion: reduce) { #splash * { animation: none !important; } }
+</style>
 </head>
 <body>
+<div id="splash" aria-hidden="true"><div class="row">
+  <svg viewBox="180 250 664 524"><path pathLength="1" d="M296 292V732"/><path pathLength="1" d="M440 292V732"/><path pathLength="1" d="M584 292V732"/><path pathLength="1" d="M728 292V732"/><path pathLength="1" d="M226 676L798 368"/></svg>
+  <span>Tally</span>
+</div></div>
 <div id="root"></div>
 <script type="module" src="/src/main.tsx"></script>
 </body>

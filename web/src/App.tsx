@@ -6,6 +6,7 @@ import { TabBar } from './components/TabBar'
 import { Palette } from './components/Palette'
 import { Skeleton } from './components/Skeleton'
 import { useBootstrap } from './lib/data'
+import { useSplash } from './lib/splash'
 import { Home } from './screens/Home'
 import { Activity } from './screens/Activity'
 import { AddSheet, type Seed } from './screens/AddSheet'
@@ -31,6 +32,7 @@ export default function App() {
   const location = useLocation()
   const navType = useNavigationType()
   const boot = useBootstrap()
+  const revealed = useSplash(!!boot.data)
   const [add, setAdd] = useState<{ open: boolean; seed: Seed }>({ open: false, seed: {} })
   const api = useMemo<AddApi>(() => ({
     open: (seed) => setAdd({ open: true, seed: seed ?? {} }),
@@ -58,7 +60,7 @@ export default function App() {
       <div className={s.shell}>
         <div className={s.topFade} aria-hidden />
         <main className={s.main}>
-          {!boot.data ? <Skeleton /> : <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}><AnimatePresence mode="popLayout" initial={false} custom={dir}>
+          {!boot.data || !revealed ? <Skeleton /> : <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}><AnimatePresence mode="popLayout" initial={false} custom={dir}>
             <motion.div key={location.pathname} className={s.page} custom={dir} variants={page} initial="enter" animate="show" exit="exit">
               <Routes location={location}>
                 <Route path="/" element={<Home />} />
