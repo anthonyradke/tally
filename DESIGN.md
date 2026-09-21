@@ -34,8 +34,8 @@ Tokens in `web/src/styles/tokens.css` (`light-dark()`).
 - Bank tints keep the user's identities (Chase blue, Amex green, SoFi orange, HSA grey, Roth violet).
 
 ## Glass (floating chrome only)
-Tab bar, sheets, the ⌘K palette, the + button, toasts. Content never.
-- Recipe: translucent fill (`--glass-bg`) + `backdrop-filter: blur(24px) saturate(190%)`, a 0.5px edge (`--glass-edge`), a top specular highlight (inset 1px white at low alpha), and one soft ambient shadow (`--shadow-float`).
+Tab bar, the ⌘K palette, the + button, toasts; sheets get the edge and highlight on a near-opaque fill (no live blur while they move). Content never.
+- Recipe: translucent fill (`--glass-bg`) + `backdrop-filter: blur(20px) saturate(180%)`, a 0.5px edge (`--glass-edge`), a top specular highlight (inset 1px white at low alpha), and one soft ambient shadow (`--shadow-float`).
 - Real Liquid Glass (refraction) is native-only; WebKit has no SVG filters in `backdrop-filter`, so this is the honest approximation. No WebGL.
 - Tab bar: a floating pill 12px off the bottom safe area and 16px off the sides, the + as a raised ink disc in its centre.
 
