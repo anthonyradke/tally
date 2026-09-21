@@ -18,6 +18,7 @@ import { FieldGroup, FieldRow, TextRow } from '@/components/Field'
 import { Picker, type Option } from '@/components/Picker'
 import { Chip, ChipRow } from '@/components/Chip'
 import { Mark } from '@/components/Mark'
+import { LogoButton } from '@/components/LogoButton'
 import { useToast } from '@/components/Toast'
 import s from './AddSheet.module.css'
 
@@ -205,7 +206,7 @@ export function AddSheet({ open, seed, onClose }: Props) {
             {shape.from !== 'blank' && <FieldRow label="From" value={acctValue(from)} placeholder={shape.from === 'optional' ? 'Optional' : 'Account'} onClick={() => { setPad(false); setPicker('from') }} />}
             {shape.to !== 'blank' && <FieldRow label="To" value={acctValue(to)} placeholder={shape.to === 'optional' ? 'Optional' : 'Account'} onClick={() => { setPad(false); setPicker('to') }} />}
             <TextRow label="What" value={what} onChange={(e) => setWhat(e.target.value)} onFocus={() => setPad(false)} placeholder="Chick-fil-A, Paycheck, Xcel…" autoCapitalize="sentences" autoComplete="off" enterKeyHint="done"
-              suggestions={suggestions} onPick={pickSuggestion} />
+              suggestions={suggestions} onPick={pickSuggestion} trailing={what.trim() && <LogoButton what={what} fallback={catVis} />} />
             <div className={s.dateRow}>
               <TextRow label="Date" type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} onFocus={() => setPad(false)} />
               <div className={`${s.dateChips} no-scrollbar`}>
