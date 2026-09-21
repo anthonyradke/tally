@@ -43,7 +43,7 @@ export function TxnList({ items, boot, lookups, onSelect, dayTotals = true, swip
         {groups.map((g) => (
           <motion.section key={g.date} className={s.group} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
             <header className={s.day}>
-              <span className="caps">{dayLabel(g.date, boot.today)}{isFuture(g.date, boot.today) ? ' · upcoming' : ''}</span>
+              <span className={s.dayLabel}>{dayLabel(g.date, boot.today)}{isFuture(g.date, boot.today) && <span className={s.soon}>Upcoming</span>}</span>
               {dayTotals && g.spent > 0 && <span className={`secondary tnum ${s.dayTotal}`}>{formatCents(g.spent)}</span>}
             </header>
             {g.items.map((t) => {

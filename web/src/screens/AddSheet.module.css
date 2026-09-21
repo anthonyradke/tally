@@ -8,7 +8,7 @@
 .dateRow { border-top: 1px solid var(--line); }
 .dateChips { display: flex; gap: var(--s-2); overflow-x: auto; padding: 0 var(--s-4) var(--s-3); }
 .moreBtn { align-self: flex-start; color: var(--fg-2); font-size: var(--t-13); font-weight: 600; min-height: 40px; padding: 0 var(--s-3); }
-.delete { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); min-height: 48px; border-radius: var(--r-control); color: var(--neg); font-weight: 600; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.delete { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); min-height: 48px; border-radius: var(--r-control); color: var(--neg); font-weight: 600; background: var(--group-bg, var(--surface)); }
 .delete svg { width: 18px; height: 18px; }
 .save { font-weight: 700; color: var(--fg); min-height: 44px; padding: 0 var(--s-1); }
 .saveOff { color: var(--fg-3); }
@@ -24,7 +24,7 @@
 .fileName + .camera, .thumbWrap + .camera { margin-left: 0; }
 .camera svg { width: 20px; height: 20px; }
 
-.padDock { flex: none; padding: var(--s-2) var(--s-4) var(--s-3); border-top: 1px solid var(--line); background: var(--surface); }
+.padDock { flex: none; padding: var(--s-2) var(--s-4) var(--s-3); border-top: .5px solid var(--glass-edge); }
 .splitLine { display: flex; align-items: center; gap: var(--s-2); min-height: 50px; padding: var(--s-1) var(--s-3) var(--s-1) var(--s-3); }
 .splitLine + .splitLine, .splitFoot { border-top: 1px solid var(--line); }
 .splitCat { flex: 1; display: inline-flex; align-items: center; gap: var(--s-2); min-height: 40px; text-align: left; font-weight: 500; min-width: 0; }

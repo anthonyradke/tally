@@ -1,0 +1,8 @@
+.wrap { display: flex; flex-direction: column; gap: var(--s-1); }
+.plot { position: relative; width: 100%; touch-action: pan-y; cursor: crosshair; outline-offset: 4px; -webkit-user-select: none; user-select: none; }
+.svg { display: block; overflow: visible; }
+.cmp { fill: none; stroke: var(--fg-3); stroke-width: 1.5; stroke-dasharray: 3 4; stroke-linecap: round; }
+.cmpDot { fill: var(--surface); stroke: var(--fg-3); stroke-width: 1.5; }
+.cursor { stroke: var(--fg-3); stroke-width: 1; }
+.dot { stroke: var(--surface); stroke-width: 2; }
+.axis { display: flex; justify-content: space-between; font-size: var(--t-11); font-weight: 500; color: var(--fg-3); padding: 0 2px; }

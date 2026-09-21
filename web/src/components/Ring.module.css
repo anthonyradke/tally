@@ -1,0 +1,4 @@
+.ring { position: relative; flex: none; }
+.svg { display: block; transform: rotate(-90deg); }
+.track { stroke: var(--surface-2); }
+.center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 2px; }

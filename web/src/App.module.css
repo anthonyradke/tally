@@ -1,4 +1,4 @@
-.shell { min-height: 100dvh; padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + var(--s-4)); }
+.shell { min-height: 100dvh; padding-bottom: calc(var(--tabbar-h) + var(--tabbar-bottom) + var(--s-8)); }
 /* Titles sit where a native large title would: clear of the status bar and its scroll-edge blur. */
 .main {
   position: relative;

@@ -1,12 +1,14 @@
 .list { display: flex; flex-direction: column; }
 .group { padding-bottom: var(--s-3); }
 .day {
-  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2;
+  position: var(--day-pos, sticky); top: env(safe-area-inset-top, 0px); z-index: 2;
   display: flex; align-items: baseline; justify-content: space-between;
-  padding: var(--s-4) 0 var(--s-1); background: var(--bg);
+  padding: var(--s-4) 0 var(--s-1); background: var(--day-bg, var(--bg));
 }
 .dayTotal { color: var(--fg-3); }
-.item + .item { border-top: 1px solid var(--line); }
+.dayLabel { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--t-13); font-weight: 600; color: var(--fg-2); }
+.soon { font-size: var(--t-11); font-weight: 600; padding: 1px 7px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--fg-2); }
+.item + .item { border-top: .5px solid var(--line-2); }
 .item { border-top: 1px solid transparent; }
 
 /* skeleton */

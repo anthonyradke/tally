@@ -1,23 +1,25 @@
 import type { ReactNode } from 'react'
 import type { NavigateFunction } from 'react-router'
-import { ChevronRight } from 'lucide-react'
 import type { Bootstrap, MonthRow, Txn } from '@/api/client'
 import type { Lookups } from '@/lib/data'
 import type { AddApi } from '@/lib/add'
+import type { Pace } from '@/lib/pace'
 import { formatCents, pct } from '@/lib/money'
-import { monthLabel } from '@/lib/dates'
 import { categoryVisual } from '@/icons/categories'
-import { Hero } from '@/components/Hero'
 import { Amount } from '@/components/Amount'
 import { Chip, ChipRow } from '@/components/Chip'
 import { Mark } from '@/components/Mark'
 import { TxnList } from '@/components/TxnList'
 import { LineChart } from '@/components/LineChart'
+import { Panel, Section } from '@/components/Panel'
+import { ProgressBar } from '@/components/ProgressBar'
+import { monthLabel } from '@/lib/dates'
+import { MonthPanel, NetWorthHero } from './HomeMonth'
 import s from './Home.module.css'
 
-export type WidgetId = 'networth' | 'stats' | 'quick' | 'ef' | 'roth' | 'budgets' | 'spending' | 'chart' | 'upcoming'
+export type WidgetId = 'networth' | 'stats' | 'quick' | 'ef' | 'roth' | 'budgets' | 'spending' | 'chart' | 'upcoming' | 'recent'
 export interface Layout { order: WidgetId[]; hidden: WidgetId[] }
-export const DEFAULT_LAYOUT: Layout = { order: ['networth', 'stats', 'quick', 'ef', 'budgets', 'spending', 'upcoming', 'roth', 'chart'], hidden: ['roth', 'chart'] }
+export const DEFAULT_LAYOUT: Layout = { order: ['networth', 'stats', 'quick', 'budgets', 'spending', 'ef', 'upcoming', 'recent', 'roth', 'chart'], hidden: ['roth', 'chart'] }
 
 export function parseLayout(raw: string | undefined): Layout {
   try {
@@ -29,97 +31,124 @@ export function parseLayout(raw: string | undefined): Layout {
   } catch { return DEFAULT_LAYOUT }
 }
 
-export interface Ctx { b: Bootstrap; lookups: Lookups; cur: MonthRow; prev?: MonthRow; nav: NavigateFunction; add: AddApi; upcoming: Txn[] }
+export interface Ctx { b: Bootstrap; lookups: Lookups; cur: MonthRow; prev?: MonthRow; nav: NavigateFunction; add: AddApi; upcoming: Txn[]; recent: Txn[]; pace: Pace | null }
+
+const pctText = (p: number) => (p > 0 && p < 0.01 ? '<1%' : `${Math.round(p * 100)}%`)
+
+const spendRows = (b: Bootstrap, cur: MonthRow) => b.categories
+  .filter((c) => c.type === 'Spending' && (cur.by_category[String(c.id)] ?? 0) > 0)
+  .map((c) => ({ c, v: categoryVisual(c), amt: cur.by_category[String(c.id)] ?? 0 }))
+  .sort((x, y) => y.amt - x.amt)
 
 export const WIDGETS: Record<WidgetId, { label: string; hint: string; render: (c: Ctx) => ReactNode }> = {
   networth: {
-    label: 'Net worth', hint: 'The hero figure with its month delta',
-    render: ({ cur, prev }) => {
-      const delta = prev ? cur.net_worth - prev.net_worth : 0
-      return <Hero label="Net worth" cents={cur.net_worth} trailing={prev && (
-        <span className={`${s.delta} ${delta >= 0 ? 'pos' : 'neg'}`}>{formatCents(delta, { sign: 'always', cents: false })} <span className={s.deltaLabel}>this month</span></span>)} />
-    },
+    label: 'Net worth', hint: 'The big figure and its change this month',
+    render: ({ b, cur, prev }) => <NetWorthHero b={b} cur={cur} prev={prev} />,
   },
   stats: {
-    label: 'Left over & spent', hint: 'This month at a glance',
-    render: ({ cur, nav }) => (
-      <section className={s.stats}>
-        <button type="button" className={s.stat} onClick={() => nav('/insights')}><span className="caps">Left over · {monthLabel(cur.month)}</span><Amount cents={cur.left_over} size="title" tone={cur.left_over >= 0 ? 'pos' : 'neg'} roll /></button>
-        <button type="button" className={s.stat} onClick={() => nav('/activity?type=Spending')}><span className="caps">Spent · {monthLabel(cur.month)}</span><Amount cents={cur.spent} size="title" roll /></button>
-      </section>
-    ),
+    label: 'This month', hint: 'Spending pace against last month',
+    render: ({ cur, pace, nav }) => <MonthPanel cur={cur} pace={pace} nav={nav} />,
   },
   quick: {
-    label: 'Quick actions', hint: 'One-tap entries',
+    label: 'Quick add', hint: 'One-tap entries',
     render: ({ b, lookups, add }) => b.favorites.length === 0 ? null : (
-      <section className={s.section}>
-        <h2 className="caps">Quick add</h2>
-        <ChipRow className={s.quick}>
+      <Section title="Quick add">
+        <ChipRow>
           {b.favorites.map((f) => { const c = lookups.cat.get(f.category_id); const v = c && categoryVisual({ ...c, icon: f.icon ?? c.icon, color: f.color ?? c.color })
             return <Chip key={f.id} onClick={() => add.open({ favorite: f })} leading={v && <Mark Icon={v.Icon} color={v.color} size="sm" />}>{f.label}{f.amount ? <span className={`tnum ${s.quickAmt}`}> {formatCents(f.amount)}</span> : null}</Chip> })}
         </ChipRow>
-      </section>
+      </Section>
     ),
-  },
-  ef: {
-    label: 'Emergency fund', hint: 'Progress toward the goal',
-    render: ({ b }) => <Hero compact label="Emergency fund" cents={b.ef.progress} progress={pct(b.ef.progress, b.ef.goal)}
-      sub={<>of <span className="tnum">{formatCents(b.ef.goal, { cents: false })}</span> · {Math.round(pct(b.ef.progress, b.ef.goal) * 100)}%</>} />,
-  },
-  roth: {
-    label: 'Roth IRA this year', hint: 'Contributions toward the annual limit',
-    render: ({ b }) => <Hero compact label={`Roth IRA · ${new Date().getFullYear()}`} cents={b.roth.ytd} progress={pct(b.roth.ytd, b.roth.limit)}
-      sub={<>of <span className="tnum">{formatCents(b.roth.limit, { cents: false })}</span> · {formatCents(Math.max(0, b.roth.limit - b.roth.ytd), { cents: false })} to go</>} />,
   },
   budgets: {
     label: 'Budgets', hint: 'Categories with a monthly target',
     render: ({ b, cur, nav }) => {
-      const rows = b.categories.filter((c) => c.type === 'Spending').map((c) => ({ c, budget: b.budgets.find((x) => x.category_id === c.id && x.month === cur.month)?.amount ?? c.budget, amt: cur.by_category[String(c.id)] ?? 0 })).filter((r) => r.budget)
+      const rows = b.categories.filter((c) => c.type === 'Spending').map((c) => ({ c, v: categoryVisual(c), budget: b.budgets.find((x) => x.category_id === c.id && x.month === cur.month)?.amount ?? c.budget, amt: cur.by_category[String(c.id)] ?? 0 })).filter((r) => r.budget)
       if (!rows.length) return null
       return (
-        <section className={s.section}>
-          <button type="button" className={s.sectionHead} onClick={() => nav('/insights')}><h2 className="caps">Budgets · {monthLabel(cur.month)}</h2><ChevronRight className={s.chev} strokeWidth={2} absoluteStrokeWidth /></button>
-          <ul className={s.bars}>
-            {rows.map(({ c, budget, amt }) => { const v = categoryVisual(c); const over = amt > budget!
-              return <li key={c.id}><button type="button" className={s.bar} onClick={() => nav(`/activity?type=Spending&category=${c.id}`)}>
+        <Section title="Budgets" onAction={() => nav('/insights')}>
+          <Panel flush>
+            {rows.map(({ c, v, budget, amt }) => { const over = amt > budget!
+              return <button key={c.id} type="button" className={s.row} onClick={() => nav(`/activity?type=Spending&category=${c.id}`)}>
                 <Mark Icon={v.Icon} color={v.color} size="sm" />
-                <span className={s.barText}><span className={s.barHead}><span className={s.barName}>{c.name}</span><span className={`secondary tnum ${over ? 'neg' : ''}`}>{over ? `over by ${formatCents(amt - budget!, { cents: false })}` : `${formatCents(budget! - amt, { cents: false })} left`}</span></span>
-                  <span className={s.track} style={{ '--c': v.color } as React.CSSProperties}><i style={{ transform: `scaleX(${pct(amt, budget!)})`, background: over ? 'var(--neg)' : v.color }} /></span></span>
-                <Amount cents={amt} size="small" />
-              </button></li> })}
-          </ul>
-        </section>
+                <span className={s.rowMain}>
+                  <span className={s.rowHead}><span className={s.rowName}>{c.name}</span><Amount cents={amt} size="small" /></span>
+                  <ProgressBar value={pct(amt, budget!)} color={over ? 'var(--neg)' : v.color} label={`${c.name} budget`} />
+                  <span className={`secondary tnum ${over ? 'neg' : ''}`}>{over ? `${formatCents(amt - budget!, { cents: false })} over` : `${formatCents(budget! - amt, { cents: false })} left of ${formatCents(budget!, { cents: false })}`}</span>
+                </span>
+              </button> })}
+          </Panel>
+        </Section>
       )
     },
   },
   spending: {
-    label: 'Spending by category', hint: 'Top categories this month',
+    label: 'Spending by category', hint: 'Where this month went',
     render: ({ b, cur, nav }) => {
-      const spending = b.categories.filter((c) => c.type === 'Spending' && (cur.by_category[String(c.id)] ?? 0) > 0).sort((x, y) => (cur.by_category[String(y.id)] ?? 0) - (cur.by_category[String(x.id)] ?? 0))
-      if (!spending.length) return null
+      const rows = spendRows(b, cur)
+      if (!rows.length) return null
       return (
-        <section className={s.section}>
-          <button type="button" className={s.sectionHead} onClick={() => nav('/insights')}><h2 className="caps">Spending · {monthLabel(cur.month)}</h2><ChevronRight className={s.chev} strokeWidth={2} absoluteStrokeWidth /></button>
-          <ul className={s.bars}>
-            {spending.slice(0, 6).map((c) => { const v = categoryVisual(c); const amt = cur.by_category[String(c.id)] ?? 0
-              return <li key={c.id}><button type="button" className={s.bar} onClick={() => nav(`/activity?type=Spending&category=${c.id}`)}>
+        <Section title="Spending" onAction={() => nav('/insights')}>
+          <Panel flush>
+            <div className={s.stack} role="img" aria-label="Share of spending by category">
+              {rows.map(({ c, v, amt }) => <i key={c.id} style={{ flexGrow: amt, background: v.color }} />)}
+            </div>
+            {rows.slice(0, 5).map(({ c, v, amt }) => (
+              <button key={c.id} type="button" className={s.row} onClick={() => nav(`/activity?type=Spending&category=${c.id}`)}>
                 <Mark Icon={v.Icon} color={v.color} size="sm" />
-                <span className={s.barText}><span className={s.barName}>{c.name}</span><span className={s.track} style={{ '--c': v.color } as React.CSSProperties}><i style={{ transform: `scaleX(${pct(amt, cur.spent)})`, background: v.color }} /></span></span>
-                <Amount cents={amt} size="small" />
-              </button></li> })}
-          </ul>
-        </section>
+                <span className={s.rowMain}><span className={s.rowName}>{c.name}</span><span className="secondary tnum">{Math.round(pct(amt, cur.spent) * 100)}% of spending</span></span>
+                <Amount cents={amt} size="body" />
+              </button>
+            ))}
+          </Panel>
+        </Section>
+      )
+    },
+  },
+  ef: {
+    label: 'Emergency fund', hint: 'Progress toward the goal',
+    render: ({ b, nav }) => {
+      const p = pct(b.ef.progress, b.ef.goal)
+      return (
+        <Section title="Emergency fund">
+          <Panel onClick={() => nav('/accounts')}>
+            <div className={s.goalHead}><Amount cents={b.ef.progress} size="title" roll /><span className={s.goalPct}>{pctText(p)}</span></div>
+            <ProgressBar value={p} color="var(--pos)" label="Emergency fund progress" />
+            <div className={`secondary tnum ${s.goalFoot}`}>{b.ef.goal > b.ef.progress ? `${formatCents(b.ef.goal - b.ef.progress, { cents: false })} to go of ${formatCents(b.ef.goal, { cents: false })}` : `Goal of ${formatCents(b.ef.goal, { cents: false })} reached`}</div>
+          </Panel>
+        </Section>
+      )
+    },
+  },
+  roth: {
+    label: 'Roth IRA this year', hint: 'Contributions toward the annual limit',
+    render: ({ b }) => {
+      const p = pct(b.roth.ytd, b.roth.limit)
+      return (
+        <Section title={`Roth IRA ${new Date().getFullYear()}`}>
+          <Panel>
+            <div className={s.goalHead}><Amount cents={b.roth.ytd} size="title" roll /><span className={s.goalPct}>{pctText(p)}</span></div>
+            <ProgressBar value={p} color="var(--bank-roth)" label="Roth IRA contributions" />
+            <div className={`secondary tnum ${s.goalFoot}`}>{formatCents(Math.max(0, b.roth.limit - b.roth.ytd), { cents: false })} left of the {formatCents(b.roth.limit, { cents: false })} limit</div>
+          </Panel>
+        </Section>
       )
     },
   },
   chart: {
     label: 'Net worth chart', hint: 'Month by month',
-    render: ({ b }) => <section className={s.section}><h2 className="caps">Net worth by month</h2><LineChart points={b.months.map((r) => ({ x: r.month, y: r.net_worth }))} height={120} xLabel={(x) => monthLabel(x)} ariaLabel="Net worth by month" /></section>,
+    render: ({ b }) => <Section title="Net worth by month"><Panel><LineChart points={b.months.map((r) => ({ x: r.month, y: r.net_worth }))} height={140} xLabel={(x) => monthLabel(x)} ariaLabel="Net worth by month" /></Panel></Section>,
   },
   upcoming: {
     label: 'Upcoming', hint: 'Future-dated entries',
     render: ({ b, lookups, upcoming, add }) => upcoming.length === 0 ? null : (
-      <section className={s.section}><h2 className="caps">Upcoming</h2><TxnList items={upcoming} boot={b} lookups={lookups} dayTotals={false} onSelect={(t) => add.open({ edit: t })} /></section>
+      <Section title="Upcoming"><Panel flush><TxnList items={upcoming} boot={b} lookups={lookups} dayTotals={false} onSelect={(t) => add.open({ edit: t })} /></Panel></Section>
+    ),
+  },
+  recent: {
+    label: 'Recent', hint: 'The last few entries',
+    render: ({ b, lookups, recent, add, nav }) => recent.length === 0 ? null : (
+      <Section title="Recent" onAction={() => nav('/activity')}><Panel flush><TxnList items={recent} boot={b} lookups={lookups} dayTotals={false} onSelect={(t) => add.open({ edit: t })} /></Panel></Section>
     ),
   },
 }
