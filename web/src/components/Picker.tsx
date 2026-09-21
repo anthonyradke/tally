@@ -29,7 +29,7 @@ export function Picker({ open, onClose, title, options, value, onChange, searcha
 
   let group: string | undefined
   return (
-    <Sheet open={open} onClose={onClose} title={title}>
+    <Sheet open={open} onClose={onClose} title={title} tall={searchable}>
       {searchable && (
         <label className={s.search}>
           <Search className={s.searchIcon} strokeWidth={2} absoluteStrokeWidth />

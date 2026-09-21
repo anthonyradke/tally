@@ -6,6 +6,8 @@
   background: var(--blur-bar);
   -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
   border-top: 1px solid var(--line);
+  /* Own compositing layer: iOS standalone can mis-place fixed-bottom bars at launch without it. */
+  transform: translateZ(0);
 }
 .brand { display: none; }
 .tab {
