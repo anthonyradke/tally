@@ -1,5 +1,4 @@
 import { Delete } from 'lucide-react'
-import { motion } from 'motion/react'
 import s from './Keypad.module.css'
 
 export type Key = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'back' | 'neg'
@@ -10,12 +9,11 @@ export function Keypad({ onKey, negative }: { onKey: (k: Key) => void; negative?
   return (
     <div className={s.pad} role="group" aria-label="Amount keypad">
       {KEYS.map((k) => (
-        <motion.button key={k} type="button" className={`${s.key} ${k === 'neg' && negative ? s.on : ''} ${k !== 'neg' && k !== 'back' ? s.digit : ''}`}
-          whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 600, damping: 30 }}
+        <button key={k} type="button" className={`${s.key} ${k === 'neg' && negative ? s.on : ''} ${k !== 'neg' && k !== 'back' ? s.digit : ''}`}
           onPointerDown={(e) => e.preventDefault()} onClick={() => onKey(k)}
           aria-label={k === 'back' ? 'Delete' : k === 'neg' ? 'Toggle negative' : k}>
           {k === 'back' ? <Delete className={s.icon} strokeWidth={2} absoluteStrokeWidth /> : k === 'neg' ? '±' : k}
-        </motion.button>
+        </button>
       ))}
     </div>
   )

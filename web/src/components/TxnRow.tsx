@@ -7,8 +7,7 @@ import { categoryVisual } from '@/icons/categories'
 import { bankColor } from '@/icons/banks'
 import { rowAmount } from '@/lib/txn'
 import { isFuture } from '@/lib/dates'
-import { useRecentIds } from '@/lib/recent'
-import { useMarkFor } from '@/lib/data'
+import type { MarkSpec } from '@/icons/merchants'
 import s from './TxnRow.module.css'
 
 interface Props {
@@ -22,6 +21,10 @@ interface Props {
   onLongPress?: () => void
   /** undefined = not in selection mode; boolean = this row's state. */
   selected?: boolean
+  /** Merchant mark (resolved once by the list); null = category glyph. */
+  mark: MarkSpec | null
+  /** Just saved: flash once. */
+  flash?: boolean
 }
 
 function AcctTag({ a }: { a: Account }) {
@@ -33,15 +36,13 @@ function AcctTag({ a }: { a: Account }) {
   )
 }
 
-export function TxnRow({ t, cat, from, to, today, onClick, onLongPress, selected }: Props) {
-  const merchant = useMarkFor()(t.what)
+export function TxnRow({ t, cat, from, to, today, onClick, onLongPress, selected, mark: merchant, flash }: Props) {
   const vis = categoryVisual(cat)
   const amt = rowAmount(cat.type, t.amount)
   const future = isFuture(t.date, today)
   const timer = useRef<number | null>(null)
   const fired = useRef(false)
   const origin = useRef<{ x: number; y: number } | null>(null)
-  const recent = useRecentIds()
 
   const down = (e: React.PointerEvent) => {
     if (!onLongPress) return
@@ -55,7 +56,7 @@ export function TxnRow({ t, cat, from, to, today, onClick, onLongPress, selected
   const click = () => { if (fired.current) { fired.current = false; return } onClick?.() }
 
   return (
-    <button type="button" className={`${s.row} ${future ? s.future : ''} ${selected ? s.selected : ''} ${recent.has(t.id) ? s.flash : ''}`} onClick={click}
+    <button type="button" className={`${s.row} ${future ? s.future : ''} ${selected ? s.selected : ''} ${flash ? s.flash : ''}`} onClick={click}
       onPointerDown={down} onPointerMove={move} onPointerUp={cancel} onPointerLeave={cancel} onPointerCancel={cancel}
       onContextMenu={(e) => { if (onLongPress) { e.preventDefault(); onLongPress() } }}
       aria-pressed={selected === undefined ? undefined : selected}>

@@ -20,6 +20,24 @@ interface Props {
 
 const DIGITS = '0123456789'
 
+// Advance width of each digit (in em, letter-spacing included) per size, measured once from the real font. A rolling
+// column is exactly as wide as the digit it shows, so rolled figures space identically to static text.
+const widths = new Map<string, number[]>()
+function digitWidths(size: AmountSize): number[] {
+  const hit = widths.get(size)
+  if (hit) return hit
+  const probe = document.createElement('span')
+  probe.className = `${s.amount} ${s[size]}`
+  probe.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0'
+  probe.innerHTML = [...DIGITS].map((d) => `<span class="${s.ch}">${d}</span>`).join('')
+  document.body.appendChild(probe)
+  const px = parseFloat(getComputedStyle(probe).fontSize) || 16
+  const w = [...probe.children].map((c) => (c as HTMLElement).getBoundingClientRect().width / px)
+  probe.remove()
+  if (w.every((x) => x > 0)) widths.set(size, w)
+  return w
+}
+
 /** Tabular figures; optional rolling-digit animation. Each digit is a 10-row column translated by transform. */
 export function Amount({ cents, size = 'body', showCents = true, sign = 'auto', tone = 'auto', roll = false, rollIn = false, className }: Props) {
   const reduce = useReducedMotion()
@@ -35,11 +53,11 @@ export function Amount({ cents, size = 'body', showCents = true, sign = 'auto', 
         if (!roll || reduce || !/\d/.test(ch)) return <span key={key} className={s.ch} aria-hidden>{ch}</span>
         const d = Number(ch)
         return (
-          <span key={key} className={s.col} aria-hidden>
+          <span key={key} className={s.col} style={{ width: `${digitWidths(size)[d]}em` }} aria-hidden>
             <motion.span
               className={s.stack}
-              initial={rollIn ? { y: '0%' } : false}
-              animate={{ y: `-${d * 10}%` }}
+              initial={rollIn ? { transform: 'translateY(0%)' } : false}
+              animate={{ transform: `translateY(-${d * 10}%)` }}
               transition={{ type: 'spring', stiffness: rollIn ? 140 : 320, damping: rollIn ? 22 : 38, mass: 0.8, delay: rollIn ? 0.05 * i : 0 }}
             >
               {[...DIGITS].map((n) => <span key={n} className={s.digit}>{n}</span>)}

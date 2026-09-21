@@ -18,7 +18,9 @@ Feels like a first-party Apple app that happens to know your money. System group
 Everything else is calm: no looping motion, no decorative entrances.
 
 ## Type
-- SF Pro via `-apple-system` (Segoe UI Variable on Windows). Display 700, tracking −0.03em, tabular figures.
+- SF Pro via `-apple-system` (Segoe UI Variable on Windows). Display 700, tracking −0.03em. Big figures (`display`, `title`) use
+  proportional digits like Apple's own large numerals; rows, tables and small amounts stay tabular so columns align.
+  Rolling digit columns take the measured width of the digit they show, so rolled and static figures space identically.
 - Scale: 11 · 13 · 15 · 17 · 20 · 28 · 34 · 48 (hero) / 64 (≥900px).
 - Roles: large title 34/700 · section title 20/700 · body 17/400 · row title 16/500 · label 13/500 fg-2 · footnote 11/500.
 - **No all-caps labels and no "A · B" middot strings** in new UI. Labels are sentence case; secondary facts go on their own line or in a pill.
@@ -46,7 +48,11 @@ Tab bar, sheets, the ⌘K palette, the + button, toasts. Content never.
 
 ## Motion
 - Timing: micro 120 · standard 240 · large 400 ms. Ease-out `cubic-bezier(.2,.8,.2,1)` for entries; springs for gestures (sheet 420/42, tab highlight 520/44).
-- Transform and opacity only (plus SVG pathLength for chart and ring draws).
+- Transform and opacity only (plus SVG pathLength for chart and ring draws). Exception: a rolling digit column eases its width
+  between digit widths.
+- Performance budget is a 120 Hz frame (8 ms). Press feedback is CSS `:active` (compositor), not JS springs; Motion animations
+  use `transform` strings so they run hardware-accelerated; sheets have no live backdrop blur; long lists skip layout
+  animation and render in two passes. Measure with `/tmp/pw/perf.js` and `tabs.js` before and after motion changes.
 - Numbers: rolling digits on every hero figure and scrub; month switches roll rather than swap.
 - Never: bounce/elastic, looping or ambient motion, hover effects on touch, per-section entrance stagger.
 - `prefers-reduced-motion`: durations → 0, digits snap, draws are instant.

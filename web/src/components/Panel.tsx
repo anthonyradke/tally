@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { motion } from 'motion/react'
 import { ChevronRight } from 'lucide-react'
 import s from './Panel.module.css'
 
@@ -21,8 +20,8 @@ export function Panel({ children, onClick, className, flush }: { children: React
   const cls = `${s.panel} ${flush ? s.flush : ''} ${className ?? ''}`
   if (!onClick) return <div className={cls}>{children}</div>
   return (
-    <motion.button type="button" className={`${cls} ${s.press}`} onClick={onClick} whileTap={{ scale: 0.98 }} transition={{ type: 'spring', stiffness: 600, damping: 40 }}>
+    <button type="button" className={`${cls} ${s.press}`} onClick={onClick}>
       {children}
-    </motion.button>
+    </button>
   )
 }

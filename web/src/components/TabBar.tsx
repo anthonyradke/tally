@@ -20,9 +20,9 @@ function Tab({ to, label, Icon, end, className }: (typeof LEFT)[number] & { clas
       {({ isActive }) => (
         <>
           {isActive && <motion.span layoutId="tab-highlight" className={s.highlight} transition={SPRING} aria-hidden />}
-          <motion.span className={s.iconWrap} whileTap={{ scale: 0.86 }} transition={SPRING}>
+          <span className={s.iconWrap}>
             <Icon className={s.icon} strokeWidth={1.75} absoluteStrokeWidth />
-          </motion.span>
+          </span>
           <span className={s.label}>{label}</span>
         </>
       )}
@@ -37,10 +37,10 @@ export function TabBar() {
     <nav className={`glass ${s.bar}`} aria-label="Primary">
       <div className={s.brand} aria-hidden>Tally</div>
       {LEFT.map((t) => <Tab key={t.to} {...t} />)}
-      <motion.button type="button" className={s.add} onClick={() => open()} aria-label="Add entry" whileTap={{ scale: 0.92 }} transition={SPRING}>
+      <button type="button" className={s.add} onClick={() => open()} aria-label="Add entry">
         <Plus className={s.plus} strokeWidth={2.25} absoluteStrokeWidth />
         <span className={s.addLabel}>New entry</span>
-      </motion.button>
+      </button>
       {RIGHT.map((t) => <Tab key={t.to} {...t} />)}
       <Tab to="/settings" label="Settings" Icon={Settings} end={false} className={s.railOnly} />
     </nav>
