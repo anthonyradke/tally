@@ -30,9 +30,11 @@ function useEntity<T>(opts: { save: () => Promise<T>; remove?: () => Promise<voi
   return { save, remove, errors, setErrors }
 }
 
+// Full height so the text fields already sit above where the keyboard lands. A short sheet made iOS scroll the whole
+// installed app to reveal the field, and it didn't restore the window height afterwards (lib/keyboard.ts).
 function Frame({ open, onClose, title, canSave, saving, onSave, onDelete, errors, children }: { open: boolean; onClose: () => void; title: string; canSave: boolean; saving: boolean; onSave: () => void; onDelete?: () => void; errors: string[]; children: ReactNode }) {
   return (
-    <Sheet open={open} onClose={onClose} title={title} action={<button type="button" className={`${s.save} ${canSave ? '' : s.off}`} disabled={!canSave || saving} onClick={onSave}>{saving ? 'Saving…' : 'Save'}</button>}>
+    <Sheet open={open} onClose={onClose} title={title} tall action={<button type="button" className={`${s.save} ${canSave ? '' : s.off}`} disabled={!canSave || saving} onClick={onSave}>{saving ? 'Saving…' : 'Save'}</button>}>
       <div className={s.body}>
         {errors.length > 0 && <div className={s.errors} role="alert">{errors.map((e) => <div key={e}>{e}</div>)}</div>}
         {children}

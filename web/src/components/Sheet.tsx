@@ -13,7 +13,7 @@ interface Props {
   action?: ReactNode
   /** Pinned below the scrolling body (the keypad). */
   footer?: ReactNode
-  /** Full-height sheet (Add entry); default sizes to content. */
+  /** Full-height sheet (Add entry, anything with a text field); default sizes to content. */
   tall?: boolean
 }
 

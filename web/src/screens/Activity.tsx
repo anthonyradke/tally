@@ -178,10 +178,10 @@ export function Activity() {
       <Picker open={picker === 'sort'} onClose={() => setPicker(null)} title="Sort" options={SORTS} value={sortKey} onChange={(v) => set({ sort: v === 'date-desc' ? undefined : v })} />
       <Picker open={picker === 'recat'} onClose={() => setPicker(null)} title="Move to category" options={recatOptions} value={null} searchable onChange={(v) => bulk.mutate({ ids, action: 'recategorize', category_id: Number(v) })} />
 
-      <Sheet open={saving} onClose={() => setSaving(false)} title="Save view" action={<button type="button" className={s.sheetSave} disabled={!viewName.trim() || saveView.isPending} onClick={() => saveView.mutate()}>Save</button>}>
+      <Sheet open={saving} onClose={() => setSaving(false)} title="Save view" tall action={<button type="button" className={s.sheetSave} disabled={!viewName.trim() || saveView.isPending} onClick={() => saveView.mutate()}>Save</button>}>
         <div className={s.sheetBody}><FieldGroup><TextRow label="Name" value={viewName} onChange={(e) => setViewName(e.target.value)} placeholder="Amex this month" autoFocus /></FieldGroup><p className="secondary">Saves the current search, filters and sort as a chip here and in Settings.</p></div>
       </Sheet>
-      <Sheet open={tagging} onClose={() => setTagging(false)} title={`Tag ${ids.length}`} action={<button type="button" className={s.sheetSave} disabled={!newTags.trim() || bulk.isPending} onClick={() => bulk.mutate({ ids, action: 'tag', tags: newTags.split(/[\s,]+/).filter(Boolean) })}>Apply</button>}>
+      <Sheet open={tagging} onClose={() => setTagging(false)} title={`Tag ${ids.length}`} tall action={<button type="button" className={s.sheetSave} disabled={!newTags.trim() || bulk.isPending} onClick={() => bulk.mutate({ ids, action: 'tag', tags: newTags.split(/[\s,]+/).filter(Boolean) })}>Apply</button>}>
         <div className={s.sheetBody}><FieldGroup><TextRow label="Tags" value={newTags} onChange={(e) => setNewTags(e.target.value)} placeholder="camping lex" autoCapitalize="none" autoFocus /></FieldGroup><p className="secondary">Added to each selected entry; existing tags stay.</p></div>
       </Sheet>
     </div>
