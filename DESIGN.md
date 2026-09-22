@@ -14,7 +14,7 @@ Feels like a first-party Apple app that happens to know your money. System group
 1. **Scrub** (above). Amplitude: high.
 2. **Add sheet**: glass sheet, custom keypad, digits roll as you type. Amplitude: high (the daily ritual).
 3. **Post-add**: the new row layout-animates into its day group with a fading tint; hero figures re-roll. Amplitude: medium.
-4. **Arrival**: progress bars and the spending ring draw once when they first scroll into view. Amplitude: low.
+4. **Arrival**: progress bars and the spending ring draw once per launch when they first scroll into view; revisiting a page shows them drawn. Amplitude: low.
 Everything else is calm: no looping motion, no decorative entrances.
 
 ## Type
@@ -35,8 +35,12 @@ Tokens in `web/src/styles/tokens.css` (`light-dark()`).
 
 ## Glass (floating chrome only)
 Tab bar, the ⌘K palette, the + button, toasts; sheets get the edge and highlight on a near-opaque fill (no live blur while they move). Content never.
-- Recipe: translucent fill (`--glass-bg`) + `backdrop-filter: blur(20px) saturate(180%)`, a 0.5px edge (`--glass-edge`), a top specular highlight (inset 1px white at low alpha), and one soft ambient shadow (`--shadow-float`).
-- Real Liquid Glass (refraction) is native-only; WebKit has no SVG filters in `backdrop-filter`, so this is the honest approximation. No WebGL.
+- Recipe (Liquid Glass, "clear" end of the slider, 2026-09-22): a thin tint (`--glass-bg`, ~34% alpha) over a light blur with
+  boosted saturation (`blur(8px) saturate(210%)`), so content underneath stays legible in color rather than frosted. Edges do the
+  work refraction does natively: a bright top specular line, an inner edge glow (`--glass-glow`), a 1px rim that catches light
+  top-left and bottom-right (`.glass::before` / `.glass-rim`), a 0.5px edge and one soft ambient shadow. Text-heavy glass (toasts,
+  the palette) uses `--glass-strong` and `--glass-blur-strong`. The rim gradient is lighting, not decoration.
+- Real Liquid Glass (lensing) is native-only; WebKit has no SVG filters in `backdrop-filter`, so this is the honest approximation. No WebGL.
 - Tab bar: a floating pill 12px off the bottom safe area and 16px off the sides, the + as a raised ink disc in its centre.
 
 ## Space, shape, depth
@@ -47,6 +51,10 @@ Tab bar, the ⌘K palette, the + button, toasts; sheets get the edge and highlig
 - Pressable panels scale to .98 on press.
 
 ## Motion
+- Navigation: pages are opaque full-bleed layers. Going deeper slides the new page in from the right edge over the old one, which
+  drifts 28% left and dims (UIKit curve `cubic-bezier(.32,.72,0,1)`, 460 ms, both pages on one clock); Back reverses it. Tab
+  switches fade the new page in over the old. A native iOS edge swipe gets no transition (it already animated), and the outgoing
+  page is held where it was on screen while the incoming one scrolls to its own position.
 - Timing: micro 120 · standard 240 · large 400 ms. Ease-out `cubic-bezier(.2,.8,.2,1)` for entries; springs for gestures (sheet 420/42, tab highlight 520/44).
 - Transform and opacity only (plus SVG pathLength for chart and ring draws). Exception: a rolling digit column eases its width
   between digit widths.
