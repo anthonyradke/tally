@@ -1,31 +1,31 @@
 """JSON API core: bootstrap + transactions. Thin by design: rules live in engine/service; this shapes I/O.
 Amounts are integer cents on the wire except request bodies, which carry dollars (see web/src/api/client.ts).
-Companion routers: api_ops (reconcile, month end), api_admin (settings CRUD), api_files (receipts)."""
+Companion routers: api_ops (reconcile, month end), api_admin (settings CRUD), api_recurring, api_files (receipts).
+Every route takes `con: Con`, a connection that lives exactly as long as the request (db.session)."""
 from __future__ import annotations
+import sqlite3
 import uuid
+from dataclasses import replace
 from datetime import date
-from typing import Optional
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import Response
+from typing import Annotated, Optional
+from fastapi import APIRouter, Depends, HTTPException, Request
 from . import db, service, recurring
 from .engine import Txn, cents, validate
 
 router = APIRouter(prefix="/api")
 META_COLS = ("note", "tags", "split_group", "receipt", "recurring_id")
-
-
-def _state():
-    return service.load(db.connect())
+Con = Annotated[sqlite3.Connection, Depends(db.session)]
 
 
 def _acct(a, x: dict):
     return {"id": a.id, "name": a.name, "kind": a.kind, "bank": a.bank, "start_balance": a.start_balance,
-            "apy": a.apy, "loan_rate": a.loan_rate, "ef": a.ef, "color": x.get("color"), "icon": x.get("icon")}
+            "apy": a.apy, "loan_rate": a.loan_rate, "ef": a.ef, "color": x.get("color"), "icon": x.get("icon"),
+            "active": bool(x.get("active", 1))}
 
 
 def _cat(c, x: dict):
     return {"id": c.id, "name": c.name, "type": c.type, "icon": x.get("icon"), "color": x.get("color"),
-            "budget": x.get("budget")}
+            "budget": x.get("budget"), "active": bool(x.get("active", 1))}
 
 
 def _txn(t, m: Optional[dict] = None):
@@ -52,10 +52,12 @@ def _by_id(con, table: str) -> dict[int, dict]:
 
 # ---------- read ----------
 @router.get("/bootstrap")
-def bootstrap():
-    """Everything a screen needs except the transaction list. Also materialises due recurring rows."""
-    con = db.connect()
+def bootstrap(con: Con):
+    """Everything a screen needs except the transaction list. Also materialises due recurring rows and clears out
+    receipt files no entry has pointed at for a day. Accounts and categories include hidden ones (`active`)."""
+    from .api_files import sweep
     recurring.generate(con, date.today())
+    sweep(con)
     st = service.load(con)
     goal, progress = st.ef()
     acc_x, cat_x = _by_id(con, "accounts"), _by_id(con, "categories")
@@ -74,12 +76,13 @@ def bootstrap():
 
 
 @router.get("/transactions")
-def transactions(q: str = "", category: Optional[int] = None, account: Optional[int] = None, type: str = "",
+def transactions(con: Con, q: str = "", category: Optional[int] = None, account: Optional[int] = None, type: str = "",
                  start: str = "", end: str = "", amount_min: Optional[float] = None,
                  amount_max: Optional[float] = None, tag: str = "", group: str = "",
                  sort: str = "date", dir: str = "desc", limit: int = 200, offset: int = 0):
-    """Filtered list. Search matches description, note, tags, category, account names and the amount."""
-    st = _state()
+    """Filtered list. Search matches description, note, tags, category, account names and the amount.
+    `by_type` sums the matches per category type, so the client can show a real net across types."""
+    st = service.load(con)
     meta = _meta(st.con)
     items = list(st.txns)
     if q:
@@ -112,7 +115,11 @@ def transactions(q: str = "", category: Optional[int] = None, account: Optional[
         items = [t for t in items if meta.get(t.id, {}).get("split_group") == group]
     key = (lambda t: (abs(t.amount), t.id or 0)) if sort == "amount" else (lambda t: (t.date, t.id or 0))
     items.sort(key=key, reverse=(dir != "asc"))
-    return {"total": len(items), "sum": sum(t.amount for t in items),
+    by_type: dict[str, int] = {}
+    for t in items:
+        ty = st.cat[t.category_id].type
+        by_type[ty] = by_type.get(ty, 0) + t.amount
+    return {"total": len(items), "sum": sum(t.amount for t in items), "by_type": by_type,
             "items": [_txn(t, meta.get(t.id)) for t in items[offset:offset + limit]]}
 
 
@@ -134,6 +141,8 @@ def _parse(b: dict, txn_id: Optional[int] = None) -> tuple[Txn, dict]:
 
 
 def _save(st, t: Txn, meta: dict) -> dict:
+    if t.category_id not in st.cat:
+        raise HTTPException(422, {"errors": ["Pick a category."]})
     errs = service.save_txn(st.con, st, t)
     if errs:
         raise HTTPException(422, {"errors": errs})
@@ -146,19 +155,21 @@ def _save(st, t: Txn, meta: dict) -> dict:
 
 
 @router.post("/transactions", status_code=201)
-async def create_txn(request: Request):
-    st = _state()
+async def create_txn(request: Request, con: Con):
+    st = service.load(con)
     t, meta = _parse(await request.json())
     return _save(st, t, meta)
 
 
 @router.post("/transactions/split", status_code=201)
-async def create_split(request: Request):
+async def create_split(request: Request, con: Con):
     """Body: {"lines": [TxnInput, ...]}. All lines validate before any is written; they share one split_group."""
-    st = _state()
+    st = service.load(con)
     lines = [_parse(b) for b in (await request.json()).get("lines", [])]
     if len(lines) < 2:
         raise HTTPException(422, {"errors": ["A split needs at least two lines."]})
+    if any(t.category_id not in st.cat for t, _ in lines):
+        raise HTTPException(422, {"errors": ["Pick a category for every line."]})
     group = uuid.uuid4().hex[:12]
     errs = [e for t, _ in lines for e in validate(t, st.cat[t.category_id].type, st.acct)]
     if errs:
@@ -167,39 +178,91 @@ async def create_split(request: Request):
 
 
 @router.put("/transactions/{txn_id}")
-async def update_txn(txn_id: int, request: Request):
-    st = _state()
+async def update_txn(txn_id: int, request: Request, con: Con):
+    st = service.load(con)
     if not any(t.id == txn_id for t in st.txns):
         raise HTTPException(404)
     t, meta = _parse(await request.json(), txn_id)
     return _save(st, t, meta)
 
 
-@router.delete("/transactions/{txn_id}", status_code=204)
-def delete_txn(txn_id: int):
-    from .api_files import remove_receipt
-    con = db.connect()
-    row = con.execute("SELECT receipt FROM transactions WHERE id=?", (txn_id,)).fetchone()
-    if row and row["receipt"]:
-        remove_receipt(row["receipt"])
-    con.execute("DELETE FROM transactions WHERE id=?", (txn_id,))
+def _full(con, ids: list[int]) -> list[dict]:
+    marks = ",".join("?" * len(ids))
+    return [_txn(Txn(r["id"], date.fromisoformat(r["date"]), r["what"], r["category_id"], r["from_account_id"],
+                     r["to_account_id"], r["amount"]), dict(r))
+            for r in con.execute(f"SELECT * FROM transactions WHERE id IN ({marks}) ORDER BY date, id", ids)]
+
+
+def _remove(con, ids: list[int]) -> list[dict]:
+    """Delete rows and return them as they were, for Undo. Receipt files stay on disk (marked as just orphaned)
+    so Undo can bring them back; the sweep in api_files removes them a day later."""
+    from .api_files import orphaned
+    gone = _full(con, ids)
+    con.execute(f"DELETE FROM transactions WHERE id IN ({','.join('?' * len(ids))})", ids)
     con.commit()
-    return Response(status_code=204)
+    orphaned([t["receipt"] for t in gone if t["receipt"]])
+    return gone
+
+
+@router.delete("/transactions/{txn_id}")
+def delete_txn(txn_id: int, con: Con):
+    gone = _remove(con, [txn_id])
+    if not gone:
+        raise HTTPException(404)
+    return gone[0]
+
+
+@router.post("/transactions/restore", status_code=201)
+async def restore(request: Request, con: Con):
+    """Undo for deletes. Body: {"rows": [Txn, ...]} as returned by a delete. Puts each row back exactly: same id
+    (so it sorts where it was), note, tags, split, receipt and recurring link."""
+    from .api_files import has_receipt
+    st = service.load(con)
+    rows = (await request.json()).get("rows", [])
+    ids = []
+    for b in rows:
+        t, meta = _parse(b, int(b["id"]))
+        if con.execute("SELECT 1 FROM transactions WHERE id=?", (t.id,)).fetchone():
+            raise HTTPException(409, {"errors": ["That entry is already back."]})
+        if t.category_id not in st.cat or any(a and a not in st.acct for a in (t.from_id, t.to_id)):
+            raise HTTPException(422, {"errors": ["Its category or account no longer exists."]})
+        receipt = b.get("receipt") if has_receipt(b.get("receipt")) else None
+        rid = b.get("recurring_id")
+        if rid and not con.execute("SELECT 1 FROM recurring WHERE id=?", (rid,)).fetchone():
+            rid = None
+        con.execute(
+            "INSERT INTO transactions(id,date,what,category_id,from_account_id,to_account_id,amount,note,tags,"
+            "split_group,receipt,recurring_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (t.id, t.date.isoformat(), t.what, t.category_id, t.from_id, t.to_id, t.amount, meta["note"],
+             meta["tags"], meta["split_group"], receipt, rid))
+        ids.append(t.id)
+    con.commit()
+    return _full(con, ids) if ids else []
 
 
 @router.post("/transactions/bulk")
-async def bulk(request: Request):
-    """Body: {"ids": [...], "action": "delete" | "recategorize" | "tag", "category_id"?: int, "tags"?: [..]}"""
+async def bulk(request: Request, con: Con):
+    """Body: {"ids": [...], "action": "delete" | "recategorize" | "tag", "category_id"?: int, "tags"?: [..]}.
+    Delete returns the removed rows for Undo. Recategorize checks every row against the new category's
+    From/To rules first: moving spending into an income category would count it as income."""
     b = await request.json()
     ids = [int(i) for i in b.get("ids", [])]
     if not ids:
         raise HTTPException(422, {"errors": ["No rows selected."]})
-    con = db.connect()
     marks = ",".join("?" * len(ids))
     if b.get("action") == "delete":
-        con.execute(f"DELETE FROM transactions WHERE id IN ({marks})", ids)
-    elif b.get("action") == "recategorize":
-        con.execute(f"UPDATE transactions SET category_id=? WHERE id IN ({marks})", [int(b["category_id"]), *ids])
+        return {"ok": True, "count": len(ids), "deleted": _remove(con, ids)}
+    if b.get("action") == "recategorize":
+        st = service.load(con)
+        c = st.cat.get(int(b.get("category_id") or 0))
+        if not c:
+            raise HTTPException(422, {"errors": ["Pick a category."]})
+        rows = [t for t in st.txns if t.id in set(ids)]
+        errs = sorted({e for t in rows for e in validate(replace(t, category_id=c.id), c.type, st.acct)})
+        if errs:
+            raise HTTPException(422, {"errors": [f"Can't move {'that entry' if len(rows) == 1 else 'these'} to "
+                                                 f"{c.name} ({c.type}).", *errs]})
+        con.execute(f"UPDATE transactions SET category_id=? WHERE id IN ({marks})", [c.id, *ids])
     elif b.get("action") == "tag":
         add = {x.strip().lstrip("#").lower() for x in b.get("tags", []) if x.strip()}
         for r in con.execute(f"SELECT id, tags FROM transactions WHERE id IN ({marks})", ids).fetchall():

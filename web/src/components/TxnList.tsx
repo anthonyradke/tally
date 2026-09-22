@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useQueryClient } from '@tanstack/react-query'
-import { api, type Bootstrap, type Txn } from '@/api/client'
+import { api, ApiError, type Bootstrap, type Txn } from '@/api/client'
 import type { Lookups } from '@/lib/data'
 import { useAdd } from '@/lib/add'
 import { useMarkFor } from '@/lib/data'
@@ -44,10 +44,12 @@ export function TxnList({ items, boot, lookups, onSelect, dayTotals = true, swip
   const toast = useToast()
   const qc = useQueryClient()
   const refresh = () => { qc.invalidateQueries({ queryKey: ['transactions'] }); qc.invalidateQueries({ queryKey: ['bootstrap'] }) }
-  const remove = (t: Txn) => api.deleteTxn(t.id).then(() => {
+  const fail = (what: string) => (e: unknown) => toast.show({ message: `${what}: ${e instanceof ApiError ? e.errors.join(' ') : e}`, tone: 'error' })
+  const remove = (t: Txn) => api.deleteTxn(t.id).then((gone) => {
     refresh()
-    toast.show({ message: `Deleted ${formatCents(Math.abs(t.amount))} · ${t.what || lookups.cat.get(t.category_id)?.name}`, action: { label: 'Undo', onClick: () => api.createTxn({ ...t }).then(refresh) } })
-  })
+    toast.show({ message: `Deleted ${formatCents(Math.abs(gone.amount))} · ${gone.what || lookups.cat.get(gone.category_id)?.name}`,
+      action: { label: 'Undo', onClick: () => api.restore([gone]).then(refresh, fail("Couldn't undo")) } })
+  }, fail("Couldn't delete"))
   // Layout animation measures every animated node on each render; worth it for short lists (Home panels, filtered
   // results), too costly for the full ledger on a 120 Hz frame budget.
   const animate = items.length <= 40

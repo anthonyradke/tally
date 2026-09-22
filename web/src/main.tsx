@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MotionConfig } from 'motion/react'
 import App from './App'
 import { ToastProvider } from './components/Toast'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { applyTheme, getTheme } from './lib/theme'
 import { registerSW } from 'virtual:pwa-register'
 
@@ -23,7 +24,7 @@ createRoot(document.getElementById('root')!).render(
       <MotionConfig reducedMotion="user">
         <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
           <ToastProvider>
-            <App />
+            <ErrorBoundary><App /></ErrorBoundary>
           </ToastProvider>
         </BrowserRouter>
       </MotionConfig>

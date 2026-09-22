@@ -15,6 +15,7 @@
 .chips { margin-top: var(--s-3); }
 .summary { margin: var(--s-4) 0 0; }
 .empty { padding: var(--s-16) var(--s-4); text-align: center; }
+.more { padding: var(--s-6) 0; text-align: center; font-size: var(--t-13); color: var(--fg-3); }
 .emptyTitle { font-weight: 600; margin-bottom: var(--s-1); }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .reset { color: var(--fg-2); text-decoration: underline; text-underline-offset: 2px; font-size: inherit; }

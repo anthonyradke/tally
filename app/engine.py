@@ -216,7 +216,9 @@ def emergency_fund(rows: list[MonthRow], accounts: list[Account], ef_months: int
         done = [r.spent for r in rows]
     avg = sum(done) // len(done) if done else 0
     goal = avg * ef_months
-    last = rows[-1].balances if rows else {}
+    # Today's month, not the last row: a future-dated entry adds later months to the table.
+    now = next((r for r in rows if r.month == month_of(today)), rows[-1] if rows else None)
+    last = now.balances if now else {}
     progress = sum(last.get(a.id, 0) for a in accounts if a.ef)
     return goal, progress
 

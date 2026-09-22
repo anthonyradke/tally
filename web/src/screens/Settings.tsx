@@ -3,11 +3,12 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Reorder } from 'motion/react'
 import { ChevronLeft, ChevronRight, GripVertical, Plus } from 'lucide-react'
-import { api, type Account, type Category, type Favorite, type Recurring, type SavedView } from '@/api/client'
+import { api, type AdminAccount, type AdminCategory, type Favorite, type Recurring, type SavedView } from '@/api/client'
 import { useBootstrap } from '@/lib/data'
 import { useBack } from '@/lib/nav'
 import { formatCents, parseDollars } from '@/lib/money'
 import { monthLabel } from '@/lib/dates'
+import { monthsNow } from '@/lib/months'
 import { applyTheme, getTheme, type Theme } from '@/lib/theme'
 import { categoryVisual } from '@/icons/categories'
 import { bankColor, KIND_LABEL } from '@/icons/banks'
@@ -84,7 +85,7 @@ function Shortcuts({ favorites }: { favorites: Favorite[] }) {
   const save = useMutation({ mutationFn: (ids: number[]) => api.orderFavorites(ids), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin'] }); qc.invalidateQueries({ queryKey: ['bootstrap'] }) } })
   return (
     <>
-      <p className="secondary">One tap pre-fills a new entry. Drag to reorder — the first few show on Home.</p>
+      <p className="secondary">One tap pre-fills a new entry. Drag to reorder; they show in this order on Home and in New entry.</p>
       <Reorder.Group axis="y" values={order} onReorder={setOrder} className={s.reorder} as="div">
         {order.map((id) => { const f = byId.get(id); if (!f) return null; const c = boot.data?.categories.find((x) => x.id === f.category_id); const v = c && categoryVisual({ ...c, icon: f.icon ?? c.icon, color: f.color ?? c.color })
           return (
@@ -103,10 +104,10 @@ function Shortcuts({ favorites }: { favorites: Favorite[] }) {
   )
 }
 
-function AccountsSection({ accounts }: { accounts: Array<Account & { active: number }> }) {
+function AccountsSection({ accounts }: { accounts: AdminAccount[] }) {
   const boot = useBootstrap()
-  const [edit, setEdit] = useState<Account | null | 'new'>(null)
-  const cur = boot.data?.months[boot.data.months.length - 1]
+  const [edit, setEdit] = useState<AdminAccount | null | 'new'>(null)
+  const cur = boot.data && monthsNow(boot.data).cur
   return (
     <>
       <FieldGroup>
@@ -121,10 +122,10 @@ function AccountsSection({ accounts }: { accounts: Array<Account & { active: num
   )
 }
 
-function CategoriesSection({ categories }: { categories: Array<Category & { active: number; sort: number }> }) {
+function CategoriesSection({ categories }: { categories: AdminCategory[] }) {
   const qc = useQueryClient()
   const [order, setOrder] = useState(categories.map((c) => c.id))
-  const [edit, setEdit] = useState<Category | null | 'new'>(null)
+  const [edit, setEdit] = useState<AdminCategory | null | 'new'>(null)
   useEffect(() => setOrder(categories.map((c) => c.id)), [categories])
   const byId = new Map(categories.map((c) => [c.id, c]))
   const save = useMutation({ mutationFn: (ids: number[]) => api.orderCategories(ids), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin'] }); qc.invalidateQueries({ queryKey: ['bootstrap'] }) } })
