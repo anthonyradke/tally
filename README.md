@@ -7,7 +7,7 @@ back end, a React PWA on the front, laid out for an iPhone home screen first and
   <img src="docs/home.png" width="200" alt="Home: net worth and this month's spending against last month">
   <img src="docs/add.png" width="200" alt="Adding an entry with the keypad">
   <img src="docs/insights.png" width="200" alt="Insights for the month">
-  <img src="docs/accounts.png" width="200" alt="Accounts in dark mode">
+  <img src="docs/accounts.png" width="200" alt="Accounts: balances by type">
 </p>
 
 The screenshots use made-up data from `scripts/seed_demo.py`.
