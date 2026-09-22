@@ -16,6 +16,7 @@ import { Amount } from '@/components/Amount'
 import { LineChart } from '@/components/LineChart'
 import { TxnList } from '@/components/TxnList'
 import s from './AccountDetail.module.css'
+import { numpad } from '@/components/NumPad'
 
 export function AccountDetail() {
   const { id } = useParams()
@@ -78,7 +79,7 @@ export function AccountDetail() {
           <p className="secondary">Type what the bank app shows right now. Rows dated after today are ignored.</p>
           <form className={s.reconForm} onSubmit={(e) => { e.preventDefault(); check.mutate(false) }}>
             <span className={s.cur}>$</span>
-            <input className={`tnum ${s.actual}`} inputMode="decimal" placeholder="0.00" value={actual} onChange={(e) => setActual(e.target.value)} aria-label="Balance in the bank app" />
+            <input className={`tnum ${s.actual}`} {...numpad('money')} placeholder="0.00" value={actual} onChange={(e) => setActual(e.target.value)} aria-label="Balance in the bank app" />
             <button type="submit" className={s.ghost} disabled={actualCents === null || check.isPending}>Check</button>
             <button type="button" className={s.primary} disabled={actualCents === null || check.isPending} onClick={() => check.mutate(true)}>Save</button>
           </form>
@@ -106,7 +107,7 @@ export function AccountDetail() {
           <p className="secondary">Investments aren't computed from entries — type what the account showed at month end.</p>
           <form className={s.reconForm} onSubmit={(e) => { e.preventDefault(); saveTyped.mutate() }}>
             <span className={s.cur}>$</span>
-            <input className={`tnum ${s.actual}`} inputMode="decimal" placeholder={(bal / 100).toFixed(2)} value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Typed balance" />
+            <input className={`tnum ${s.actual}`} {...numpad('money')} placeholder={(bal / 100).toFixed(2)} value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Typed balance" />
             <button type="submit" className={s.primary} disabled={parseDollars(typed) === null || saveTyped.isPending}>Save</button>
           </form>
         </section>

@@ -1,0 +1,22 @@
+/* Sits where the system keyboard would, over sheets and the tab bar. Shorter than the tallest iOS keyboard, so the
+   lift in lib/keyboard.ts (which clears 400px) keeps the focused field in view. */
+.dock {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
+  background: var(--sheet-bg); box-shadow: 0 0 0 .5px var(--glass-edge), var(--shadow-sheet);
+  padding: 0 var(--s-2) calc(env(safe-area-inset-bottom, 0px) + var(--s-2));
+  --key-bg: light-dark(#FFFFFF, #3A3A3C); --key-bg-on: light-dark(#D8D8DD, #545456);
+  touch-action: none;
+}
+.bar { display: flex; justify-content: space-between; align-items: center; min-height: 44px; }
+.barBtn { min-height: 44px; min-width: 44px; padding: 0 var(--s-3); font-size: var(--t-17); color: var(--fg); }
+.done { font-weight: 600; }
+.keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.key {
+  height: 50px; border-radius: var(--r-key); background: var(--key-bg); color: var(--fg); box-shadow: 0 1px 0 rgb(0 0 0 / .06);
+  font-family: var(--font-display); font-size: var(--t-28); font-weight: 500;
+  display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums;
+  -webkit-user-select: none; user-select: none;
+  transition: transform 90ms var(--ease-out), background 90ms var(--ease-out);
+}
+.key:active { transform: scale(.94); background: var(--key-bg-on); }
+.icon { width: 22px; height: 22px; }

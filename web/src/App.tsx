@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { AddContext, type AddApi } from './lib/add'
 import { TabBar } from './components/TabBar'
 import { Palette } from './components/Palette'
+import { NumPad } from './components/NumPad'
 import { OutboxSync } from './components/Outbox'
 import { Skeleton } from './components/Skeleton'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -123,6 +124,7 @@ export default function App() {
       </div>
       <AddSheet open={add.open} seed={add.seed} onClose={close} />
       <Palette />
+      <NumPad />
       <OutboxSync />
     </AddContext.Provider>
   )

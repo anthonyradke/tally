@@ -21,6 +21,7 @@ import { useToast } from '@/components/Toast'
 import { BudgetSetup } from './BudgetSetup'
 import { AccountSheet, CategorySheet, FavoriteSheet, RecurringSheet, ViewSheet } from './SettingsSheets'
 import s from './Settings.module.css'
+import { numpad } from '@/components/NumPad'
 
 export const useAdmin = () => useQuery({ queryKey: ['admin'], queryFn: api.admin })
 
@@ -222,8 +223,8 @@ function General({ settings, categories }: { settings: Record<string, string>; c
   return (
     <>
       <FieldGroup>
-        <TextRow label="Emergency fund" value={ef} onChange={(e) => setEf(e.target.value)} inputMode="numeric" placeholder="months" />
-        <TextRow label="Roth IRA limit" value={roth} onChange={(e) => setRoth(e.target.value)} inputMode="decimal" />
+        <TextRow label="Emergency fund" value={ef} onChange={(e) => setEf(e.target.value)} {...numpad('whole')} placeholder="months" />
+        <TextRow label="Roth IRA limit" value={roth} onChange={(e) => setRoth(e.target.value)} {...numpad('amount')} />
         <TextRow label="Log starts" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
       </FieldGroup>
       <FieldGroup title="Categories Tally watches">

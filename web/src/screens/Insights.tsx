@@ -23,6 +23,7 @@ import { Delta } from './HomeMonth'
 import { Mark } from '@/components/Mark'
 import { LineChart } from '@/components/LineChart'
 import s from './Insights.module.css'
+import { numpad } from '@/components/NumPad'
 
 export function Insights() {
   const boot = useBootstrap()
@@ -184,7 +185,7 @@ function MonthEnd({ ym }: { ym: string }) {
         <form className={s.form} onSubmit={(e) => { e.preventDefault(); saveTyped.mutate() }}>
           {inv.map((a) => (
             <label key={a.id} className={s.field}><span className={s.fieldLabel}>{a.name}</span><span className={s.cur}>$</span>
-              <input className="tnum" inputMode="decimal" placeholder={me.typed[String(a.id)] != null ? (me.typed[String(a.id)]! / 100).toFixed(2) : '0.00'} value={typed[a.id] ?? ''} onChange={(e) => setTyped({ ...typed, [a.id]: e.target.value })} /></label>
+              <input className="tnum" {...numpad('money')} placeholder={me.typed[String(a.id)] != null ? (me.typed[String(a.id)]! / 100).toFixed(2) : '0.00'} value={typed[a.id] ?? ''} onChange={(e) => setTyped({ ...typed, [a.id]: e.target.value })} /></label>
           ))}
           <button type="submit" className={s.primary} disabled={!Object.values(typed).some(Boolean) || saveTyped.isPending}>Save balances</button>
         </form>
@@ -194,7 +195,7 @@ function MonthEnd({ ym }: { ym: string }) {
           <form className={s.form} onSubmit={(e) => { e.preventDefault(); logInterest.mutate() }}>
             {hysas.map((a) => { const it = me.interest[String(a.id)]; return (
               <label key={a.id} className={s.field}><span className={s.fieldLabel}>{a.name}</span>
-                {it.logged.length ? <span className="pos tnum">{formatCents(it.logged[0].amount)} logged</span> : <><span className={s.cur}>$</span><input className="tnum" inputMode="decimal" value={interest[a.id] ?? (it.proposed / 100).toFixed(2)} onChange={(e) => setInterest({ ...interest, [a.id]: e.target.value })} /></>}
+                {it.logged.length ? <span className="pos tnum">{formatCents(it.logged[0].amount)} logged</span> : <><span className={s.cur}>$</span><input className="tnum" {...numpad('amount')} value={interest[a.id] ?? (it.proposed / 100).toFixed(2)} onChange={(e) => setInterest({ ...interest, [a.id]: e.target.value })} /></>}
               </label>) })}
             {!me.interest_done && <button type="submit" className={s.primary} disabled={logInterest.isPending}>Log interest</button>}
           </form>
