@@ -42,3 +42,12 @@ export function useBack(parent: string) {
     else nav(parent)
   }, [nav, parent])
 }
+
+/** Navigate one level deeper once the tapped row's pressed state has been painted away. iOS snapshots the page as it
+ *  leaves and shows that snapshot during a swipe back, so navigating mid-press left the row highlighted there. */
+export function useOpen() {
+  const nav = useNavigate()
+  return useCallback((to: string) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => nav(to)))
+  }, [nav])
+}
