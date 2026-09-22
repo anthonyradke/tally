@@ -73,6 +73,7 @@ function Index() {
         <FieldRow label="Export" value={<span className={s.links}><a href="/export/log.csv">log.csv</a><a href="/export/months.csv">months.csv</a></span>} />
         <BackupRow />
       </FieldGroup>
+      <p className={`secondary ${s.version}`}>Tally {__APP_VERSION__}</p>
     </>
   )
 }
