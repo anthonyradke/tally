@@ -51,8 +51,9 @@ function scroller(el: HTMLElement) {
   return null
 }
 
-/** The field's value with rolling digits, drawn over the field (whose own text goes clear) while the pad types into it. */
-function Roller({ el }: { el: HTMLInputElement }) {
+/** The field's value with rolling digits, drawn over the field (whose own text goes clear) while the pad types into it.
+ *  An empty field shows a dim zero in its place, like New entry's 0.00, so the first digit rolls in instead of popping. */
+function Roller({ el, places }: { el: HTMLInputElement; places: number }) {
   const [text, setText] = useState(el.value)
   const box = useRef<HTMLSpanElement>(null)
   useEffect(() => {
@@ -61,15 +62,8 @@ function Roller({ el }: { el: HTMLInputElement }) {
     el.addEventListener('input', on)
     return () => el.removeEventListener('input', on)
   }, [el])
-  // Hide the field's text only while there is some, so its placeholder still shows when empty.
-  useLayoutEffect(() => {
-    const keep = { color: el.style.color, fill: el.style.webkitTextFillColor, caret: el.style.caretColor }
-    el.style.color = text ? 'transparent' : keep.color
-    el.style.webkitTextFillColor = text ? 'transparent' : keep.fill
-    el.style.caretColor = 'transparent'
-    return () => { el.style.color = keep.color; el.style.webkitTextFillColor = keep.fill; el.style.caretColor = keep.caret }
-  }, [el, text])
-  // Follow the field every frame: the sheet scrolls it into place as the pad comes up.
+  // Copy the field's look (before the effect below clears its colour), then follow it every frame: the sheet scrolls
+  // it into place as the pad comes up.
   useLayoutEffect(() => {
     const o = box.current
     if (!o) return
@@ -93,7 +87,16 @@ function Roller({ el }: { el: HTMLInputElement }) {
     tick()
     return () => cancelAnimationFrame(raf)
   }, [el])
-  return <span ref={box} className={s.roller} aria-hidden><Rolling text={text} widths={digitWidthsOf(el)} /></span>
+  // The roller stands in for the field's text and its placeholder (hidden via [data-rolling] in global.css).
+  useLayoutEffect(() => {
+    const keep = { color: el.style.color, fill: el.style.webkitTextFillColor, caret: el.style.caretColor }
+    el.style.color = el.style.webkitTextFillColor = el.style.caretColor = 'transparent'
+    el.dataset.rolling = ''
+    return () => { el.style.color = keep.color; el.style.webkitTextFillColor = keep.fill; el.style.caretColor = keep.caret; delete el.dataset.rolling }
+  }, [el])
+  const empty = !/\d/.test(text)
+  const shown = empty ? (text.trim().startsWith('-') ? '-' : '') + (0).toFixed(places) : text
+  return <span ref={box} className={`${s.roller} ${empty ? s.zero : ''}`} aria-hidden><Rolling text={shown} widths={digitWidthsOf(el)} /></span>
 }
 
 export function NumPad() {
@@ -121,7 +124,7 @@ export function NumPad() {
   const kind = (el?.dataset.numpad ?? 'amount') as Kind
   return createPortal(
     <>
-      {el && !reduce && <Roller el={el} />}
+      {el && !reduce && <Roller el={el} places={PLACES[kind]} />}
       <AnimatePresence>
         {el && (
           <motion.div className={s.dock} role="group" aria-label="Number pad"

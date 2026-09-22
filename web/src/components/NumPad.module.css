@@ -10,4 +10,9 @@
 .bar { display: flex; justify-content: flex-end; align-items: center; min-height: 44px; }
 .done { min-height: 44px; padding: 0 var(--s-1); font-size: var(--t-17); font-weight: 600; color: var(--fg); }
 /* The focused field's value with rolling digits, laid over the field (placed by NumPad.tsx). Above sheets, under the pad. */
-.roller { position: fixed; z-index: 120; display: flex; align-items: center; overflow: hidden; pointer-events: none; white-space: nowrap; }
+.roller {
+  position: fixed; z-index: 120; display: flex; align-items: center; overflow: hidden; pointer-events: none; white-space: nowrap;
+  transition: color 160ms var(--ease-out);
+}
+/* An empty field's stand-in zero, dimmed like placeholder text (!important: the field's colour is copied inline). */
+.zero { color: var(--fg-3) !important; }
