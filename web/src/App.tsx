@@ -7,6 +7,7 @@ import { AddContext, type AddApi } from './lib/add'
 import { TabBar } from './components/TabBar'
 import { Palette } from './components/Palette'
 import { Skeleton } from './components/Skeleton'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { useBootstrap } from './lib/data'
 import { useSplash } from './lib/splash'
 import { takeNativeSwipe, trackEntry } from './lib/nav'
@@ -103,7 +104,8 @@ export default function App() {
         <main className={s.main}>
           {!boot.data || !revealed ? <div className={s.page}><Skeleton /></div> : <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}><AnimatePresence mode="popLayout" initial={false} custom={dir}>
             <motion.div key={location.pathname} data-page={location.pathname} className={s.page} custom={dir} variants={page} initial="enter" animate="show" exit="exit">
-              <Routes location={location}>
+              {/* Per page, so a broken screen keeps the tab bar; it resets on navigation (the page remounts). */}
+              <ErrorBoundary><Routes location={location}>
                 <Route path="/" element={<Home />} />
                 <Route path="/activity" element={<Activity />} />
                 <Route path="/accounts" element={<Accounts />} />
@@ -112,7 +114,7 @@ export default function App() {
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/settings/:section" element={<Settings />} />
                 <Route path="*" element={<Home />} />
-              </Routes>
+              </Routes></ErrorBoundary>
             </motion.div>
           </AnimatePresence></motion.div>}
         </main>

@@ -142,18 +142,19 @@ export const merchantKey = (what: string) => what.toLowerCase().replace(/\(.*?\)
 /** User overrides, keyed by merchantKey. Value: a registry id, `tint:<tint>` (letter tile) or `category` (no mark). */
 export type MarkOverrides = Record<string, string>
 export function parseOverrides(raw: string | undefined): MarkOverrides {
-  try { const v = raw ? JSON.parse(raw) : {}; return v && typeof v === 'object' ? v : {} } catch { return {} }
+  try { const v = raw ? JSON.parse(raw) : {}; return v && typeof v === 'object' && !Array.isArray(v) ? v : {} } catch { return {} }
 }
 
-/** The override that applies to a description: exact key, else the longest key it starts with ("costco" covers "costco gas"). */
+/** The override that applies to a description: exact key, else the longest key it starts with ("costco" covers "costco gas").
+ *  Own keys only: `in` also matched Object.prototype, so an entry named "Constructor" crashed every list it was in. */
 export function overrideKey(what: string, o: MarkOverrides): string | undefined {
   const k = merchantKey(what)
-  if (k in o) return k
+  if (Object.hasOwn(o, k)) return k
   return Object.keys(o).filter((x) => x && k.startsWith(x + ' ')).sort((a, b) => b.length - a.length)[0]
 }
 
 export function specFor(value: string, what: string): MarkSpec | null {
-  if (value === 'category') return null
+  if (typeof value !== 'string' || value === 'category') return null
   if (value.startsWith('tint:')) {
     const letter = merchantKey(what).replace(/^[^\p{L}\p{N}]+/u, '').charAt(0).toUpperCase() || '?'
     return mono(letter, tintVar(value.slice(5) as Tint), what)

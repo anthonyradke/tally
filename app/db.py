@@ -42,22 +42,38 @@ CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
 DEFAULT_SETTINGS = {"start_month": "2026-08-01", "ef_months": "6", "roth_limit": "750000"}
+_ready: set[str] = set()  # database paths already set up by this process
 
 
 def connect(path: Optional[str] = None) -> sqlite3.Connection:
+    """Open a connection. Schema, migrations and default settings run once per path per process, so ordinary
+    requests never write just by connecting. check_same_thread=False: FastAPI may open a request's connection
+    on one worker thread and use it on another; a connection still serves one request at a time."""
     path = path or os.environ.get("TALLY_DB", "data/tally.db")
     if path != ":memory:":
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    con = sqlite3.connect(path, detect_types=0)
+    con = sqlite3.connect(path, detect_types=0, check_same_thread=False)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys=ON")
-    con.execute("PRAGMA journal_mode=WAL")
-    con.executescript(SCHEMA)
-    migrate(con)  # additive 2026-09 columns/tables; idempotent
-    for k, v in DEFAULT_SETTINGS.items():
-        con.execute("INSERT OR IGNORE INTO settings VALUES(?,?)", (k, v))
-    con.commit()
+    if path == ":memory:" or path not in _ready:
+        con.execute("PRAGMA journal_mode=WAL")
+        con.executescript(SCHEMA)
+        migrate(con)  # additive 2026-09 columns/tables; idempotent
+        for k, v in DEFAULT_SETTINGS.items():
+            con.execute("INSERT OR IGNORE INTO settings VALUES(?,?)", (k, v))
+        con.commit()
+        _ready.add(path)
     return con
+
+
+def session():
+    """FastAPI dependency: one connection per request, closed when the request ends however it ends. Closing
+    rolls back anything uncommitted; a failed write used to leave its transaction open and lock every later request."""
+    con = connect()
+    try:
+        yield con
+    finally:
+        con.close()
 
 
 def setting(con, key: str) -> str:
