@@ -11,6 +11,9 @@
 .chip:active { transform: scale(.95); }
 .on { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
 .lead, .trail { display: inline-flex; align-items: center; }
+/* A leading mark in a small chip: 22px leaves an even 3-4px ring inside the 30px pill instead of touching its edge. */
+.sm .lead { margin-left: -6px; }
+.sm .lead > * { width: 22px; height: 22px; border-radius: 6px; }
 .trail { color: var(--fg-3); margin-right: -2px; } .on .trail { color: inherit; opacity: .7; }
 /* Bleeds to the screen edge and fades out there, so a half-visible chip reads as "more" rather than "cut". */
 .row {
