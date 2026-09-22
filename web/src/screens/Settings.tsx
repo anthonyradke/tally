@@ -5,6 +5,7 @@ import { Reorder } from 'motion/react'
 import { ChevronLeft, ChevronRight, GripVertical, Plus } from 'lucide-react'
 import { api, type Account, type Category, type Favorite, type Recurring, type SavedView } from '@/api/client'
 import { useBootstrap } from '@/lib/data'
+import { useBack } from '@/lib/nav'
 import { formatCents, parseDollars } from '@/lib/money'
 import { monthLabel } from '@/lib/dates'
 import { applyTheme, getTheme, type Theme } from '@/lib/theme'
@@ -30,14 +31,14 @@ const SECTIONS = [
 
 export function Settings() {
   const { section } = useParams()
-  const nav = useNavigate()
+  const back = useBack('/settings')
   const boot = useBootstrap()
   const admin = useAdmin()
   const title = SECTIONS.find(([k]) => k === section)?.[1] ?? 'Settings'
   return (
     <div className={s.screen}>
       {section ? (
-        <button type="button" className={s.back} onClick={() => nav('/settings')}><ChevronLeft strokeWidth={2} absoluteStrokeWidth />Settings</button>
+        <button type="button" className={s.back} onClick={back}><ChevronLeft strokeWidth={2} absoluteStrokeWidth />Settings</button>
       ) : null}
       <h1 className={s.title}>{title}</h1>
       {!section && <Index />}

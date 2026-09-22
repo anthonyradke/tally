@@ -41,7 +41,7 @@ export function Home() {
         <button type="button" className={s.gear} onClick={() => setEditing(true)} aria-label="Edit Home"><SlidersHorizontal strokeWidth={1.75} absoluteStrokeWidth /></button>
         <button type="button" className={`${s.gear} ${s.gearPhone}`} onClick={() => nav('/settings')} aria-label="Settings"><SettingsIcon strokeWidth={1.75} absoluteStrokeWidth /></button>
       </div>
-      {layout.order.filter((id) => !layout.hidden.includes(id)).map((id) => [id, WIDGETS[id].render(ctx)] as const).filter(([, node]) => node).map(([id, node], i) => <div key={id} className={i > 1 ? s.lazy : undefined}>{node}</div>)}
+      {layout.order.filter((id) => !layout.hidden.includes(id)).map((id) => [id, WIDGETS[id].render(ctx)] as const).filter(([, node]) => node).map(([id, node]) => <div key={id}>{node}</div>)}
 
       <Sheet open={editing} onClose={() => setEditing(false)} title="Edit Home" action={<button type="button" className={s.done} onClick={() => setEditing(false)}>Done</button>}>
         <p className={`secondary ${s.editHint}`}>Drag to reorder. Switch off what you don't want to see.</p>
