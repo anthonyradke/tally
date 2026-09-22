@@ -11,6 +11,8 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 #root { min-height: 100dvh; }
+/* A number field the keypad is typing into shows its value through the rolling overlay (components/NumPad.tsx). */
+input[data-rolling]::placeholder { color: transparent; }
 
 /* text roles */
 .caps { font-size: var(--t-13); font-weight: 500; color: var(--fg-2); }
