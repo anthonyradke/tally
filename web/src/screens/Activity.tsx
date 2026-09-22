@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowDownUp, Bookmark, ChevronDown, Search, X } from 'lucide-react'
-import { api, type CatType, type Txn } from '@/api/client'
+import { api, ApiError, type CatType, type Category, type Txn } from '@/api/client'
 import { useBootstrap, useLookups, useTransactions } from '@/lib/data'
 import { useAdd } from '@/lib/add'
 import { formatCents } from '@/lib/money'
+import { fits } from '@/lib/shapes'
 import { monthLabel } from '@/lib/dates'
 import { categoryVisual } from '@/icons/categories'
 import { bankColor } from '@/icons/banks'
@@ -22,6 +23,8 @@ const TYPES: Array<{ label: string; value: CatType | '' }> = [
   { label: 'All', value: '' }, { label: 'Spending', value: 'Spending' }, { label: 'Money in', value: 'Money in' },
   { label: 'Transfers', value: 'Transfer' }, { label: 'Saving', value: 'Saving' }, { label: 'Loans', value: 'Loan' },
 ]
+const PAGE = 200
+const errText = (e: unknown) => (e instanceof ApiError ? e.errors.join(' ') : String(e))
 const SORTS = [
   { value: 'date-desc', label: 'Newest first' }, { value: 'date-asc', label: 'Oldest first' },
   { value: 'amount-desc', label: 'Largest first' }, { value: 'amount-asc', label: 'Smallest first' },
@@ -46,9 +49,22 @@ export function Activity() {
   }
   const filtered = !!(q || type || category || account || tag || start || end || group)
 
+  // Pages of PAGE rows; scrolling near the end asks for the next page. Any filter change starts over.
+  const [paging, setPaging] = useState({ key: '', limit: PAGE })
+  const pageKey = params.toString()
+  const limit = paging.key === pageKey ? paging.limit : PAGE
   const boot = useBootstrap()
   const lookups = useLookups(boot.data)
-  const txns = useTransactions({ q, type, category, account, tag, start, end, group, sort, dir, limit: 500 })
+  const txns = useTransactions({ q, type, category, account, tag, start, end, group, sort, dir, limit })
+  const more = !!txns.data && txns.data.items.length < txns.data.total
+  const sentinel = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = sentinel.current
+    if (!el || !more || txns.isFetching) return
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setPaging({ key: pageKey, limit: limit + PAGE }) }, { rootMargin: '800px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [more, txns.isFetching, pageKey, limit])
   const { open } = useAdd()
   const toast = useToast()
   const qc = useQueryClient()
@@ -62,30 +78,43 @@ export function Activity() {
   const b = boot.data
   const cat = category ? lookups.cat.get(category) : undefined
   const acct = account ? lookups.acct.get(account) : undefined
-  const catOptions: Option[] = (b?.categories ?? []).filter((c) => !type || c.type === type).map((c) => { const v = categoryVisual(c); return { value: String(c.id), label: c.name, group: c.type, mark: <Mark Icon={v.Icon} color={v.color} size="sm" /> } })
-  const acctOptions: Option[] = (b?.accounts ?? []).map((a) => ({ value: String(a.id), label: a.name, group: { cash: 'Cash', card: 'Cards', investment: 'Investments', loan: 'Loans' }[a.kind], mark: <i className={s.dot} style={{ background: bankColor(a) }} /> }))
+  // Filters list hidden categories/accounts too (under "Hidden"): their history is still worth finding.
+  const catOption = (c: Category): Option => { const v = categoryVisual(c); return { value: String(c.id), label: c.name, group: c.active ? c.type : 'Hidden', mark: <Mark Icon={v.Icon} color={v.color} size="sm" /> } }
+  const byActive = <T extends { active: boolean }>(xs: T[]) => [...xs.filter((x) => x.active), ...xs.filter((x) => !x.active)]
+  const catOptions: Option[] = byActive((b?.categories ?? []).filter((c) => !type || c.type === type)).map(catOption)
+  const acctOptions: Option[] = byActive(b?.accounts ?? []).map((a) => ({ value: String(a.id), label: a.name, group: a.active ? { cash: 'Cash', card: 'Cards', investment: 'Investments', loan: 'Loans' }[a.kind] : 'Hidden', mark: <i className={s.dot} style={{ background: bankColor(a) }} /> }))
 
   const refresh = () => { qc.invalidateQueries({ queryKey: ['transactions'] }); qc.invalidateQueries({ queryKey: ['bootstrap'] }) }
   const saveView = useMutation({
     mutationFn: () => api.saveView({ name: viewName.trim(), query: params.toString() }),
     onSuccess: () => { setSaving(false); setViewName(''); refresh(); toast.show({ message: 'View saved' }) },
+    onError: (e) => toast.show({ message: `Couldn't save the view: ${errText(e)}`, tone: 'error' }),
   })
   const bulk = useMutation({
-    mutationFn: async (body: Parameters<typeof api.bulk>[0]) => {
-      const before = body.action === 'delete' ? (txns.data?.items ?? []).filter((t) => body.ids.includes(t.id)) : []
-      await api.bulk(body); return before
-    },
-    onSuccess: (before, body) => {
+    mutationFn: (body: Parameters<typeof api.bulk>[0]) => api.bulk(body),
+    onSuccess: (res, body) => {
       refresh(); setSelection(null); setTagging(false); setNewTags('')
       const n = body.ids.length
-      if (body.action === 'delete') toast.show({ message: `Deleted ${n} ${n === 1 ? 'entry' : 'entries'}`, action: { label: 'Undo', onClick: () => Promise.all(before.map((t: Txn) => api.createTxn({ ...t }))).then(refresh) } })
+      // The server returns what it deleted, including rows selected under an earlier filter.
+      const gone: Txn[] = res.deleted ?? []
+      if (body.action === 'delete') toast.show({ message: `Deleted ${n} ${n === 1 ? 'entry' : 'entries'}`, action: { label: 'Undo', onClick: () => api.restore(gone).then(refresh, (e) => toast.show({ message: `Couldn't undo: ${errText(e)}`, tone: 'error' })) } })
       else toast.show({ message: body.action === 'tag' ? `Tagged ${n}` : `Recategorized ${n}` })
     },
-    onError: (e) => toast.show({ message: String(e), tone: 'error' }),
+    onError: (e) => toast.show({ message: errText(e), tone: 'error' }),
   })
 
   const toggle = (id: number) => setSelection((sel) => { const next = new Set(sel ?? []); next.has(id) ? next.delete(id) : next.add(id); return next })
   const ids = [...(selection ?? [])]
+  // Move-to offers only categories every selected (visible) entry fits; the server checks the rest.
+  const picked = (txns.data?.items ?? []).filter((t) => selection?.has(t.id))
+  const recatOptions: Option[] = (b?.categories ?? []).filter((c) => c.active && picked.every((t) => fits(t, c.type))).map(catOption)
+  const summary = (p: NonNullable<typeof txns.data>) => {
+    const types = Object.keys(p.by_type)
+    if (types.length <= 1) return <>total <span className="tnum">{formatCents(p.sum)}</span></>
+    // Net the way Left over works: money in minus spending, saving and loan payments; transfers move nothing.
+    const bt = p.by_type, net = (bt['Money in'] ?? 0) - (bt.Spending ?? 0) - (bt.Saving ?? 0) - (bt.Loan ?? 0)
+    return <>net <span className="tnum">{formatCents(net, { sign: 'always' })}</span></>
+  }
 
   return (
     <div className={s.screen}>
@@ -114,7 +143,7 @@ export function Activity() {
       {txns.data && (
         <p className={`secondary ${s.summary}`}>
           {txns.data.total} {txns.data.total === 1 ? 'entry' : 'entries'}
-          {filtered && <> · net <span className="tnum">{formatCents(txns.data.sum)}</span></>}
+          {filtered && <> · {summary(txns.data)}</>}
           {filtered && <> · <button type="button" className={s.reset} onClick={() => setParams(new URLSearchParams(), { replace: true })}>clear filters</button></>}
         </p>
       )}
@@ -130,6 +159,7 @@ export function Activity() {
         <TxnList items={txns.data.items} boot={b} lookups={lookups} onSelect={(t) => open({ edit: t })} swipe
           selection={selection ?? undefined} onToggle={toggle} onLongPress={(id) => setSelection((sel) => new Set([...(sel ?? []), id]))} />
       )}
+      {more && <div ref={sentinel} className={s.more}>{txns.isFetching ? 'Loading…' : `${txns.data!.total - txns.data!.items.length} more`}</div>}
 
       {selection && (
         <div className={s.bulkBar} role="toolbar" aria-label="Selection actions">
@@ -144,7 +174,7 @@ export function Activity() {
       <Picker open={picker === 'cat'} onClose={() => setPicker(null)} title="Category" options={catOptions} value={category ? String(category) : ''} searchable noneLabel="All categories" onChange={(v) => set({ category: v || undefined })} />
       <Picker open={picker === 'acct'} onClose={() => setPicker(null)} title="Account" options={acctOptions} value={account ? String(account) : ''} noneLabel="All accounts" onChange={(v) => set({ account: v || undefined })} />
       <Picker open={picker === 'sort'} onClose={() => setPicker(null)} title="Sort" options={SORTS} value={sortKey} onChange={(v) => set({ sort: v === 'date-desc' ? undefined : v })} />
-      <Picker open={picker === 'recat'} onClose={() => setPicker(null)} title="Move to category" options={(b?.categories ?? []).map((c) => { const v = categoryVisual(c); return { value: String(c.id), label: c.name, group: c.type, mark: <Mark Icon={v.Icon} color={v.color} size="sm" /> } })} value={null} searchable onChange={(v) => bulk.mutate({ ids, action: 'recategorize', category_id: Number(v) })} />
+      <Picker open={picker === 'recat'} onClose={() => setPicker(null)} title="Move to category" options={recatOptions} value={null} searchable onChange={(v) => bulk.mutate({ ids, action: 'recategorize', category_id: Number(v) })} />
 
       <Sheet open={saving} onClose={() => setSaving(false)} title="Save view" action={<button type="button" className={s.sheetSave} disabled={!viewName.trim() || saveView.isPending} onClick={() => saveView.mutate()}>Save</button>}>
         <div className={s.sheetBody}><FieldGroup><TextRow label="Name" value={viewName} onChange={(e) => setViewName(e.target.value)} placeholder="Amex this month" autoFocus /></FieldGroup><p className="secondary">Saves the current search, filters and sort as a chip here and in Settings.</p></div>

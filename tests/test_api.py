@@ -103,6 +103,10 @@ def test_budgets_and_receipts(client):
     assert b"root:" not in client.get("/api/receipts/../../etc/passwd").content
     assert client.post(f"/api/transactions/{t['id']}/receipt", files={"file": ("r.txt", b"x", "text/plain")}).status_code == 422
     client.delete(f"/api/transactions/{t['id']}")
+    assert client.get(f"/api/receipts/{name}").status_code == 200  # kept for Undo until the sweep
+    from app import db
+    from app.api_files import sweep
+    assert sweep(db.connect(), grace=0, every=0) == 1
     assert client.get(f"/api/receipts/{name}").status_code == 404
 
 

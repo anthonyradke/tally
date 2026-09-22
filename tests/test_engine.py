@@ -93,6 +93,14 @@ def test_emergency_fund_uses_completed_months_only():
     assert progress == cents("1")
 
 
+def test_emergency_fund_progress_is_today_not_a_future_month():
+    hysa = Account(5, "SoFi HYSA", "cash", cents("100"), ef=True)
+    txns = [tx(date(2026, 10, 1), 2, 5, None, "40")]   # pre-logged for next month
+    rows = month_table(ACCTS + [hysa], CATS, txns, {}, [AUG, SEP, date(2026, 10, 1)])
+    _, progress = emergency_fund(rows, ACCTS + [hysa], 6, date(2026, 9, 21))
+    assert progress == cents("100")
+
+
 def test_helpers():
     assert month_range(date(2026, 8, 15), date(2026, 10, 2)) == [AUG, SEP, date(2026, 10, 1)]
     assert cents("12.345") == 1235 and cents(-170) == -17000

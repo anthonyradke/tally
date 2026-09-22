@@ -8,6 +8,7 @@ import { useBootstrap } from '@/lib/data'
 import { useToast } from '@/components/Toast'
 import { formatCents, parseDollars, pct } from '@/lib/money'
 import { fromISO, monthLabel } from '@/lib/dates'
+import { monthsNow } from '@/lib/months'
 import { categoryVisual } from '@/icons/categories'
 import { Hero } from '@/components/Hero'
 import { Amount } from '@/components/Amount'
@@ -28,13 +29,14 @@ export function Insights() {
   const b = boot.data
   if (!b) return null
   const months = b.months
-  const m = months.find((r) => r.month.slice(0, 7) === params.get('m')) ?? months[months.length - 1]
+  const { cur, upTo } = monthsNow(b)
+  const m = months.find((r) => r.month.slice(0, 7) === params.get('m')) ?? cur
   const ym = m.month.slice(0, 7)
   const idx = months.indexOf(m)
   const prev = months[idx - 1]
   const spending = b.categories.filter((c) => c.type === 'Spending')
   const budgetFor = (cid: number) => b.budgets.find((x) => x.category_id === cid && x.month === m.month)?.amount ?? b.categories.find((c) => c.id === cid)?.budget ?? null
-  const rows = spending.map((c) => ({ c, amt: m.by_category[String(c.id)] ?? 0, budget: budgetFor(c.id) }))
+  const rows = spending.map((c) => ({ c, amt: m.by_category[String(c.id)] ?? 0, budget: c.active ? budgetFor(c.id) : null }))
     .filter((r) => r.amt || r.budget).sort((x, y) => y.amt - x.amt)
   const budgeted = rows.filter((r) => r.budget)
   const budgetTotal = budgeted.reduce((n, r) => n + (r.budget ?? 0), 0)
@@ -87,7 +89,7 @@ export function Insights() {
               </Ring>
               {budgeted.length > 0 && <p className={`secondary tnum ${budgetSpent > budgetTotal ? 'neg' : ''}`}>{formatCents(budgetSpent, { cents: false })} of {formatCents(budgetTotal, { cents: false })} budgeted</p>}
             </div>
-          ) : <p className="secondary">Nothing spent this month yet.</p>}
+          ) : <p className="secondary">{m === cur ? 'Nothing spent this month yet.' : m.month > cur.month ? `Nothing scheduled for ${monthName} yet.` : `Nothing spent in ${monthName}.`}</p>}
           <ul className={s.bars}>
             {rows.map(({ c, amt, budget }) => {
               const v = categoryVisual(c)
@@ -112,7 +114,7 @@ export function Insights() {
       </Section>
 
       <Section title="Net worth">
-        <Panel><LineChart points={months.map((r) => ({ x: r.month, y: r.net_worth }))} xLabel={(x) => monthLabel(x)} ariaLabel="Net worth by month" /></Panel>
+        <Panel><LineChart points={upTo.map((r) => ({ x: r.month, y: r.net_worth }))} xLabel={(x) => monthLabel(x)} ariaLabel="Net worth by month" /></Panel>
       </Section>
 
       <MonthEnd ym={ym} />
@@ -161,23 +163,24 @@ function MonthEnd({ ym }: { ym: string }) {
   const saveTyped = useMutation({
     mutationFn: () => api.monthEndTyped(ym, Object.fromEntries(Object.entries(typed).filter(([, v]) => v !== '').map(([k, v]) => [k, parseDollars(v) ?? 0]))),
     onSuccess: () => { refresh(); setTyped({}); toast.show({ message: 'Balances saved' }) },
+    onError: (e) => toast.show({ message: String(e), tone: 'error' }),
   })
   const logInterest = useMutation({
-    mutationFn: () => api.monthEndInterest(ym, Object.fromEntries(Object.entries(interest).filter(([, v]) => v !== '').map(([k, v]) => [k, parseDollars(v) ?? 0]))),
+    // Every account still waiting, at its edited amount or else the proposal shown in the field.
+    mutationFn: () => api.monthEndInterest(ym, Object.fromEntries(Object.entries(q.data?.interest ?? {}).filter(([, it]) => !it.logged.length)
+      .map(([k, it]) => [k, interest[Number(k)] !== undefined ? parseDollars(interest[Number(k)]) ?? 0 : it.proposed]).filter(([, v]) => v))),
     onSuccess: () => { refresh(); setInterest({}); toast.show({ message: 'Interest logged' }) },
+    onError: (e) => toast.show({ message: String(e), tone: 'error' }),
   })
   const b = boot.data, me = q.data
   if (!b || !me) return null
-  const inv = b.accounts.filter((a) => a.kind === 'investment')
+  const inv = b.accounts.filter((a) => a.kind === 'investment' && a.active)
   const hysas = b.accounts.filter((a) => String(a.id) in me.interest)
-  const cashCards = b.accounts.filter((a) => a.kind === 'cash' || a.kind === 'card')
-  const Step = ({ n, done, title, children }: { n: number; done: boolean; title: string; children: React.ReactNode }) => (
-    <div className={s.step}><span className={`${s.n} ${done ? s.done : ''}`}>{done ? <Check strokeWidth={2.5} absoluteStrokeWidth /> : n}</span><div className={s.stepBody}><h3 className={s.stepTitle}>{title}</h3>{children}</div></div>
-  )
+  const cashCards = b.accounts.filter((a) => (a.kind === 'cash' || a.kind === 'card') && a.active)
   return (
     <Section title={`Month end, ${fromISO(ym + '-01').toLocaleDateString('en-US', { month: 'long' })}`}>
       <Panel>
-      <Step n={1} done={me.typed_done} title="Investment balances">
+      <Step n={1} done={inv.length > 0 && me.typed_done} title="Investment balances">
         <form className={s.form} onSubmit={(e) => { e.preventDefault(); saveTyped.mutate() }}>
           {inv.map((a) => (
             <label key={a.id} className={s.field}><span className={s.fieldLabel}>{a.name}</span><span className={s.cur}>$</span>
@@ -186,7 +189,7 @@ function MonthEnd({ ym }: { ym: string }) {
           <button type="submit" className={s.primary} disabled={!Object.values(typed).some(Boolean) || saveTyped.isPending}>Save balances</button>
         </form>
       </Step>
-      <Step n={2} done={me.interest_done} title="HYSA interest">
+      <Step n={2} done={hysas.length > 0 && me.interest_done} title="HYSA interest">
         {hysas.length === 0 ? <p className="secondary">No account has an APY set. Add one in Settings and a proposal appears here.</p> : (
           <form className={s.form} onSubmit={(e) => { e.preventDefault(); logInterest.mutate() }}>
             {hysas.map((a) => { const it = me.interest[String(a.id)]; return (
@@ -197,7 +200,7 @@ function MonthEnd({ ym }: { ym: string }) {
           </form>
         )}
       </Step>
-      <Step n={3} done={me.recon_done} title="Reconcile">
+      <Step n={3} done={cashCards.length > 0 && me.recon_done} title="Reconcile">
         <div className={s.reconList}>
           {cashCards.map((a) => { const r = me.recon[String(a.id)]; return (
             <button key={a.id} type="button" className={s.reconRow} onClick={() => nav(`/accounts/${a.id}`)}>
@@ -209,4 +212,10 @@ function MonthEnd({ ym }: { ym: string }) {
       </Panel>
     </Section>
   )
+}
+
+/** One month-end step. Module level on purpose: defined inside MonthEnd it was a new component every render, so
+ *  its inputs remounted and lost focus after each keystroke. */
+function Step({ n, done, title, children }: { n: number; done: boolean; title: string; children: React.ReactNode }) {
+  return <div className={s.step}><span className={`${s.n} ${done ? s.done : ''}`}>{done ? <Check strokeWidth={2.5} absoluteStrokeWidth /> : n}</span><div className={s.stepBody}><h3 className={s.stepTitle}>{title}</h3>{children}</div></div>
 }

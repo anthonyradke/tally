@@ -9,6 +9,7 @@ import { useBack } from '@/lib/nav'
 import { useToast } from '@/components/Toast'
 import { formatCents, parseDollars } from '@/lib/money'
 import { monthLabel } from '@/lib/dates'
+import { monthsNow } from '@/lib/months'
 import { bankColor } from '@/icons/banks'
 import { Hero } from '@/components/Hero'
 import { Amount } from '@/components/Amount'
@@ -33,27 +34,31 @@ export function AccountDetail() {
 
   const b = boot.data
   const a = b?.accounts.find((x) => x.id === aid)
-  if (!b || !a) return null
-  const cur = b.months[b.months.length - 1]
-  const prev = b.months[b.months.length - 2]
-  const bal = cur.balances[String(aid)] ?? 0
-  const delta = prev ? bal - (prev.balances[String(aid)] ?? 0) : 0
-  const owed = a.kind === 'card' || a.kind === 'loan'
-  const series = b.months.map((m) => ({ x: m.month, y: m.balances[String(aid)] ?? 0 }))
-  const ym = cur.month.slice(0, 7)
+  const now = b && monthsNow(b)
+  const ym = now ? now.cur.month.slice(0, 7) : ''
+  const actualCents = parseDollars(actual)
 
+  // Hooks stay above the early return: an account vanishing mid-visit (hidden elsewhere) changed the hook count.
   const check = useMutation({
-    mutationFn: (save: boolean) => api.reconcile(aid, parseDollars(actual) ?? 0, save),
+    mutationFn: (save: boolean) => api.reconcile(aid, actualCents ?? 0, save),
     onSuccess: (d, save) => {
       setDiag(d)
-      if (save) { toast.show({ message: d.gap === 0 ? `${a.name} reconciled` : `Saved with a ${formatCents(d.gap)} gap` }); qc.invalidateQueries({ queryKey: ['month-end'] }) }
+      if (save) { toast.show({ message: d.gap === 0 ? `${a?.name} reconciled` : `Saved with a ${formatCents(d.gap)} gap` }); qc.invalidateQueries({ queryKey: ['month-end'] }) }
     },
     onError: (e) => toast.show({ message: String(e), tone: 'error' }),
   })
   const saveTyped = useMutation({
     mutationFn: () => api.monthEndTyped(ym, { [aid]: parseDollars(typed) ?? 0 }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['bootstrap'] }); toast.show({ message: `${a.name} balance updated for ${monthLabel(cur.month)}` }); setTyped('') },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['bootstrap'] }); toast.show({ message: `${a?.name} balance updated for ${monthLabel(ym + '-01')}` }); setTyped('') },
+    onError: (e) => toast.show({ message: String(e), tone: 'error' }),
   })
+
+  if (!b || !a || !now) return null
+  const { cur, prev, upTo } = now
+  const bal = cur.balances[String(aid)] ?? 0
+  const delta = prev ? bal - (prev.balances[String(aid)] ?? 0) : 0
+  const owed = a.kind === 'card' || a.kind === 'loan'
+  const series = upTo.map((m) => ({ x: m.month, y: m.balances[String(aid)] ?? 0 }))
 
   return (
     <div className={s.screen}>
@@ -74,8 +79,8 @@ export function AccountDetail() {
           <form className={s.reconForm} onSubmit={(e) => { e.preventDefault(); check.mutate(false) }}>
             <span className={s.cur}>$</span>
             <input className={`tnum ${s.actual}`} inputMode="decimal" placeholder="0.00" value={actual} onChange={(e) => setActual(e.target.value)} aria-label="Balance in the bank app" />
-            <button type="submit" className={s.ghost} disabled={!actual || check.isPending}>Check</button>
-            <button type="button" className={s.primary} disabled={!actual || check.isPending} onClick={() => check.mutate(true)}>Save</button>
+            <button type="submit" className={s.ghost} disabled={actualCents === null || check.isPending}>Check</button>
+            <button type="button" className={s.primary} disabled={actualCents === null || check.isPending} onClick={() => check.mutate(true)}>Save</button>
           </form>
           {diag && (
             <div className={s.diag}>
@@ -102,7 +107,7 @@ export function AccountDetail() {
           <form className={s.reconForm} onSubmit={(e) => { e.preventDefault(); saveTyped.mutate() }}>
             <span className={s.cur}>$</span>
             <input className={`tnum ${s.actual}`} inputMode="decimal" placeholder={(bal / 100).toFixed(2)} value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Typed balance" />
-            <button type="submit" className={s.primary} disabled={!typed || saveTyped.isPending}>Save</button>
+            <button type="submit" className={s.primary} disabled={parseDollars(typed) === null || saveTyped.isPending}>Save</button>
           </form>
         </section>
       )}

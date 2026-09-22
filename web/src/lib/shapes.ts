@@ -16,3 +16,10 @@ export const HINT: Record<CatType, string> = {
   'Saving': 'Leaves From; To is optional.',
   'Loan': 'Leaves From; To is the loan if you track one.',
 }
+
+/** Whether an entry's From/To satisfy a category type's rules (mirrors engine.validate). */
+export function fits(t: { from_id: number | null; to_id: number | null }, type: CatType): boolean {
+  const r = SHAPES[type]
+  const ok = (rule: Rule, v: number | null) => (rule === 'required' ? !!v : rule === 'blank' ? !v : true)
+  return ok(r.from, t.from_id) && ok(r.to, t.to_id) && !(t.from_id && t.from_id === t.to_id)
+}
