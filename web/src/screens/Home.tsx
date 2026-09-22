@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Reorder } from 'motion/react'
-import { GripVertical, Settings as SettingsIcon, SlidersHorizontal } from 'lucide-react'
+import { Settings as SettingsIcon, SlidersHorizontal } from 'lucide-react'
 import { api, type Bootstrap } from '@/api/client'
 import { useBootstrap, useLookups, useTransactions } from '@/lib/data'
 import { useAdd } from '@/lib/add'
 import { usePace } from '@/lib/pace'
 import { monthsNow } from '@/lib/months'
 import { Sheet } from '@/components/Sheet'
+import { DragRow } from '@/components/DragRow'
 import { OutboxNotice } from '@/components/Outbox'
 import { DEFAULT_LAYOUT, parseLayout, WIDGETS, type Layout, type WidgetId } from './HomeWidgets'
 import s from './Home.module.css'
@@ -57,12 +58,11 @@ export function Home() {
         <p className={`secondary ${s.editHint}`}>Drag to reorder. Switch off what you don't want to see.</p>
         <Reorder.Group axis="y" values={layout.order} onReorder={(order) => arrange({ ...layout, order: order as WidgetId[] })} className={s.reorder} as="div">
           {layout.order.map((id) => (
-            <Reorder.Item key={id} value={id} as="div" className={s.dragRow} onDragEnd={() => persist.mutate(latest.current)}>
-              <GripVertical className={s.grip} strokeWidth={2} absoluteStrokeWidth />
+            <DragRow key={id} value={id} className={s.dragRow} onDragEnd={() => persist.mutate(latest.current)}>
               <span className={s.dragText}><span>{WIDGETS[id].label}</span><span className="secondary">{WIDGETS[id].hint}</span></span>
               <input type="checkbox" className={s.switch} checked={!layout.hidden.includes(id)} aria-label={`Show ${WIDGETS[id].label}`}
                 onChange={(e) => update({ ...layout, hidden: e.target.checked ? layout.hidden.filter((x) => x !== id) : [...layout.hidden, id] })} />
-            </Reorder.Item>
+            </DragRow>
           ))}
         </Reorder.Group>
         <button type="button" className={s.resetBtn} onClick={() => update(DEFAULT_LAYOUT)}>Reset to default</button>

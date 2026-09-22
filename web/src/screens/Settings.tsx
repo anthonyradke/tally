@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Reorder } from 'motion/react'
-import { ChevronLeft, ChevronRight, GripVertical, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { api, type AdminAccount, type AdminCategory, type Favorite, type Recurring, type SavedView } from '@/api/client'
 import { useBootstrap } from '@/lib/data'
 import { useBack } from '@/lib/nav'
@@ -16,6 +16,7 @@ import { FieldGroup, FieldRow, TextRow } from '@/components/Field'
 import { Picker } from '@/components/Picker'
 import { Mark } from '@/components/Mark'
 import { Chip } from '@/components/Chip'
+import { DragRow } from '@/components/DragRow'
 import { useToast } from '@/components/Toast'
 import { BudgetSetup } from './BudgetSetup'
 import { AccountSheet, CategorySheet, FavoriteSheet, RecurringSheet, ViewSheet } from './SettingsSheets'
@@ -92,14 +93,13 @@ function Shortcuts({ favorites }: { favorites: Favorite[] }) {
       <Reorder.Group axis="y" values={order} onReorder={setOrder} className={s.reorder} as="div">
         {order.map((id) => { const f = byId.get(id); if (!f) return null; const c = boot.data?.categories.find((x) => x.id === f.category_id); const v = c && categoryVisual({ ...c, icon: f.icon ?? c.icon, color: f.color ?? c.color })
           return (
-            <Reorder.Item key={id} value={id} as="div" className={s.dragRow} onDragEnd={() => save.mutate(order)}>
-              <GripVertical className={s.grip} strokeWidth={2} absoluteStrokeWidth />
+            <DragRow key={id} value={id} className={s.dragRow} onDragEnd={() => save.mutate(order)}>
               <button type="button" className={s.rowBtn} onClick={() => setEdit(f)}>
                 {v && <Mark Icon={v.Icon} color={v.color} size="sm" />}
                 <span className={s.rowText}><span>{f.label}</span>{f.amount ? <span className="secondary tnum">{formatCents(f.amount)}</span> : null}</span>
                 <ChevronRight className={s.chev} strokeWidth={2} absoluteStrokeWidth />
               </button>
-            </Reorder.Item>) })}
+            </DragRow>) })}
       </Reorder.Group>
       <button type="button" className={s.add} onClick={() => setEdit('new')}><Plus strokeWidth={2.25} absoluteStrokeWidth />Add quick action</button>
       <FavoriteSheet open={edit !== null} item={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />
@@ -137,14 +137,13 @@ function CategoriesSection({ categories }: { categories: AdminCategory[] }) {
       <Reorder.Group axis="y" values={order} onReorder={setOrder} className={s.reorder} as="div">
         {order.map((id) => { const c = byId.get(id); if (!c) return null; const v = categoryVisual(c)
           return (
-            <Reorder.Item key={id} value={id} as="div" className={s.dragRow} onDragEnd={() => save.mutate(order)}>
-              <GripVertical className={s.grip} strokeWidth={2} absoluteStrokeWidth />
+            <DragRow key={id} value={id} className={s.dragRow} onDragEnd={() => save.mutate(order)}>
               <button type="button" className={s.rowBtn} onClick={() => setEdit(c)}>
                 <Mark Icon={v.Icon} color={v.color} size="sm" />
                 <span className={s.rowText}><span className={c.active ? '' : s.dim}>{c.name}</span><span className="secondary">{c.type}{c.budget ? ` · ${formatCents(c.budget, { cents: false })}/mo` : ''}{c.active ? '' : ' · hidden'}</span></span>
                 <ChevronRight className={s.chev} strokeWidth={2} absoluteStrokeWidth />
               </button>
-            </Reorder.Item>) })}
+            </DragRow>) })}
       </Reorder.Group>
       <div className={s.actions}>
         <button type="button" className={s.add} onClick={() => setEdit('new')}><Plus strokeWidth={2.25} absoluteStrokeWidth />Add category</button>
