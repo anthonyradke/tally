@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath } from 'node:url'
+import pkg from './package.json' with { type: 'json' }
 
 // Served by FastAPI from app/static/dist at / (the Jinja pages were retired 2026-09-18).
 // The PWA manifest and service-worker scope follow `base`.
@@ -44,6 +45,7 @@ export default defineConfig({
     }),
   ],
   base: '/',
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },  // shown in Settings; bump it per CHANGELOG.md
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   build: { outDir: '../app/static/dist', emptyOutDir: true, chunkSizeWarningLimit: 700 },
   server: { proxy: { '/api': 'http://127.0.0.1:8000' } },
