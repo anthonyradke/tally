@@ -89,7 +89,7 @@ export function AccountSheet({ open, item, onClose }: { open: boolean; item: Adm
         <FieldGroup title="Balances">
           <TextRow label="Starting" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} {...numpad('money')} />
           {f.kind === 'cash' && <TextRow label="APY %" value={f.apy} onChange={(e) => setF({ ...f, apy: e.target.value })} {...numpad('amount')} placeholder="4.00 for a HYSA" />}
-          {f.kind === 'loan' && <TextRow label="Rate %" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} {...numpad('amount')} placeholder="annual" />}
+          {f.kind === 'loan' && <TextRow label="Rate %" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} {...numpad('rate')} placeholder="annual" />}
           {f.kind === 'cash' && <ToggleRow label="Counts toward emergency fund" checked={f.ef} onChange={(v) => setF({ ...f, ef: v })} />}
           <ToggleRow label="Active" checked={f.active} onChange={(v) => setF({ ...f, active: v })} hint="Hidden accounts keep their history but leave the pickers." />
         </FieldGroup>
