@@ -72,7 +72,7 @@ export function Palette() {
       {open && (
         <div className={s.root}>
           <motion.div className={s.scrim} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }} onClick={() => setOpen(false)} />
-          <motion.div role="dialog" aria-label="Commands" className={s.box} initial={{ opacity: 0, scale: 0.97, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}>
+          <motion.div role="dialog" aria-label="Commands" className={`glass-rim ${s.box}`} initial={{ opacity: 0, scale: 0.97, y: -8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}>
             <div className={s.inputRow}><Search className={s.searchIcon} strokeWidth={2} absoluteStrokeWidth />
               <input ref={input} value={q} onChange={(e) => { setQ(e.target.value); setI(0) }} onKeyDown={onKey} placeholder="Type a command, a merchant, an account…" aria-label="Command" autoComplete="off" /></div>
             <ul className={s.list} role="listbox">

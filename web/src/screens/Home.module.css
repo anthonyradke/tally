@@ -55,5 +55,3 @@
 .goalHead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: var(--s-3); }
 .goalPct { font-size: var(--t-15); font-weight: 600; color: var(--fg-2); font-variant-numeric: tabular-nums; }
 .goalFoot { margin-top: var(--s-2); }
-/* Widgets below the fold skip layout and paint until scrolled near. */
-.lazy { content-visibility: auto; contain-intrinsic-size: auto 320px; }
