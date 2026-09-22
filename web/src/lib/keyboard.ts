@@ -4,10 +4,9 @@ import { vp } from './vpdebug'
 // iOS bug in installed web apps: after the keyboard closes, WebKit leaves the window at the keyboard-era height
 // (logged on the iPhone: innerHeight stuck at 812 of 874 until a manual overscroll). Fixed elements sit on the short
 // window's bottom edge, so the tab bar floated ~60pt up with a dead black band under it, and nothing below 812 painted.
-// It heals on any real scroll (the log showed innerHeight climbing 814, 820 … 874 as the overscroll went -2 … -15px),
-// so after the keyboard closes the app scrolls 1px and back. Short pages can't scroll, so a 2px spacer in <body> gives
-// them room for the round trip (padding on <html> doesn't: it's height: 100% border-box). The bar hides while the
-// keyboard is up so it never shows mid-bug.
+// Nothing the page does makes WebKit re-measure: a real 1px programmatic scroll and taking #root out of layout both
+// left innerHeight at 812; only a finger overscroll grows it back. So the app doesn't try to heal it: it publishes how
+// short the window is as --vp-short and the bar moves down by that much. The bar hides while the keyboard is up.
 // Keyed off the visual viewport, not focus events: a focused field that unmounts (a closing sheet's search box) never
 // fires focusout.
 const TEXT = /^(text|search|email|number|tel|url|password|date|datetime-local|month|time|week)$/
@@ -31,48 +30,39 @@ const keyboardUp = (vv: VisualViewport) => full.h - vv.height * vv.scale > 150
 const standalone = () =>
   matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
 
-/** Scroll 1px and back so WebKit re-measures the window if the keyboard left it short. */
-function heal(vv: VisualViewport) {
-  if (!standalone() || keyboardUp(vv) || isField(document.activeElement) || full.h - window.innerHeight < 4) return
-  vp('heal-before')
-  const spacer = document.createElement('div')
-  spacer.style.height = '2px'
-  document.body.appendChild(spacer)
-  const y = window.scrollY
-  window.scrollTo(0, y + 1)
-  requestAnimationFrame(() => {
-    vp('heal-nudged')
-    window.scrollTo(0, y)
-    spacer.remove()
-    vp('heal-after')
-    window.setTimeout(() => vp('heal-later'), 600)
-  })
+/** How far the window is short of its full height, for the bar to make up (0 in Safari and while typing). */
+function pin(vv: VisualViewport) {
+  const short = standalone() && !keyboardUp(vv) ? Math.max(0, Math.round(full.h - window.innerHeight)) : 0
+  document.documentElement.style.setProperty('--vp-short', `${short}px`)
+  return short
 }
 
-/** True while the on-screen keyboard is up for a text field, and until the window has been healed after it closes. */
+/** True while the on-screen keyboard is up for a text field, and until the page has settled after it closes. */
 export function useTyping(bar: RefObject<HTMLElement | null>) {
   const [typing, setTyping] = useState(false)
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
     measure(vv)
+    pin(vv)
     let hidden = false
     let timer = 0
     const settle = () => {
       timer = 0
       if (keyboardUp(vv) || isField(document.activeElement)) return
-      heal(vv)
+      vp('settle-short-' + pin(vv), bar.current)
       hidden = false
       setTyping(false)
     }
     const check = (ev?: Event) => {
       measure(vv)
+      pin(vv)
       if (ev) vp(ev.type + (keyboardUp(vv) ? '-up' : '-down'), bar.current)
       window.clearTimeout(timer); timer = 0
       if (keyboardUp(vv)) {
         if (!hidden && isField(document.activeElement)) { hidden = true; setTyping(true) }
       } else {
-        // Wait for the keyboard to finish animating and focus to settle, then heal and bring the bar back.
+        // Wait for the keyboard to finish animating and focus to settle, then bring the bar back.
         timer = window.setTimeout(settle, 150)
       }
     }
