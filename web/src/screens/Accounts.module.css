@@ -3,7 +3,7 @@
 .groupHead { display: flex; align-items: baseline; justify-content: space-between; }
 .groupTotal { color: var(--fg-2); }
 .list { display: flex; flex-direction: column; }
-.row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: var(--s-3); min-height: 64px; width: 100%; text-align: left; border-top: 1px solid var(--line); transition: background var(--d-micro) var(--ease-out); }
+.row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: var(--s-3); min-height: 64px; width: 100%; text-align: left; border-top: 1px solid var(--line); }
 .row:first-child { border-top: 0; }
 .row:active { background: var(--surface-2); }
 .dot { display: inline-block; border-radius: 50%; border: 2px solid var(--c); flex: none; }

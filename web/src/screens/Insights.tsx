@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'motion/react'
 import { useNavigate, useSearchParams } from 'react-router'
+import { useOpen } from '@/lib/nav'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check } from 'lucide-react'
 import { api } from '@/api/client'
@@ -155,7 +156,7 @@ function MonthEnd({ ym }: { ym: string }) {
   const q = useQuery({ queryKey: ['month-end', ym], queryFn: () => api.monthEnd(ym) })
   const qc = useQueryClient()
   const toast = useToast()
-  const nav = useNavigate()
+  const open = useOpen()
   const [typed, setTyped] = useState<Record<number, string>>({})
   const [interest, setInterest] = useState<Record<number, string>>({})
   const refresh = () => { qc.invalidateQueries({ queryKey: ['month-end', ym] }); qc.invalidateQueries({ queryKey: ['bootstrap'] }); qc.invalidateQueries({ queryKey: ['transactions'] }) }
@@ -202,7 +203,7 @@ function MonthEnd({ ym }: { ym: string }) {
       <Step n={3} done={cashCards.length > 0 && me.recon_done} title="Reconcile">
         <div className={s.reconList}>
           {cashCards.map((a) => { const r = me.recon[String(a.id)]; return (
-            <button key={a.id} type="button" className={s.reconRow} onClick={() => nav(`/accounts/${a.id}`)}>
+            <button key={a.id} type="button" className={s.reconRow} onClick={() => open(`/accounts/${a.id}`)}>
               <span>{a.name}</span>
               <span className={`secondary tnum ${r ? (r.actual === r.expected ? 'pos' : 'neg') : ''}`}>{r ? (r.actual === r.expected ? 'reconciled' : `gap ${formatCents(r.actual - r.expected, { sign: 'always' })}`) + ` · ${r.date.slice(5)}` : 'not yet'}</span>
             </button>) })}

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Reorder } from 'motion/react'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { api, type AdminAccount, type AdminCategory, type Favorite, type Recurring, type SavedView } from '@/api/client'
 import { useBootstrap } from '@/lib/data'
-import { useBack } from '@/lib/nav'
+import { useBack, useOpen } from '@/lib/nav'
 import { formatCents, parseDollars } from '@/lib/money'
 import { dayLabel, monthLabel, toISO } from '@/lib/dates'
 import { monthsNow } from '@/lib/months'
@@ -57,13 +57,13 @@ export function Settings() {
 }
 
 function Index() {
-  const nav = useNavigate()
+  const open = useOpen()
   const [theme, setTheme] = useState<Theme>(getTheme)
   useEffect(() => applyTheme(theme), [theme])
   return (
     <>
       <FieldGroup>
-        {SECTIONS.map(([k, label, hint]) => <FieldRow key={k} label={label} value={<span className="secondary">{hint}</span>} onClick={() => nav(`/settings/${k}`)} />)}
+        {SECTIONS.map(([k, label, hint]) => <FieldRow key={k} label={label} value={<span className="secondary">{hint}</span>} onClick={() => open(`/settings/${k}`)} />)}
       </FieldGroup>
       <FieldGroup title="Appearance">
         <div className={s.segRow}>

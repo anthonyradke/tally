@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router'
+import { useOpen } from '@/lib/nav'
 import { ChevronRight } from 'lucide-react'
 import type { Account, Kind } from '@/api/client'
 import { useBootstrap } from '@/lib/data'
@@ -16,7 +16,7 @@ export function AccountDot({ a, size = 12 }: { a: Account; size?: number }) {
 
 export function Accounts() {
   const boot = useBootstrap()
-  const nav = useNavigate()
+  const open = useOpen()
   const b = boot.data
   if (!b) return null
   const { cur, prev } = monthsNow(b)
@@ -42,7 +42,7 @@ export function Accounts() {
               const delta = prev ? bal - (prev.balances[String(a.id)] ?? 0) : 0
               const owed = a.kind === 'card' || a.kind === 'loan'
               return (
-                <button key={a.id} type="button" className={s.row} onClick={() => nav(`/accounts/${a.id}`)}>
+                <button key={a.id} type="button" className={s.row} onClick={() => open(`/accounts/${a.id}`)}>
                   <AccountDot a={a} />
                   <span className={s.text}>
                     <span className={s.name}>{a.name}</span>
