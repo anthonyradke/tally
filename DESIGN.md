@@ -1,8 +1,8 @@
 # Design: Tally Glass
-**Date:** 2026-09-21 · **Status:** confirmed by the user 2026-09-21. Replaces "Paper Ledger" (v1.0, tagged in git). Deviations edit this file first.
+**Date:** 2026-09-21 · **Status:** locked 2026-09-21. Replaces "Paper Ledger" (v1.0, tagged in git). Deviations edit this file first.
 **Archetype:** personal instrument (one user, daily, glanceable) · **Register:** native iOS structure; expressive at the scrub chart, the Add keypad and post-add confirmation
-**Goal (user's words):** "an extremely satisfying Apple-like front-end." Robinhood, SoFi and T3 Code are loose references, not templates.
-**Pins (user):** Apple quality bar; glass on floating chrome only; grouped panels on Home + Insights only; SF system type; offline icon set.
+**Goal:** "an extremely satisfying Apple-like front-end." Robinhood, SoFi and T3 Code are loose references, not templates.
+**Pins:** Apple quality bar; glass on floating chrome only; grouped panels on Home + Insights only; SF system type; offline icon set.
 
 ## Direction
 Feels like a first-party Apple app that happens to know your money. System grouped backgrounds, solid content, glass only on what floats above it. The eye lands on one number, and that number answers your finger: drag across a chart and the figure rolls to that day.
@@ -31,7 +31,7 @@ Tokens in `web/src/styles/tokens.css` (`light-dark()`).
 - Ink (fg) is still the only interactive color: primary buttons, selected chips, the + button.
 - One semantic pair: pos green, neg red. Used for money direction, never decoration.
 - Identity ring: the 8 validated category tints from v1 are unchanged (see git history of this file for the validator run). They are never the sole identity channel: every tinted mark sits beside its glyph and name.
-- Bank tints keep the user's identities (Chase blue, Amex green, SoFi orange, HSA grey, Roth violet).
+- Bank tints follow each bank's own color (Chase blue, Amex green, SoFi orange, HSA grey, Roth violet).
 
 ## Glass (floating chrome only)
 Tab bar, the ⌘K palette, the + button, toasts; sheets get the edge and highlight on a near-opaque fill (no live blur while they move). Content never.
