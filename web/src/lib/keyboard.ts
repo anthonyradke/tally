@@ -1,4 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react'
+import { vp } from './vpdebug'
 
 // iOS lays fixed elements out against the viewport the keyboard shrank. After the keyboard closes they can stay
 // there (the tab bar floated a quarter of the way up) until the next scroll recomputes them. So the bar hides while
@@ -39,15 +40,26 @@ export function useTyping(bar: RefObject<HTMLElement | null>) {
     const settle = () => {
       timer = 0
       if (keyboardUp(vv)) return
-      const y = window.scrollY
-      window.scrollTo(0, y > 0 ? y - 1 : y + 1)
-      window.scrollTo(0, y)
       const el = bar.current
-      if (el) { el.style.display = 'none'; void el.offsetHeight; el.style.display = '' }
-      hidden = false
-      setTyping(false)
+      vp('settle', el)
+      // A real 1px scroll round trip, like the swipe that fixes it by hand. Short pages can't scroll, so they get
+      // 2px of extra room for the duration.
+      const root = document.documentElement
+      const y = window.scrollY
+      root.style.paddingBottom = '2px'
+      window.scrollTo(0, y + 1)
+      requestAnimationFrame(() => {
+        vp('nudged', el)
+        window.scrollTo(0, y)
+        root.style.paddingBottom = ''
+        if (el) { el.style.display = 'none'; void el.offsetHeight; el.style.display = '' }
+        hidden = false
+        setTyping(false)
+        window.setTimeout(() => vp('after', el), 600)
+      })
     }
-    const check = () => {
+    const check = (ev?: Event) => {
+      if (ev) vp(ev.type + (keyboardUp(vv) ? '-up' : '-down'), bar.current)
       if (keyboardUp(vv)) {
         window.clearTimeout(timer); timer = 0
         if (!hidden && isField(document.activeElement)) { hidden = true; setTyping(true) }
@@ -56,7 +68,7 @@ export function useTyping(bar: RefObject<HTMLElement | null>) {
         window.clearTimeout(timer); timer = window.setTimeout(settle, 150)
       }
     }
-    const later = () => window.setTimeout(check, 50)
+    const later = () => window.setTimeout(() => check(new Event('focusout')), 50)
     vv.addEventListener('resize', check)
     document.addEventListener('focusin', check)
     document.addEventListener('focusout', later)
