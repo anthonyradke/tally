@@ -54,8 +54,11 @@ function scroller(el: HTMLElement): HTMLElement | null | undefined {
 function lift(vv: VisualViewport, el: Element | null) {
   if (!standalone() || !isField(el) || (el instanceof HTMLInputElement && PICKER.test(el.type))) return
   const field = el as HTMLElement
+  const rect = field.getBoundingClientRect()
+  // Off screen means focus() from code (autoFocus while a sheet is still sliding in), not a tap: leave it alone.
+  if (rect.bottom <= 0 || rect.top >= full.h) return
   const top = keyboardUp(vv) ? vv.offsetTop + vv.height : full.h - KEYBOARD
-  const over = Math.ceil(field.getBoundingClientRect().bottom + GAP - top)
+  const over = Math.ceil(rect.bottom + GAP - top)
   if (over <= 0) return
   const box = scroller(field)
   if (box === undefined) return

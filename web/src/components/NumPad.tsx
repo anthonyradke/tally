@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type TouchEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Delete } from 'lucide-react'
@@ -36,6 +36,10 @@ function press(el: HTMLInputElement, kind: Kind, key: string) {
   type(el, v === '0' ? key : v === '-0' ? `-${key}` : v + key)
 }
 
+// iOS moves focus when a tap ends, whatever pointerdown did, so on touch the key acts on touchend and cancels it
+// (which also cancels the click). Mouse and keyboard still go through onClick.
+const act = (fn: () => void) => ({ onClick: fn, onTouchEnd: (e: TouchEvent) => { e.preventDefault(); fn() } })
+
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back']
 
 export function NumPad() {
@@ -69,16 +73,16 @@ export function NumPad() {
         <motion.div className={s.dock} role="group" aria-label="Number pad"
           initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
           transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 46, mass: 0.8 }}
-          onPointerDown={(e) => e.preventDefault()}>
+          onPointerDown={(e) => e.preventDefault()} onTouchEnd={(e) => e.preventDefault()}>
           <div className={s.bar}>
             {kind === 'money'
-              ? <button type="button" className={s.barBtn} onClick={() => press(el, kind, 'sign')} aria-label="Toggle negative">±</button>
+              ? <button type="button" className={s.barBtn} {...act(() => press(el, kind, 'sign'))} aria-label="Toggle negative">±</button>
               : <span />}
-            <button type="button" className={`${s.barBtn} ${s.done}`} onClick={() => el.blur()}>Done</button>
+            <button type="button" className={`${s.barBtn} ${s.done}`} {...act(() => el.blur())}>Done</button>
           </div>
           <div className={s.keys}>
             {KEYS.map((k) => k === '.' && kind === 'whole' ? <span key={k} /> : (
-              <button key={k} type="button" className={s.key} onClick={() => press(el, kind, k)} aria-label={k === 'back' ? 'Delete' : k}>
+              <button key={k} type="button" className={s.key} {...act(() => press(el, kind, k))} aria-label={k === 'back' ? 'Delete' : k}>
                 {k === 'back' ? <Delete className={s.icon} strokeWidth={2} absoluteStrokeWidth /> : k}
               </button>
             ))}
