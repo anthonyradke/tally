@@ -8,6 +8,9 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `web/package.json` (shown at the bottom of Settings) and `pyproject.toml`. Each release gets a git
 tag (`v2.1.0`) and an entry here, newest first.
 
+## Unreleased
+- Reorderable lists (categories, quick actions, Edit Home) now scroll normally. Only the grip handle on the left drags a row.
+
 ## 2.1.0 (2026-09-22)
 Added
 - **Month in review:** for the first week of each month, Home recaps last month: left over, money in, spending
