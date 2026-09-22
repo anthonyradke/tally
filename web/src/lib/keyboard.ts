@@ -1,13 +1,14 @@
 import { useEffect, useState, type RefObject } from 'react'
 import { vp } from './vpdebug'
 
-// iOS lays fixed elements out against the viewport the keyboard shrank. After the keyboard closes they can stay
-// there (the tab bar floated a quarter of the way up) until the next scroll recomputes them. So the bar hides while
-// the keyboard is up, like a native tab bar under the keyboard, and once it has gone the page takes a 1px scroll
-// round trip and a forced re-layout of the bar before it comes back. A short page can't scroll, so the re-layout
-// is what fixes it there (Settings > Quick actions > Add, type, Cancel left the bar a little high).
+// iOS bug in installed web apps: after the keyboard closes, WebKit leaves the window at the keyboard-era height
+// (logged on the iPhone: innerHeight stuck at 812 of 874 until a manual overscroll). Fixed elements sit on the short
+// window's bottom edge, so the tab bar floated ~60pt up with a dead black band under it, and nothing below 812 painted.
+// No scroll or measurement from the page grows it back; taking the full-height #root out of layout and back in makes
+// WebKit re-measure (the same fix as dev.to/cederhook's write-up). The bar hides while the keyboard is up so it
+// never shows mid-bug.
 // Keyed off the visual viewport, not focus events: a focused field that unmounts (a closing sheet's search box) never
-// fires focusout, which left the bar hidden with no keyboard on screen.
+// fires focusout.
 const TEXT = /^(text|search|email|number|tel|url|password|date|datetime-local|month|time|week)$/
 
 function isField(el: Element | null) {
@@ -16,67 +17,70 @@ function isField(el: Element | null) {
   return el instanceof HTMLInputElement && TEXT.test(el.type)
 }
 
-// Tallest viewport seen at the current width. innerHeight alone isn't a safe baseline: an installed app on iOS can
-// shrink it along with the keyboard.
+// Tallest window seen at the current width: the height the app should have with no keyboard.
 let full = { w: 0, h: 0 }
-
-/** The on-screen keyboard covers part of the screen (pinch zoom doesn't count). */
-function keyboardUp(vv: VisualViewport) {
-  const h = vv.height * vv.scale
+function measure(vv: VisualViewport) {
   if (full.w !== window.innerWidth) full = { w: window.innerWidth, h: 0 }
-  full.h = Math.max(full.h, h, window.innerHeight)
-  return full.h - h > 150
+  full.h = Math.max(full.h, vv.height * vv.scale, window.innerHeight)
+}
+/** The on-screen keyboard covers part of the screen (pinch zoom doesn't count). */
+const keyboardUp = (vv: VisualViewport) => full.h - vv.height * vv.scale > 150
+
+// Only the installed app has the bug; in Safari the toolbar changes innerHeight all the time.
+const standalone = () =>
+  matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
+
+/** Re-measure the window if the keyboard left it short. Scroll positions don't survive the flip, so put them back. */
+function heal(vv: VisualViewport) {
+  if (!standalone() || keyboardUp(vv) || isField(document.activeElement) || full.h - window.innerHeight < 4) return
+  const root = document.getElementById('root')
+  if (!root) return
+  vp('heal-before')
+  const y = window.scrollY
+  root.style.display = 'none'
+  void root.offsetHeight
+  root.style.display = ''
+  window.scrollTo(0, y)
+  vp('heal-after')
+  window.setTimeout(() => vp('heal-later'), 600)
 }
 
-/** True while the on-screen keyboard is up for a text field, and until the page has settled after it closes. */
+/** True while the on-screen keyboard is up for a text field, and until the window has been healed after it closes. */
 export function useTyping(bar: RefObject<HTMLElement | null>) {
   const [typing, setTyping] = useState(false)
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
-    keyboardUp(vv)
+    measure(vv)
     let hidden = false
     let timer = 0
     const settle = () => {
       timer = 0
-      if (keyboardUp(vv)) return
-      const el = bar.current
-      vp('settle', el)
-      // A real 1px scroll round trip, like the swipe that fixes it by hand. Short pages can't scroll, so they get
-      // 2px of extra room for the duration.
-      const root = document.documentElement
-      const y = window.scrollY
-      root.style.paddingBottom = '2px'
-      window.scrollTo(0, y + 1)
-      requestAnimationFrame(() => {
-        vp('nudged', el)
-        window.scrollTo(0, y)
-        root.style.paddingBottom = ''
-        if (el) { el.style.display = 'none'; void el.offsetHeight; el.style.display = '' }
-        hidden = false
-        setTyping(false)
-        window.setTimeout(() => vp('after', el), 600)
-      })
+      if (keyboardUp(vv) || isField(document.activeElement)) return
+      heal(vv)
+      hidden = false
+      setTyping(false)
     }
     const check = (ev?: Event) => {
+      measure(vv)
       if (ev) vp(ev.type + (keyboardUp(vv) ? '-up' : '-down'), bar.current)
+      window.clearTimeout(timer); timer = 0
       if (keyboardUp(vv)) {
-        window.clearTimeout(timer); timer = 0
         if (!hidden && isField(document.activeElement)) { hidden = true; setTyping(true) }
-      } else if (hidden) {
-        // The keyboard animates the viewport; settle once it stops resizing.
-        window.clearTimeout(timer); timer = window.setTimeout(settle, 150)
+      } else {
+        // Wait for the keyboard to finish animating and focus to settle, then heal and bring the bar back.
+        timer = window.setTimeout(settle, 150)
       }
     }
-    const later = () => window.setTimeout(() => check(new Event('focusout')), 50)
+    const onFocusOut = () => window.setTimeout(() => check(new Event('focusout')), 50)
     vv.addEventListener('resize', check)
     document.addEventListener('focusin', check)
-    document.addEventListener('focusout', later)
+    document.addEventListener('focusout', onFocusOut)
     return () => {
       window.clearTimeout(timer)
       vv.removeEventListener('resize', check)
       document.removeEventListener('focusin', check)
-      document.removeEventListener('focusout', later)
+      document.removeEventListener('focusout', onFocusOut)
     }
   }, [bar])
   return typing
