@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 
 // iOS lays fixed elements out against the viewport the keyboard shrank. After the keyboard closes they can stay
 // there (the tab bar floated a quarter of the way up) until the next scroll recomputes them. So the bar hides while
 // the keyboard is up, like a native tab bar under the keyboard, and once it has gone the page takes a 1px scroll
-// round trip before the bar comes back.
+// round trip and a forced re-layout of the bar before it comes back. A short page can't scroll, so the re-layout
+// is what fixes it there (Settings > Quick actions > Add, type, Cancel left the bar a little high).
 // Keyed off the visual viewport, not focus events: a focused field that unmounts (a closing sheet's search box) never
 // fires focusout, which left the bar hidden with no keyboard on screen.
 const TEXT = /^(text|search|email|number|tel|url|password|date|datetime-local|month|time|week)$/
@@ -14,17 +15,25 @@ function isField(el: Element | null) {
   return el instanceof HTMLInputElement && TEXT.test(el.type)
 }
 
-/** The on-screen keyboard covers part of the layout viewport (pinch zoom doesn't count). */
+// Tallest viewport seen at the current width. innerHeight alone isn't a safe baseline: an installed app on iOS can
+// shrink it along with the keyboard.
+let full = { w: 0, h: 0 }
+
+/** The on-screen keyboard covers part of the screen (pinch zoom doesn't count). */
 function keyboardUp(vv: VisualViewport) {
-  return window.innerHeight - vv.height * vv.scale > 150
+  const h = vv.height * vv.scale
+  if (full.w !== window.innerWidth) full = { w: window.innerWidth, h: 0 }
+  full.h = Math.max(full.h, h, window.innerHeight)
+  return full.h - h > 150
 }
 
 /** True while the on-screen keyboard is up for a text field, and until the page has settled after it closes. */
-export function useTyping() {
+export function useTyping(bar: RefObject<HTMLElement | null>) {
   const [typing, setTyping] = useState(false)
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv) return
+    keyboardUp(vv)
     let hidden = false
     let timer = 0
     const settle = () => {
@@ -33,6 +42,8 @@ export function useTyping() {
       const y = window.scrollY
       window.scrollTo(0, y > 0 ? y - 1 : y + 1)
       window.scrollTo(0, y)
+      const el = bar.current
+      if (el) { el.style.display = 'none'; void el.offsetHeight; el.style.display = '' }
       hidden = false
       setTyping(false)
     }
@@ -55,6 +66,6 @@ export function useTyping() {
       document.removeEventListener('focusin', check)
       document.removeEventListener('focusout', later)
     }
-  }, [])
+  }, [bar])
   return typing
 }

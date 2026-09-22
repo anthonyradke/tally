@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { NavLink } from 'react-router'
 import { motion } from 'motion/react'
 import { ChartColumn, House, Landmark, Plus, ReceiptText, Settings } from 'lucide-react'
@@ -34,9 +35,10 @@ function Tab({ to, label, Icon, end, className }: (typeof LEFT)[number] & { clas
 /** Thumb-zone bottom bar on phones; left rail from 900px. The centre Add is the app's primary action. */
 export function TabBar() {
   const { open } = useAdd()
-  const typing = useTyping()
+  const bar = useRef<HTMLElement>(null)
+  const typing = useTyping(bar)
   return (
-    <nav className={`glass ${s.bar}`} aria-label="Primary" data-typing={typing || undefined}>
+    <nav ref={bar} className={`glass ${s.bar}`} aria-label="Primary" data-typing={typing || undefined}>
       <div className={s.brand} aria-hidden>Tally</div>
       {LEFT.map((t) => <Tab key={t.to} {...t} />)}
       <button type="button" className={s.add} onClick={() => open()} aria-label="Add entry">

@@ -37,6 +37,12 @@
   .bar { transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); }
   .bar[data-typing] { opacity: 0; pointer-events: none; transform: translateZ(0) translateY(24px); }
 }
+/* Installed app: pin to the top edge at the screen's full height instead of the bottom edge. After the keyboard
+   closes, iOS can keep the shrunken viewport's bottom for fixed elements; 100lvh never shrinks. In Safari proper the
+   toolbar changes the height, so the browser keeps the plain bottom anchor. */
+@media (max-width: 899px) and (display-mode: standalone) {
+  .bar { bottom: auto; top: calc(100lvh - var(--tabbar-bottom) - var(--tabbar-h)); }
+}
 
 @media (min-width: 900px) {
   .railOnly { display: flex; order: 20; margin-top: auto; }
