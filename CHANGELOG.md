@@ -10,6 +10,7 @@ tag (`v2.1.0`) and an entry here, newest first.
 
 ## Unreleased
 - Reorderable lists (categories, quick actions, Edit Home) now scroll normally. Only the grip handle on the left drags a row.
+- The tab bar no longer floats partway up the screen after typing in a search box or field. It tucks away while the keyboard is up and returns once it has closed.
 
 ## 2.1.0 (2026-09-22)
 Added
