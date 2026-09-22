@@ -15,6 +15,7 @@ import { Picker, type Option } from '@/components/Picker'
 import { Mark } from '@/components/Mark'
 import { useToast } from '@/components/Toast'
 import s from './SettingsSheets.module.css'
+import { numpad } from '@/components/NumPad'
 
 const TYPES: CatType[] = ['Spending', 'Money in', 'Saving', 'Transfer', 'Loan']
 const FREQS: Array<{ value: Freq; label: string }> = [{ value: 'weekly', label: 'Weekly' }, { value: 'biweekly', label: 'Every 2 weeks' }, { value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly' }]
@@ -86,9 +87,9 @@ export function AccountSheet({ open, item, onClose }: { open: boolean; item: Adm
           <div className={s.padRow}><span className={s.label}>Tint</span><TintRow value={f.color} onChange={(c) => setF({ ...f, color: c })} allowNone /></div>
         </FieldGroup>
         <FieldGroup title="Balances">
-          <TextRow label="Starting" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} inputMode="decimal" />
-          {f.kind === 'cash' && <TextRow label="APY %" value={f.apy} onChange={(e) => setF({ ...f, apy: e.target.value })} inputMode="decimal" placeholder="4.00 for a HYSA" />}
-          {f.kind === 'loan' && <TextRow label="Rate %" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} inputMode="decimal" placeholder="annual" />}
+          <TextRow label="Starting" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} {...numpad('money')} />
+          {f.kind === 'cash' && <TextRow label="APY %" value={f.apy} onChange={(e) => setF({ ...f, apy: e.target.value })} {...numpad('amount')} placeholder="4.00 for a HYSA" />}
+          {f.kind === 'loan' && <TextRow label="Rate %" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} {...numpad('amount')} placeholder="annual" />}
           {f.kind === 'cash' && <ToggleRow label="Counts toward emergency fund" checked={f.ef} onChange={(v) => setF({ ...f, ef: v })} />}
           <ToggleRow label="Active" checked={f.active} onChange={(v) => setF({ ...f, active: v })} hint="Hidden accounts keep their history but leave the pickers." />
         </FieldGroup>
@@ -116,7 +117,7 @@ export function CategorySheet({ open, item, onClose }: { open: boolean; item: Ad
           <TextRow label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Dining Out" autoFocus={!item} />
           <FieldRow label="Type" value={f.type} onClick={() => setPicker(true)}
             hint={item && f.type !== item.type ? `Past entries in this category will count as ${f.type} in every month's totals.` : undefined} />
-          {f.type === 'Spending' && <TextRow label="Budget / mo" value={f.budget} onChange={(e) => setF({ ...f, budget: e.target.value })} inputMode="decimal" placeholder="none" />}
+          {f.type === 'Spending' && <TextRow label="Budget / mo" value={f.budget} onChange={(e) => setF({ ...f, budget: e.target.value })} {...numpad('amount')} placeholder="none" />}
           <ToggleRow label="Active" checked={f.active} onChange={(v) => setF({ ...f, active: v })} hint="Hidden categories keep their entries and totals but leave the pickers." />
         </FieldGroup>
         <FieldGroup title="Tint"><div className={s.padRow}><TintRow value={f.color} onChange={(c) => setF({ ...f, color: c })} allowNone /></div></FieldGroup>
@@ -163,7 +164,7 @@ export function FavoriteSheet({ open, item, onClose }: { open: boolean; item: Fa
           <FieldRow label="Category" value={cat?.name} mark={cat && <Mark Icon={categoryVisual(cat).Icon} color={categoryVisual(cat).color} size="sm" />} onClick={() => setPicker('cat')} />
           {shape.from !== 'blank' && <FieldRow label="From" value={p.acctName(f.from)} placeholder="Optional" onClick={() => setPicker('from')} />}
           {shape.to !== 'blank' && <FieldRow label="To" value={p.acctName(f.to)} placeholder="Optional" onClick={() => setPicker('to')} />}
-          <TextRow label="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} inputMode="decimal" placeholder="Leave blank to type each time" />
+          <TextRow label="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} {...numpad('money')} placeholder="Leave blank to type each time" />
         </FieldGroup>
       </Frame>
       <Picker open={picker === 'cat'} onClose={() => setPicker(null)} title="Category" options={p.catOpts} value={String(f.category_id)} searchable onChange={(v) => setF({ ...f, category_id: Number(v) })} />
@@ -191,7 +192,7 @@ export function RecurringSheet({ open, item, onClose }: { open: boolean; item: R
       <Frame open={open} onClose={onClose} title={item ? 'Edit recurring' : 'New recurring'} canSave={!!f.label.trim() && !!f.category_id && !!parseDollars(f.amount) && p.complete} saving={ent.save.isPending} onSave={() => ent.save.mutate()} onDelete={item ? () => ent.remove.mutate() : undefined} errors={ent.errors}>
         <FieldGroup>
           <TextRow label="Label" value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} placeholder="Phone" autoFocus={!item} />
-          <TextRow label="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} inputMode="decimal" placeholder="57.00" />
+          <TextRow label="Amount" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} {...numpad('money')} placeholder="57.00" />
           <FieldRow label="Category" value={cat?.name} mark={cat && <Mark Icon={categoryVisual(cat).Icon} color={categoryVisual(cat).color} size="sm" />} onClick={() => setPicker('cat')} />
           {shape.from !== 'blank' && <FieldRow label="From" value={p.acctName(f.from)} placeholder={side(shape.from)} onClick={() => setPicker('from')} />}
           {shape.to !== 'blank' && <FieldRow label="To" value={p.acctName(f.to)} placeholder={side(shape.to)} onClick={() => setPicker('to')} />}

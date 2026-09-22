@@ -36,10 +36,15 @@ export function Sheet({ open, onClose, title, children, action, footer, tall }: 
   const restore = useRef<Element | null>(null)
   const drag = useDragControls()
 
+  // Callers often pass an inline onClose, which is new on every render. Re-running this effect for it would restore
+  // focus to the opener and refocus the panel on every keystroke, so the effect reads the latest one through a ref.
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
   useEffect(() => {
     if (!open) return
     bindKeys()
-    stack.push(onClose)
+    const close = () => closeRef.current()
+    stack.push(close)
     restore.current = document.activeElement
     const root = document.getElementById('root')
     root?.setAttribute('inert', '')
@@ -50,11 +55,11 @@ export function Sheet({ open, onClose, title, children, action, footer, tall }: 
       ;(first ?? panel.current)?.focus({ preventScroll: true })
     })
     return () => {
-      stack.splice(stack.lastIndexOf(onClose), 1)
+      stack.splice(stack.lastIndexOf(close), 1)
       if (stack.length === 0) { root?.removeAttribute('inert'); document.body.style.overflow = '' }
       ;(restore.current as HTMLElement | null)?.focus?.({ preventScroll: true })
     }
-  }, [open, onClose, coarse])
+  }, [open, coarse])
 
   const variants = wide
     ? { hidden: { opacity: 0, scale: 0.96 }, shown: { opacity: 1, scale: 1 } }

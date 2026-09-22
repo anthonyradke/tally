@@ -22,6 +22,7 @@ import { Mark } from '@/components/Mark'
 import { LogoButton } from '@/components/LogoButton'
 import { useToast } from '@/components/Toast'
 import s from './AddSheet.module.css'
+import { numpad } from '@/components/NumPad'
 
 export interface Seed { favorite?: Favorite; edit?: Txn; duplicate?: Txn }
 interface Props { open: boolean; seed: Seed; onClose: () => void }
@@ -258,7 +259,7 @@ export function AddSheet({ open, seed, onClose }: Props) {
                       {v ? <Mark Icon={v.Icon} color={v.color} size="sm" /> : <span className={s.splitDot} />}<span className={c ? '' : s.placeholder}>{c?.name ?? 'Category'}</span>
                     </button>
                     <span className={s.splitCur}>$</span>
-                    <input className={`tnum ${s.splitAmt}`} inputMode="decimal" placeholder="0.00" value={l.amount} onFocus={() => setPad(false)} aria-label={`Line ${i + 1} amount`}
+                    <input className={`tnum ${s.splitAmt}`} {...numpad('money')} placeholder="0.00" value={l.amount} onFocus={() => setPad(false)} aria-label={`Line ${i + 1} amount`}
                       onChange={(e) => setSplits(splits.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} />
                     {splits.length > 2 && <button type="button" className={s.splitRemove} onClick={() => setSplits(splits.filter((_, j) => j !== i))} aria-label="Remove line"><X strokeWidth={2.5} absoluteStrokeWidth /></button>}
                   </div>) })}

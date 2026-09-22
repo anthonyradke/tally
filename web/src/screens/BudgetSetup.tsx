@@ -10,6 +10,7 @@ import { Sheet } from '@/components/Sheet'
 import { Mark } from '@/components/Mark'
 import { useToast } from '@/components/Toast'
 import s from './BudgetSetup.module.css'
+import { numpad } from '@/components/NumPad'
 
 const toField = (c: number | null) => (!c ? '' : c % 100 ? (c / 100).toFixed(2) : String(c / 100))
 
@@ -54,7 +55,7 @@ export function BudgetSetup({ trigger }: { trigger: (open: () => void) => ReactN
       <span className={s.text}><span className={s.name}>{name}</span><span className="secondary tnum">{hint}</span></span>
       <label className={s.field}>
         <span className={s.cur}>$</span>
-        <input className="tnum" inputMode="decimal" placeholder="None" value={values[id] ?? ''} aria-label={`${name} monthly budget`}
+        <input className="tnum" {...numpad('amount')} placeholder="None" value={values[id] ?? ''} aria-label={`${name} monthly budget`}
           onChange={(e) => setValues({ ...values, [id]: e.target.value })} />
       </label>
     </li>
