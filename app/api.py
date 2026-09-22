@@ -3,6 +3,7 @@ Amounts are integer cents on the wire except request bodies, which carry dollars
 Companion routers: api_ops (reconcile, month end), api_admin (settings CRUD), api_recurring, api_files (receipts).
 Every route takes `con: Con`, a connection that lives exactly as long as the request (db.session)."""
 from __future__ import annotations
+import re
 import sqlite3
 import uuid
 from dataclasses import replace
@@ -72,7 +73,8 @@ def bootstrap(con: Con):
             "saved_views": rows("SELECT * FROM saved_views ORDER BY sort, id"),
             "settings": settings, "months": [_row(r) for r in st.rows],
             "ef": {"goal": goal, "progress": progress},
-            "roth": {"ytd": st.roth_ytd(), "limit": int(settings.get("roth_limit", 0))}}
+            "roth": {"ytd": st.roth_ytd(), "limit": int(settings.get("roth_limit", 0)),
+                     "category_id": st.category_for("roth_category", "Roth IRA")}}
 
 
 @router.get("/transactions")
@@ -136,8 +138,24 @@ def _parse(b: dict, txn_id: Optional[int] = None) -> tuple[Txn, dict]:
         tags = tags.split()
     meta = {"note": (b.get("note") or "").strip(),
             "tags": " ".join(sorted({x.strip().lstrip("#").lower() for x in tags if x.strip()})),
-            "split_group": b.get("split_group") or None}
+            "split_group": b.get("split_group") or None, "client_id": None}
     return t, meta
+
+
+def _client_id(b: dict) -> Optional[str]:
+    """The outbox's id for a queued save. A retry whose first attempt did land returns that row instead of adding
+    a second one (the phone can lose the response after the server wrote the row)."""
+    cid = b.get("client_id")
+    if cid is None:
+        return None
+    if not isinstance(cid, str) or not re.fullmatch(r"[A-Za-z0-9-]{8,64}", cid):
+        raise HTTPException(422, {"errors": ["Bad client_id."]})
+    return cid
+
+
+def _landed(con, pattern: str) -> list[dict]:
+    ids = [r[0] for r in con.execute("SELECT id FROM transactions WHERE client_id LIKE ?", (pattern,))]
+    return _full(con, ids) if ids else []
 
 
 def _save(st, t: Txn, meta: dict) -> dict:
@@ -147,8 +165,8 @@ def _save(st, t: Txn, meta: dict) -> dict:
     if errs:
         raise HTTPException(422, {"errors": errs})
     tid = t.id or st.con.execute("SELECT last_insert_rowid()").fetchone()[0]
-    st.con.execute("UPDATE transactions SET note=?, tags=?, split_group=? WHERE id=?",
-                   (meta["note"], meta["tags"], meta["split_group"], tid))
+    st.con.execute("UPDATE transactions SET note=?, tags=?, split_group=?, client_id=COALESCE(?, client_id) "
+                   "WHERE id=?", (meta["note"], meta["tags"], meta["split_group"], meta.get("client_id"), tid))
     st.con.commit()
     row = st.con.execute(f"SELECT id,{','.join(META_COLS)} FROM transactions WHERE id=?", (tid,)).fetchone()
     return _txn(Txn(tid, t.date, t.what, t.category_id, t.from_id, t.to_id, t.amount), dict(row))
@@ -156,16 +174,25 @@ def _save(st, t: Txn, meta: dict) -> dict:
 
 @router.post("/transactions", status_code=201)
 async def create_txn(request: Request, con: Con):
+    b = await request.json()
+    cid = _client_id(b)
+    if cid and (done := _landed(con, cid)):
+        return done[0]
     st = service.load(con)
-    t, meta = _parse(await request.json())
-    return _save(st, t, meta)
+    t, meta = _parse(b)
+    return _save(st, t, {**meta, "client_id": cid})
 
 
 @router.post("/transactions/split", status_code=201)
 async def create_split(request: Request, con: Con):
-    """Body: {"lines": [TxnInput, ...]}. All lines validate before any is written; they share one split_group."""
+    """Body: {"lines": [TxnInput, ...], "client_id"?: str}. All lines validate before any is written; they share one
+    split_group. Line i stores client_id "<id>:<i>", so a retried split returns the rows already written."""
+    body = await request.json()
+    cid = _client_id(body)
+    if cid and (done := _landed(con, f"{cid}:%")):
+        return done
     st = service.load(con)
-    lines = [_parse(b) for b in (await request.json()).get("lines", [])]
+    lines = [_parse(b) for b in body.get("lines", [])]
     if len(lines) < 2:
         raise HTTPException(422, {"errors": ["A split needs at least two lines."]})
     if any(t.category_id not in st.cat for t, _ in lines):
@@ -174,7 +201,8 @@ async def create_split(request: Request, con: Con):
     errs = [e for t, _ in lines for e in validate(t, st.cat[t.category_id].type, st.acct)]
     if errs:
         raise HTTPException(422, {"errors": sorted(set(errs))})
-    return [_save(st, t, {**m, "split_group": group}) for t, m in lines]
+    return [_save(st, t, {**m, "split_group": group, "client_id": f"{cid}:{i}" if cid else None})
+            for i, (t, m) in enumerate(lines)]
 
 
 @router.put("/transactions/{txn_id}")

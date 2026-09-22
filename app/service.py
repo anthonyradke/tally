@@ -37,8 +37,16 @@ class State:
     def ef(self) -> tuple[int, int]:
         return emergency_fund(self.rows, self.accounts, int(db.setting(self.con, "ef_months")), self.today)
 
+    def category_for(self, key: str, default_name: str) -> Optional[int]:
+        """A category picked in Settings (roth_category, interest_category), by id so renaming it can't break the
+        link. Falls back to the default name for databases that never stored the pick."""
+        row = self.con.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        if row is None:
+            return next((c.id for c in self.categories if c.name == default_name), None)
+        return int(row[0]) if row[0] and int(row[0]) in self.cat else None  # "" = switched off in Settings
+
     def roth_ytd(self) -> int:
-        rid = next((c.id for c in self.categories if c.name == "Roth IRA"), None)
+        rid = self.category_for("roth_category", "Roth IRA")
         return sum(t.amount for t in self.txns
                    if t.category_id == rid and t.date.year == self.today.year)
 
@@ -61,7 +69,7 @@ class State:
         inv = self.by_kind("investment")
         typed = {a.id: self.typed.get((a.id, m)) for a in inv}
         hysas = [a for a in self.by_kind("cash") if a.apy]
-        income = next((c.id for c in self.categories if c.name == "Other Income"), None)
+        income = self.category_for("interest_category", "Other Income")
         interest = {}
         for a in hysas:
             done = [t for t in self.txns if t.to_id == a.id and t.category_id == income

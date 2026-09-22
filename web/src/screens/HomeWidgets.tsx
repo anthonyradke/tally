@@ -13,20 +13,25 @@ import { TxnList } from '@/components/TxnList'
 import { LineChart } from '@/components/LineChart'
 import { Panel, Section } from '@/components/Panel'
 import { ProgressBar } from '@/components/ProgressBar'
+import { BudgetMeter } from '@/components/BudgetMeter'
+import { budgetFor, suggestBudgets } from '@/lib/budgets'
+import { BudgetSetup } from './BudgetSetup'
+import { MonthReview } from './MonthReview'
 import { monthLabel } from '@/lib/dates'
 import { MonthPanel, NetWorthHero } from './HomeMonth'
 import s from './Home.module.css'
 
-export type WidgetId = 'networth' | 'stats' | 'quick' | 'ef' | 'roth' | 'budgets' | 'spending' | 'chart' | 'upcoming' | 'recent'
+export type WidgetId = 'review' | 'networth' | 'stats' | 'quick' | 'ef' | 'roth' | 'budgets' | 'spending' | 'chart' | 'upcoming' | 'recent'
 export interface Layout { order: WidgetId[]; hidden: WidgetId[] }
-export const DEFAULT_LAYOUT: Layout = { order: ['networth', 'stats', 'quick', 'budgets', 'spending', 'ef', 'upcoming', 'recent', 'roth', 'chart'], hidden: ['roth', 'chart'] }
+export const DEFAULT_LAYOUT: Layout = { order: ['networth', 'review', 'stats', 'quick', 'budgets', 'spending', 'ef', 'upcoming', 'recent', 'roth', 'chart'], hidden: ['roth', 'chart'] }
 
 export function parseLayout(raw: string | undefined): Layout {
   try {
     const v = raw ? JSON.parse(raw) as Partial<Layout> : {}
     const known = new Set(DEFAULT_LAYOUT.order)
     const order = (v.order ?? []).filter((x): x is WidgetId => known.has(x))
-    for (const id of DEFAULT_LAYOUT.order) if (!order.includes(id)) order.push(id)
+    // Widgets added since the layout was saved go in at their default position (the review card sits under net worth).
+    DEFAULT_LAYOUT.order.forEach((id, i) => { if (!order.includes(id)) order.splice(Math.min(i, order.length), 0, id) })
     return { order, hidden: (v.hidden ?? DEFAULT_LAYOUT.hidden).filter((x): x is WidgetId => known.has(x)) }
   } catch { return DEFAULT_LAYOUT }
 }
@@ -41,6 +46,10 @@ const spendRows = (b: Bootstrap, cur: MonthRow) => b.categories
   .sort((x, y) => y.amt - x.amt)
 
 export const WIDGETS: Record<WidgetId, { label: string; hint: string; render: (c: Ctx) => ReactNode }> = {
+  review: {
+    label: 'Month in review', hint: 'Last month at a glance, for the first week',
+    render: ({ b, nav }) => <MonthReview b={b} nav={nav} />,
+  },
   networth: {
     label: 'Net worth', hint: 'The big figure and its change this month',
     render: ({ months, cur, prev }) => <NetWorthHero months={months} cur={cur} prev={prev} />,
@@ -63,20 +72,28 @@ export const WIDGETS: Record<WidgetId, { label: string; hint: string; render: (c
   budgets: {
     label: 'Budgets', hint: 'Categories with a monthly target',
     render: ({ b, cur, nav }) => {
-      const rows = b.categories.filter((c) => c.type === 'Spending' && c.active).map((c) => ({ c, v: categoryVisual(c), budget: b.budgets.find((x) => x.category_id === c.id && x.month === cur.month)?.amount ?? c.budget, amt: cur.by_category[String(c.id)] ?? 0 })).filter((r) => r.budget)
-      if (!rows.length) return null
+      const rows = b.categories.filter((c) => c.type === 'Spending' && c.active).map((c) => ({ c, v: categoryVisual(c), budget: budgetFor(b, c, cur.month), amt: cur.by_category[String(c.id)] ?? 0 })).filter((r) => r.budget)
+      if (!rows.length) return suggestBudgets(b).length === 0 ? null : (
+        <Section title="Budgets">
+          <BudgetSetup trigger={(open) => (
+            <Panel onClick={open}>
+              <div className={s.setupHead}>Set monthly budgets</div>
+              <div className="secondary">Tally suggests a target for each category from what you usually spend. One tap to accept.</div>
+            </Panel>
+          )} />
+        </Section>
+      )
       return (
         <Section title="Budgets" onAction={() => nav('/insights')}>
           <Panel flush>
-            {rows.map(({ c, v, budget, amt }) => { const over = amt > budget!
-              return <button key={c.id} type="button" className={s.row} onClick={() => nav(`/activity?type=Spending&category=${c.id}`)}>
+            {rows.map(({ c, v, budget, amt }) => (
+              <button key={c.id} type="button" className={s.row} onClick={() => nav(`/activity?type=Spending&category=${c.id}`)}>
                 <Mark Icon={v.Icon} color={v.color} size="sm" />
                 <span className={s.rowMain}>
                   <span className={s.rowHead}><span className={s.rowName}>{c.name}</span><Amount cents={amt} size="small" /></span>
-                  <ProgressBar value={pct(amt, budget!)} color={over ? 'var(--neg)' : v.color} label={`${c.name} budget`} />
-                  <span className={`secondary tnum ${over ? 'neg' : ''}`}>{over ? `${formatCents(amt - budget!, { cents: false })} over` : `${formatCents(budget! - amt, { cents: false })} left of ${formatCents(budget!, { cents: false })}`}</span>
+                  <BudgetMeter name={c.name} spent={amt} budget={budget!} color={v.color} month={cur.month} today={b.today} />
                 </span>
-              </button> })}
+              </button>))}
           </Panel>
         </Section>
       )

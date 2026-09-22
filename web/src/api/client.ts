@@ -15,7 +15,7 @@ export interface Budget { category_id: number; month: string; amount: number }
 export interface Recurring { id: number; label: string; category_id: number; from_account_id: number | null; to_account_id: number | null; amount: number; what: string; freq: Freq; next_date: string; horizon_days: number; active: number }
 export interface SavedView { id: number; name: string; query: string; icon: string | null; sort: number }
 export interface MonthRow { month: string; money_in: number; spent: number; loan: number; saving: number; left_over: number; by_category: Record<string, number>; balances: Record<string, number>; cash: number; invested: number; cards: number; loans: number; net_worth: number }
-export interface Bootstrap { today: string; start: string; accounts: Account[]; categories: Category[]; favorites: Favorite[]; budgets: Budget[]; recurring: Recurring[]; saved_views: SavedView[]; settings: Record<string, string>; months: MonthRow[]; ef: { goal: number; progress: number }; roth: { ytd: number; limit: number } }
+export interface Bootstrap { today: string; start: string; accounts: Account[]; categories: Category[]; favorites: Favorite[]; budgets: Budget[]; recurring: Recurring[]; saved_views: SavedView[]; settings: Record<string, string>; months: MonthRow[]; ef: { goal: number; progress: number }; roth: { ytd: number; limit: number; category_id: number | null } }
 export interface TxnPage { total: number; sum: number; by_type: Partial<Record<CatType, number>>; items: Txn[] }
 export interface TxnQuery { q?: string; category?: number; account?: number; type?: CatType | ''; start?: string; end?: string; amount_min?: number; amount_max?: number; tag?: string; group?: string; sort?: 'date' | 'amount'; dir?: 'asc' | 'desc'; limit?: number; offset?: number }
 export interface Diagnosis { expected: number; actual: number; gap: number; saved: boolean; doubled: Txn[]; single: Txn[]; future: Txn[] }
@@ -25,14 +25,21 @@ export type AdminAccount = Omit<Account, 'active'> & { sort: number; active: num
 export type AdminCategory = Omit<Category, 'active'> & { sort: number; active: number }
 export interface AdminData { accounts: AdminAccount[]; categories: AdminCategory[]; favorites: Favorite[]; recurring: Recurring[]; saved_views: SavedView[]; budgets: Budget[]; settings: Record<string, string> }
 
+export interface Backups { latest: { name: string; size: number; at: string } | null; count: number; folder: string }
+
 export class ApiError extends Error {
   constructor(public status: number, public errors: string[]) { super(errors.join(' ')) }
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+/** True when the request never got an answer from Tally (no signal, Tailscale off, timed out, server restarting),
+ *  as opposed to Tally refusing it. Only these are worth retrying. */
+export const unreachable = (e: unknown) => e instanceof ApiError ? e.status >= 502
+  : e instanceof TypeError || (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError'))
+
+async function call<T>(method: string, path: string, body?: unknown, timeoutMs?: number): Promise<T> {
   const isForm = body instanceof FormData
   const res = await fetch(`/api${path}`, {
-    method,
+    method, signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
     headers: body === undefined || isForm ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   })
@@ -59,8 +66,9 @@ export const api = {
   bootstrap: () => call<Bootstrap>('GET', '/bootstrap'),
   admin: () => call<AdminData>('GET', '/admin'),
   transactions: (query: TxnQuery = {}) => call<TxnPage>('GET', `/transactions${qs(query)}`),
-  createTxn: (t: TxnInput) => call<Txn>('POST', '/transactions', dollars(t)),
-  createSplit: (lines: TxnInput[]) => call<Txn[]>('POST', '/transactions/split', { lines: lines.map(dollars) }),
+  /** `clientId` makes the create safe to retry: the server returns the row it already wrote for that id. */
+  createTxn: (t: TxnInput, clientId?: string) => call<Txn>('POST', '/transactions', { ...dollars(t), client_id: clientId }, clientId ? 12_000 : undefined),
+  createSplit: (lines: TxnInput[], clientId?: string) => call<Txn[]>('POST', '/transactions/split', { lines: lines.map(dollars), client_id: clientId }, clientId ? 12_000 : undefined),
   updateTxn: (id: number, t: TxnInput) => call<Txn>('PUT', `/transactions/${id}`, dollars(t)),
   /** Returns the row as it was, for Undo via `restore`. */
   deleteTxn: (id: number) => call<Txn>('DELETE', `/transactions/${id}`),
@@ -97,5 +105,6 @@ export const api = {
   deleteRecurring: (id: number) => call<void>('DELETE', `/recurring/${id}`),
   saveView: (body: object, id?: number) => id ? call<SavedView>('PUT', `/saved-views/${id}`, body) : call<SavedView>('POST', '/saved-views', body),
   deleteView: (id: number) => call<void>('DELETE', `/saved-views/${id}`),
+  backups: () => call<Backups>('GET', '/backups'),
   putSettings: (body: Record<string, unknown>) => call<Record<string, string>>('PUT', '/settings', body),
 }

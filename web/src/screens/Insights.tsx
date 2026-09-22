@@ -13,7 +13,9 @@ import { categoryVisual } from '@/icons/categories'
 import { Hero } from '@/components/Hero'
 import { Amount } from '@/components/Amount'
 import { Panel, Section } from '@/components/Panel'
-import { ProgressBar } from '@/components/ProgressBar'
+import { BudgetMeter } from '@/components/BudgetMeter'
+import { budgetFor } from '@/lib/budgets'
+import { BudgetSetup } from './BudgetSetup'
 import { Ring } from '@/components/Ring'
 import { Segmented } from '@/components/Segmented'
 import { Delta } from './HomeMonth'
@@ -35,8 +37,7 @@ export function Insights() {
   const idx = months.indexOf(m)
   const prev = months[idx - 1]
   const spending = b.categories.filter((c) => c.type === 'Spending')
-  const budgetFor = (cid: number) => b.budgets.find((x) => x.category_id === cid && x.month === m.month)?.amount ?? b.categories.find((c) => c.id === cid)?.budget ?? null
-  const rows = spending.map((c) => ({ c, amt: m.by_category[String(c.id)] ?? 0, budget: c.active ? budgetFor(c.id) : null }))
+  const rows = spending.map((c) => ({ c, amt: m.by_category[String(c.id)] ?? 0, budget: c.active ? budgetFor(b, c, m.month) : null }))
     .filter((r) => r.amt || r.budget).sort((x, y) => y.amt - x.amt)
   const budgeted = rows.filter((r) => r.budget)
   const budgetTotal = budgeted.reduce((n, r) => n + (r.budget ?? 0), 0)
@@ -79,7 +80,7 @@ export function Insights() {
         </Panel>
       </Section>
 
-      <Section title="Spending" action="Set budgets" onAction={() => nav('/settings/categories')}>
+      <BudgetSetup trigger={(openBudgets) => <Section title="Spending" action="Set budgets" onAction={openBudgets}>
         <Panel>
           {spentRows.length > 0 ? (
             <div className={s.ringWrap}>
@@ -93,7 +94,6 @@ export function Insights() {
           <ul className={s.bars}>
             {rows.map(({ c, amt, budget }) => {
               const v = categoryVisual(c)
-              const over = budget !== null && amt > budget
               return (
                 <li key={c.id}>
                   <button type="button" className={s.bar} onClick={() => nav(`/activity?type=Spending&category=${c.id}&start=${m.month}&end=${endOf(m.month)}`)}>
@@ -101,8 +101,7 @@ export function Insights() {
                     <span className={s.barText}>
                       <span className={s.barHead}><span className={s.barName}>{c.name}</span><Amount cents={amt} size="small" /></span>
                       {budget !== null
-                        ? <><ProgressBar value={pct(amt, budget)} color={over ? 'var(--neg)' : v.color} label={`${c.name} budget`} />
-                            <span className={`secondary tnum ${over ? 'neg' : ''}`}>{over ? `${formatCents(amt - budget, { cents: false })} over` : `${formatCents(budget - amt, { cents: false })} left of ${formatCents(budget, { cents: false })}`}</span></>
+                        ? <BudgetMeter name={c.name} spent={amt} budget={budget} color={v.color} month={m.month} today={b.today} />
                         : <span className="secondary tnum">{Math.round(pct(amt, m.spent) * 100)}% of spending</span>}
                     </span>
                   </button>
@@ -111,7 +110,7 @@ export function Insights() {
             })}
           </ul>
         </Panel>
-      </Section>
+      </Section>} />
 
       <Section title="Net worth">
         <Panel><LineChart points={upTo.map((r) => ({ x: r.month, y: r.net_worth }))} xLabel={(x) => monthLabel(x)} ariaLabel="Net worth by month" /></Panel>

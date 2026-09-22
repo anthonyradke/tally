@@ -9,6 +9,7 @@ import { useAdd } from '@/lib/add'
 import { usePace } from '@/lib/pace'
 import { monthsNow } from '@/lib/months'
 import { Sheet } from '@/components/Sheet'
+import { OutboxNotice } from '@/components/Outbox'
 import { DEFAULT_LAYOUT, parseLayout, WIDGETS, type Layout, type WidgetId } from './HomeWidgets'
 import s from './Home.module.css'
 
@@ -49,6 +50,7 @@ export function Home() {
         <button type="button" className={s.gear} onClick={() => setEditing(true)} aria-label="Edit Home"><SlidersHorizontal strokeWidth={1.75} absoluteStrokeWidth /></button>
         <button type="button" className={`${s.gear} ${s.gearPhone}`} onClick={() => nav('/settings')} aria-label="Settings"><SettingsIcon strokeWidth={1.75} absoluteStrokeWidth /></button>
       </div>
+      <OutboxNotice />
       {layout.order.filter((id) => !layout.hidden.includes(id)).map((id) => [id, WIDGETS[id].render(ctx)] as const).filter(([, node]) => node).map(([id, node]) => <div key={id}>{node}</div>)}
 
       <Sheet open={editing} onClose={() => setEditing(false)} title="Edit Home" action={<button type="button" className={s.done} onClick={() => setEditing(false)}>Done</button>}>

@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { Camera, Split as SplitIcon, Trash2, X } from 'lucide-react'
-import { api, ApiError, type Category, type Favorite, type Txn, type TxnInput } from '@/api/client'
+import { api, ApiError, unreachable, type Category, type Favorite, type Txn, type TxnInput } from '@/api/client'
 import { useBootstrap, useLookups, useTransactions } from '@/lib/data'
-import { SHAPES, HINT } from '@/lib/shapes'
+import { SHAPES, HINT, fits } from '@/lib/shapes'
 import { todayISO, addDays, dayLabel } from '@/lib/dates'
 import { formatCents, parseDollars } from '@/lib/money'
 import { shrinkImage } from '@/lib/image'
 import { markRecent } from '@/lib/recent'
+import { enqueue, newClientId, send } from '@/lib/outbox'
 import { categoryVisual } from '@/icons/categories'
 import { bankColor } from '@/icons/banks'
 import { Sheet } from '@/components/Sheet'
@@ -25,6 +26,8 @@ import s from './AddSheet.module.css'
 export interface Seed { favorite?: Favorite; edit?: Txn; duplicate?: Txn }
 interface Props { open: boolean; seed: Seed; onClose: () => void }
 
+const errorText = (e: unknown) => e instanceof ApiError ? e.errors
+  : unreachable(e) ? ["Can't reach Tally. Changes to saved entries need a connection; try again in a moment."] : [String(e)]
 const toDigits = (cents: number) => (cents === 0 ? '' : String(Math.abs(cents)))
 
 export function AddSheet({ open, seed, onClose }: Props) {
@@ -114,18 +117,34 @@ export function AddSheet({ open, seed, onClose }: Props) {
   const refresh = () => { qc.invalidateQueries({ queryKey: ['transactions'] }); qc.invalidateQueries({ queryKey: ['bootstrap'] }) }
   const undo = (p: Promise<unknown>) => p.then(refresh, (e) => toast.show({ message: `Couldn't undo: ${e instanceof ApiError ? e.errors.join(' ') : e}`, tone: 'error' }))
 
+  // networkMode 'always': React Query would otherwise hold the save while the phone reports offline, and the
+  // outbox needs the attempt to fail so it can queue the entry.
   const save = useMutation({
+    networkMode: 'always',
     mutationFn: async () => {
       const body = payload()
       let saved: Txn
-      if (splits && !seed.edit) {
-        const lines = splits.map((l) => ({ ...body, category_id: l.category_id!, amount: parseDollars(l.amount)! }))
-        const created = await api.createSplit(lines)
-        savedIds.current = created.map((c) => c.id)
-        saved = { ...created[0], amount: splitTotal }
-      } else {
-        saved = seed.edit ? await api.updateTxn(seed.edit.id, body) : await api.createTxn(body)
+      if (seed.edit) {
+        saved = await api.updateTxn(seed.edit.id, body)
         savedIds.current = [saved.id]
+      } else {
+        // New entries carry a client id, so if Tally is out of reach they can wait in the outbox and post later.
+        const lines = splits ? splits.map((l) => ({ ...body, category_id: l.category_id!, amount: parseDollars(l.amount)! })) : [body]
+        const cid = newClientId()
+        let created: Txn | Txn[]
+        try {
+          created = await send(lines, cid)
+        } catch (e) {
+          if (!unreachable(e)) throw e
+          if (file) throw new ApiError(0, ["Can't reach Tally, and receipts need a connection. Remove the photo to save the entry for later."])
+          // Tally can't check it now, so catch what it would refuse before the entry waits in the queue.
+          if (category && !fits(body, category.type)) throw new ApiError(0, [body.from_id && body.from_id === body.to_id ? 'From and To are the same account.' : `Check From and To. ${HINT[category.type]}`])
+          enqueue({ cid, lines, label: `${formatCents(Math.abs(cents))} ${body.what || category?.name || ''}`.trim() })
+          return { saved: null, receiptError: null }
+        }
+        const rows = Array.isArray(created) ? created : [created]
+        savedIds.current = rows.map((c) => c.id)
+        saved = { ...rows[0], amount: cents }
       }
       // The entry is saved at this point: a failed upload must not keep the sheet open (Save again = a duplicate).
       let receiptError: string | null = null
@@ -136,6 +155,7 @@ export function AddSheet({ open, seed, onClose }: Props) {
       return { saved, receiptError }
     },
     onSuccess: ({ saved, receiptError }) => {
+      if (!saved) { onClose(); toast.show({ message: "Saved offline. It'll sync when Tally is back." }); return }
       refresh(); onClose(); markRecent(savedIds.current)
       if (receiptError) { toast.show({ message: `Saved, but the receipt didn't upload: ${receiptError}`, tone: 'error' }); return }
       const label = `${formatCents(Math.abs(saved.amount))} · ${saved.what || category?.name}${savedIds.current.length > 1 ? ` · ${savedIds.current.length} lines` : ''}`
@@ -148,7 +168,7 @@ export function AddSheet({ open, seed, onClose }: Props) {
           : { label: 'Undo', onClick: () => undo(Promise.all(ids.map((id) => api.deleteTxn(id)))) },
       })
     },
-    onError: (e) => setErrors(e instanceof ApiError ? e.errors : [String(e)]),
+    onError: (e) => setErrors(errorText(e)),
   })
 
   const remove = useMutation({
@@ -158,7 +178,7 @@ export function AddSheet({ open, seed, onClose }: Props) {
       toast.show({ message: `Deleted ${formatCents(Math.abs(gone.amount))} · ${gone.what || lk.cat.get(gone.category_id)?.name}`,
         action: { label: 'Undo', onClick: () => undo(api.restore([gone])) } })
     },
-    onError: (e) => setErrors(e instanceof ApiError ? e.errors : [String(e)]),
+    onError: (e) => setErrors(errorText(e)),
   })
 
   const canSaveRef = useRef(false)

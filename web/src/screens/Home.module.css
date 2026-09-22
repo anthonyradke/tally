@@ -51,6 +51,9 @@
 .stack { display: flex; gap: 2px; height: 10px; margin: var(--s-3) 0 var(--s-2); border-radius: 5px; overflow: hidden; }
 .stack i { display: block; min-width: 3px; }
 
+/* budgets */
+.setupHead { font-size: var(--t-17); font-weight: 600; margin-bottom: var(--s-1); }
+
 /* goals */
 .goalHead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: var(--s-3); }
 .goalPct { font-size: var(--t-15); font-weight: 600; color: var(--fg-2); font-variant-numeric: tabular-nums; }

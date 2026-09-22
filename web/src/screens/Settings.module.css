@@ -19,3 +19,4 @@
 .add svg { width: 16px; height: 16px; }
 .primary { align-self: flex-start; min-height: 44px; padding: 0 var(--s-5); border-radius: var(--r-control); background: var(--ink); color: var(--on-ink); font-weight: 600; }
 .primary:disabled { opacity: .45; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
