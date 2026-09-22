@@ -17,7 +17,7 @@ reading).
 ## Run on x1
     uv sync --frozen && (cd web && npm ci && npm run build)   # deps + frontend into app/static/dist
     sudo systemctl restart tally                              # Python changes only; a rebuild alone is picked up live
-    uv run pytest -q                                          # 13 tests (engine + API)
+    uv run pytest -q                                          # 23 tests (engine + API)
 
 Frontend dev loop: `cd web && npm run dev` (Vite on :5173, `/api` proxied to :8000). Point `TALLY_DB` at a copy of
 the database for experiments; never at the live file.

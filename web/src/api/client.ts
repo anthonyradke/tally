@@ -5,8 +5,9 @@ export type Kind = 'cash' | 'card' | 'investment' | 'loan'
 export type CatType = 'Money in' | 'Spending' | 'Saving' | 'Transfer' | 'Loan'
 export type Freq = 'weekly' | 'biweekly' | 'monthly' | 'yearly'
 
-export interface Account { id: number; name: string; kind: Kind; bank: string | null; start_balance: number; apy: number | null; loan_rate: number | null; ef: boolean; color: string | null; icon: string | null }
-export interface Category { id: number; name: string; type: CatType; icon: string | null; color: string | null; budget: number | null }
+export interface Account { id: number; name: string; kind: Kind; bank: string | null; start_balance: number; apy: number | null; loan_rate: number | null; ef: boolean; color: string | null; icon: string | null; active: boolean }
+/** `active: false` = hidden in Settings: kept for existing entries and totals, left out of pickers. */
+export interface Category { id: number; name: string; type: CatType; icon: string | null; color: string | null; budget: number | null; active: boolean }
 export interface Txn { id: number; date: string; what: string; category_id: number; from_id: number | null; to_id: number | null; amount: number; note: string; tags: string[]; split_group: string | null; receipt: string | null; recurring_id: number | null }
 export interface TxnInput { date: string; what: string; category_id: number; from_id: number | null; to_id: number | null; amount: number; note?: string; tags?: string[]; split_group?: string | null }
 export interface Favorite { id: number; label: string; category_id: number; from_account_id: number | null; to_account_id: number | null; amount: number | null; sort: number; icon: string | null; color: string | null }
@@ -15,11 +16,14 @@ export interface Recurring { id: number; label: string; category_id: number; fro
 export interface SavedView { id: number; name: string; query: string; icon: string | null; sort: number }
 export interface MonthRow { month: string; money_in: number; spent: number; loan: number; saving: number; left_over: number; by_category: Record<string, number>; balances: Record<string, number>; cash: number; invested: number; cards: number; loans: number; net_worth: number }
 export interface Bootstrap { today: string; start: string; accounts: Account[]; categories: Category[]; favorites: Favorite[]; budgets: Budget[]; recurring: Recurring[]; saved_views: SavedView[]; settings: Record<string, string>; months: MonthRow[]; ef: { goal: number; progress: number }; roth: { ytd: number; limit: number } }
-export interface TxnPage { total: number; sum: number; items: Txn[] }
+export interface TxnPage { total: number; sum: number; by_type: Partial<Record<CatType, number>>; items: Txn[] }
 export interface TxnQuery { q?: string; category?: number; account?: number; type?: CatType | ''; start?: string; end?: string; amount_min?: number; amount_max?: number; tag?: string; group?: string; sort?: 'date' | 'amount'; dir?: 'asc' | 'desc'; limit?: number; offset?: number }
 export interface Diagnosis { expected: number; actual: number; gap: number; saved: boolean; doubled: Txn[]; single: Txn[]; future: Txn[] }
 export interface MonthEnd { month: string; typed: Record<string, number | null>; recon: Record<string, { actual: number; expected: number; date: string } | null>; interest: Record<string, { logged: Txn[]; proposed: number }>; typed_done: boolean; interest_done: boolean; recon_done: boolean }
-export interface AdminData { accounts: Array<Account & { sort: number; active: number }>; categories: Array<Category & { sort: number; active: number }>; favorites: Favorite[]; recurring: Recurring[]; saved_views: SavedView[]; budgets: Budget[]; settings: Record<string, string> }
+/** Settings rows straight from the tables: `active` is SQLite's 0/1 here. */
+export type AdminAccount = Omit<Account, 'active'> & { sort: number; active: number }
+export type AdminCategory = Omit<Category, 'active'> & { sort: number; active: number }
+export interface AdminData { accounts: AdminAccount[]; categories: AdminCategory[]; favorites: Favorite[]; recurring: Recurring[]; saved_views: SavedView[]; budgets: Budget[]; settings: Record<string, string> }
 
 export class ApiError extends Error {
   constructor(public status: number, public errors: string[]) { super(errors.join(' ')) }
@@ -58,9 +62,12 @@ export const api = {
   createTxn: (t: TxnInput) => call<Txn>('POST', '/transactions', dollars(t)),
   createSplit: (lines: TxnInput[]) => call<Txn[]>('POST', '/transactions/split', { lines: lines.map(dollars) }),
   updateTxn: (id: number, t: TxnInput) => call<Txn>('PUT', `/transactions/${id}`, dollars(t)),
-  deleteTxn: (id: number) => call<void>('DELETE', `/transactions/${id}`),
+  /** Returns the row as it was, for Undo via `restore`. */
+  deleteTxn: (id: number) => call<Txn>('DELETE', `/transactions/${id}`),
+  /** Undo for deletes: puts rows back exactly (same id, receipt, split and recurring links). */
+  restore: (rows: Txn[]) => call<Txn[]>('POST', '/transactions/restore', { rows: rows.map((t) => ({ ...t, amount: t.amount / 100 })) }),
   bulk: (body: { ids: number[]; action: 'delete' | 'recategorize' | 'tag'; category_id?: number; tags?: string[] }) =>
-    call<{ ok: true; count: number }>('POST', '/transactions/bulk', body),
+    call<{ ok: true; count: number; deleted?: Txn[] }>('POST', '/transactions/bulk', body),
   uploadReceipt: (id: number, file: Blob, filename: string) => {
     const fd = new FormData(); fd.append('file', file, filename)
     return call<{ receipt: string }>('POST', `/transactions/${id}/receipt`, fd)

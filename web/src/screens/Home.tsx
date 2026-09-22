@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Reorder } from 'motion/react'
 import { GripVertical, Settings as SettingsIcon, SlidersHorizontal } from 'lucide-react'
-import { api } from '@/api/client'
+import { api, type Bootstrap } from '@/api/client'
 import { useBootstrap, useLookups, useTransactions } from '@/lib/data'
 import { useAdd } from '@/lib/add'
 import { usePace } from '@/lib/pace'
+import { monthsNow } from '@/lib/months'
 import { Sheet } from '@/components/Sheet'
 import { DEFAULT_LAYOUT, parseLayout, WIDGETS, type Layout, type WidgetId } from './HomeWidgets'
 import s from './Home.module.css'
@@ -26,14 +27,21 @@ export function Home() {
   // Layout: server setting wins; localStorage makes the first paint match before bootstrap lands.
   const [layout, setLayout] = useState<Layout>(() => parseLayout(localStorage.getItem(LS) ?? undefined))
   useEffect(() => { if (boot.data?.settings.home_layout) setLayout(parseLayout(boot.data.settings.home_layout)) }, [boot.data?.settings.home_layout])
-  const persist = useMutation({ mutationFn: (l: Layout) => api.putSettings({ home_layout: l }), onSuccess: () => qc.invalidateQueries({ queryKey: ['bootstrap'] }) })
-  const update = (l: Layout) => { setLayout(l); localStorage.setItem(LS, JSON.stringify(l)); persist.mutate(l) }
+  // Saves write the settings straight into the cached bootstrap instead of refetching it: a refetch landing
+  // mid-drag used to snap the list back. Dragging only updates local state; the save happens on drop.
+  const persist = useMutation({
+    mutationFn: (l: Layout) => api.putSettings({ home_layout: l }),
+    onSuccess: (settings) => qc.setQueryData<Bootstrap>(['bootstrap'], (old) => old && { ...old, settings }),
+  })
+  const latest = useRef(layout)
+  latest.current = layout
+  const arrange = (l: Layout) => { setLayout(l); localStorage.setItem(LS, JSON.stringify(l)) }
+  const update = (l: Layout) => { arrange(l); persist.mutate(l) }
 
   const b = boot.data
   if (!b) return <div className={s.screen} />
-  const cur = b.months[b.months.length - 1]
-  const prev = b.months[b.months.length - 2]
-  const ctx = { b, lookups, cur, prev, nav, add, upcoming: (upcoming.data?.items ?? []).filter((t) => t.date > b.today).slice(0, 5), recent: recent.data?.items ?? [], pace }
+  const { cur, prev, upTo } = monthsNow(b)
+  const ctx = { b, lookups, cur, prev, months: upTo, nav, add, upcoming: (upcoming.data?.items ?? []).filter((t) => t.date > b.today).slice(0, 5), recent: recent.data?.items ?? [], pace }
 
   return (
     <div className={s.screen}>
@@ -45,9 +53,9 @@ export function Home() {
 
       <Sheet open={editing} onClose={() => setEditing(false)} title="Edit Home" action={<button type="button" className={s.done} onClick={() => setEditing(false)}>Done</button>}>
         <p className={`secondary ${s.editHint}`}>Drag to reorder. Switch off what you don't want to see.</p>
-        <Reorder.Group axis="y" values={layout.order} onReorder={(order) => update({ ...layout, order: order as WidgetId[] })} className={s.reorder} as="div">
+        <Reorder.Group axis="y" values={layout.order} onReorder={(order) => arrange({ ...layout, order: order as WidgetId[] })} className={s.reorder} as="div">
           {layout.order.map((id) => (
-            <Reorder.Item key={id} value={id} as="div" className={s.dragRow}>
+            <Reorder.Item key={id} value={id} as="div" className={s.dragRow} onDragEnd={() => persist.mutate(latest.current)}>
               <GripVertical className={s.grip} strokeWidth={2} absoluteStrokeWidth />
               <span className={s.dragText}><span>{WIDGETS[id].label}</span><span className="secondary">{WIDGETS[id].hint}</span></span>
               <input type="checkbox" className={s.switch} checked={!layout.hidden.includes(id)} aria-label={`Show ${WIDGETS[id].label}`}

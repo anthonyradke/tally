@@ -20,6 +20,7 @@ class State:
     today: date
     months: list
     rows: list
+    hidden: frozenset = frozenset()  # ids of accounts switched off in Settings: still counted, left off checklists
 
     @property
     def acct(self) -> dict[int, Account]:
@@ -42,7 +43,7 @@ class State:
                    if t.category_id == rid and t.date.year == self.today.year)
 
     def by_kind(self, kind: str) -> list[Account]:
-        return [a for a in self.accounts if a.kind == kind]
+        return [a for a in self.accounts if a.kind == kind and a.id not in self.hidden]
 
     def recent(self, n: int = 80) -> list[Txn]:
         return sorted(self.txns, key=lambda t: (t.date, t.id or 0), reverse=True)[:n]
@@ -59,7 +60,7 @@ class State:
     def month_end_status(self, m: date) -> dict:
         inv = self.by_kind("investment")
         typed = {a.id: self.typed.get((a.id, m)) for a in inv}
-        hysas = [a for a in self.accounts if a.kind == "cash" and a.apy]
+        hysas = [a for a in self.by_kind("cash") if a.apy]
         income = next((c.id for c in self.categories if c.name == "Other Income"), None)
         interest = {}
         for a in hysas:
@@ -82,14 +83,17 @@ class State:
 
 
 def load(con, today: Optional[date] = None) -> State:
+    """Hidden (inactive) accounts and categories load too: their entries still exist, so balances, totals and
+    exports must count them. Settings' Active switch only takes them out of pickers and checklists."""
     today = today or date.today()
-    accounts, cats = db.load_accounts(con), db.load_categories(con)
+    accounts, cats = db.load_accounts(con, active_only=False), db.load_categories(con, active_only=False)
+    hidden = frozenset(r[0] for r in con.execute("SELECT id FROM accounts WHERE active=0"))
     txns, typed = db.load_txns(con), db.load_typed(con)
     start = date.fromisoformat(db.setting(con, "start_month"))
     last = max([today] + [t.date for t in txns] + [m for _, m in typed])
     months = month_range(start, last)
     rows = month_table(accounts, cats, txns, typed, months)
-    return State(con, accounts, cats, txns, typed, start, today, months, rows)
+    return State(con, accounts, cats, txns, typed, start, today, months, rows, hidden)
 
 
 def txn_from_form(f, txn_id: Optional[int] = None) -> Txn:

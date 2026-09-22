@@ -31,7 +31,7 @@ export function parseLayout(raw: string | undefined): Layout {
   } catch { return DEFAULT_LAYOUT }
 }
 
-export interface Ctx { b: Bootstrap; lookups: Lookups; cur: MonthRow; prev?: MonthRow; nav: NavigateFunction; add: AddApi; upcoming: Txn[]; recent: Txn[]; pace: Pace | null }
+export interface Ctx { b: Bootstrap; lookups: Lookups; cur: MonthRow; prev?: MonthRow; months: MonthRow[]; nav: NavigateFunction; add: AddApi; upcoming: Txn[]; recent: Txn[]; pace: Pace | null }
 
 const pctText = (p: number) => (p > 0 && p < 0.01 ? '<1%' : `${Math.round(p * 100)}%`)
 
@@ -43,7 +43,7 @@ const spendRows = (b: Bootstrap, cur: MonthRow) => b.categories
 export const WIDGETS: Record<WidgetId, { label: string; hint: string; render: (c: Ctx) => ReactNode }> = {
   networth: {
     label: 'Net worth', hint: 'The big figure and its change this month',
-    render: ({ b, cur, prev }) => <NetWorthHero b={b} cur={cur} prev={prev} />,
+    render: ({ months, cur, prev }) => <NetWorthHero months={months} cur={cur} prev={prev} />,
   },
   stats: {
     label: 'This month', hint: 'Spending pace against last month',
@@ -63,7 +63,7 @@ export const WIDGETS: Record<WidgetId, { label: string; hint: string; render: (c
   budgets: {
     label: 'Budgets', hint: 'Categories with a monthly target',
     render: ({ b, cur, nav }) => {
-      const rows = b.categories.filter((c) => c.type === 'Spending').map((c) => ({ c, v: categoryVisual(c), budget: b.budgets.find((x) => x.category_id === c.id && x.month === cur.month)?.amount ?? c.budget, amt: cur.by_category[String(c.id)] ?? 0 })).filter((r) => r.budget)
+      const rows = b.categories.filter((c) => c.type === 'Spending' && c.active).map((c) => ({ c, v: categoryVisual(c), budget: b.budgets.find((x) => x.category_id === c.id && x.month === cur.month)?.amount ?? c.budget, amt: cur.by_category[String(c.id)] ?? 0 })).filter((r) => r.budget)
       if (!rows.length) return null
       return (
         <Section title="Budgets" onAction={() => nav('/insights')}>
@@ -137,7 +137,7 @@ export const WIDGETS: Record<WidgetId, { label: string; hint: string; render: (c
   },
   chart: {
     label: 'Net worth chart', hint: 'Month by month',
-    render: ({ b }) => <Section title="Net worth by month"><Panel><LineChart points={b.months.map((r) => ({ x: r.month, y: r.net_worth }))} height={140} xLabel={(x) => monthLabel(x)} ariaLabel="Net worth by month" /></Panel></Section>,
+    render: ({ months }) => <Section title="Net worth by month"><Panel><LineChart points={months.map((r) => ({ x: r.month, y: r.net_worth }))} height={140} xLabel={(x) => monthLabel(x)} ariaLabel="Net worth by month" /></Panel></Section>,
   },
   upcoming: {
     label: 'Upcoming', hint: 'Future-dated entries',

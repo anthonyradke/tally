@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { Camera, Split as SplitIcon, Trash2, X } from 'lucide-react'
-import { api, ApiError, type Favorite, type Txn, type TxnInput } from '@/api/client'
+import { api, ApiError, type Category, type Favorite, type Txn, type TxnInput } from '@/api/client'
 import { useBootstrap, useLookups, useTransactions } from '@/lib/data'
 import { SHAPES, HINT } from '@/lib/shapes'
 import { todayISO, addDays, dayLabel } from '@/lib/dates'
@@ -61,9 +61,10 @@ export function AddSheet({ open, seed, onClose }: Props) {
     // Default to the spending category used most in the last 300 entries, else the first spending category.
     const counts = new Map<number, number>()
     for (const t of recent.data?.items ?? []) counts.set(t.category_id, (counts.get(t.category_id) ?? 0) + 1)
-    const spendingIds = new Set(boot.data.categories.filter((c) => c.type === 'Spending').map((c) => c.id))
+    const active = boot.data.categories.filter((c) => c.active)
+    const spendingIds = new Set(active.filter((c) => c.type === 'Spending').map((c) => c.id))
     const top = [...counts.entries()].filter(([id]) => spendingIds.has(id)).sort((a, b) => b[1] - a[1])[0]?.[0]
-    const defaultCat = top ?? boot.data.categories.find((c) => c.type === 'Spending')?.id ?? boot.data.categories[0]?.id ?? null
+    const defaultCat = top ?? active.find((c) => c.type === 'Spending')?.id ?? active[0]?.id ?? null
     setDigits(src ? toDigits(src.amount) : f?.amount ? toDigits(f.amount) : '')
     setNeg(!!src && src.amount < 0)
     setCat(src?.category_id ?? f?.category_id ?? defaultCat)
@@ -81,6 +82,7 @@ export function AddSheet({ open, seed, onClose }: Props) {
   const splitTotal = splits ? splits.reduce((n, l) => n + (parseDollars(l.amount) ?? 0), 0) : 0
   const cents = splits ? splitTotal : (neg ? -1 : 1) * Number(digits || '0')
   const splitsOk = !splits || (splits.length >= 2 && splits.every((l) => l.category_id && parseDollars(l.amount)))
+  const refund = splits ? splitTotal < 0 : neg
 
   // Merchant memory: recent descriptions matching what's typed, most recent first.
   const suggestions = useMemo(() => {
@@ -110,6 +112,7 @@ export function AddSheet({ open, seed, onClose }: Props) {
   })
 
   const refresh = () => { qc.invalidateQueries({ queryKey: ['transactions'] }); qc.invalidateQueries({ queryKey: ['bootstrap'] }) }
+  const undo = (p: Promise<unknown>) => p.then(refresh, (e) => toast.show({ message: `Couldn't undo: ${e instanceof ApiError ? e.errors.join(' ') : e}`, tone: 'error' }))
 
   const save = useMutation({
     mutationFn: async () => {
@@ -124,19 +127,25 @@ export function AddSheet({ open, seed, onClose }: Props) {
         saved = seed.edit ? await api.updateTxn(seed.edit.id, body) : await api.createTxn(body)
         savedIds.current = [saved.id]
       }
-      if (file) { const { blob, name } = await shrinkImage(file); await api.uploadReceipt(saved.id, blob, name) }
-      return saved
+      // The entry is saved at this point: a failed upload must not keep the sheet open (Save again = a duplicate).
+      let receiptError: string | null = null
+      if (file) {
+        try { const { blob, name } = await shrinkImage(file); await api.uploadReceipt(saved.id, blob, name) }
+        catch (e) { receiptError = e instanceof ApiError ? e.errors.join(' ') : String(e) }
+      }
+      return { saved, receiptError }
     },
-    onSuccess: (saved) => {
+    onSuccess: ({ saved, receiptError }) => {
       refresh(); onClose(); markRecent(savedIds.current)
+      if (receiptError) { toast.show({ message: `Saved, but the receipt didn't upload: ${receiptError}`, tone: 'error' }); return }
       const label = `${formatCents(Math.abs(saved.amount))} · ${saved.what || category?.name}${savedIds.current.length > 1 ? ` · ${savedIds.current.length} lines` : ''}`
       const before = seed.edit
       const ids = [...savedIds.current]
       toast.show({
         message: before ? `Updated ${label}` : `Added ${label}`,
         action: before
-          ? { label: 'Undo', onClick: () => api.updateTxn(before.id, { ...before }).then(refresh) }
-          : { label: 'Undo', onClick: () => Promise.all(ids.map((id) => api.deleteTxn(id))).then(refresh) },
+          ? { label: 'Undo', onClick: () => undo(api.updateTxn(before.id, { ...before })) }
+          : { label: 'Undo', onClick: () => undo(Promise.all(ids.map((id) => api.deleteTxn(id)))) },
       })
     },
     onError: (e) => setErrors(e instanceof ApiError ? e.errors : [String(e)]),
@@ -144,15 +153,15 @@ export function AddSheet({ open, seed, onClose }: Props) {
 
   const remove = useMutation({
     mutationFn: () => api.deleteTxn(seed.edit!.id),
-    onSuccess: () => {
-      const gone = seed.edit!
+    onSuccess: (gone) => {
       refresh(); onClose()
-      toast.show({ message: `Deleted ${formatCents(Math.abs(gone.amount))} · ${gone.what}`,
-        action: { label: 'Undo', onClick: () => api.createTxn({ ...gone }).then(refresh) } })
+      toast.show({ message: `Deleted ${formatCents(Math.abs(gone.amount))} · ${gone.what || lk.cat.get(gone.category_id)?.name}`,
+        action: { label: 'Undo', onClick: () => undo(api.restore([gone])) } })
     },
     onError: (e) => setErrors(e instanceof ApiError ? e.errors : [String(e)]),
   })
 
+  const canSaveRef = useRef(false)
   const onKey = (k: Key) => { if (k === 'neg') setNeg((n) => !n); else setDigits((d) => applyKey(d, k)) }
 
   // Hardware keyboard drives the keypad when no text field has focus.
@@ -164,7 +173,7 @@ export function AddSheet({ open, seed, onClose }: Props) {
       if (/^\d$/.test(e.key)) { onKey(e.key as Key); setPad(true) }
       else if (e.key === 'Backspace') onKey('back')
       else if (e.key === '-') onKey('neg')
-      else if (e.key === 'Enter' && !save.isPending) save.mutate()
+      else if (e.key === 'Enter' && canSaveRef.current) save.mutate()
     }
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
@@ -172,12 +181,17 @@ export function AddSheet({ open, seed, onClose }: Props) {
 
   if (!boot.data) return null
   const b = boot.data
-  const catOptions: Option[] = b.categories.map((c) => { const v = categoryVisual(c); return { value: String(c.id), label: c.name, group: c.type, mark: <Mark Icon={v.Icon} color={v.color} size="sm" /> } })
-  const acctOptions = (forTo: boolean): Option[] => b.accounts.filter((a) => forTo || a.kind !== 'loan')
+  // Hidden categories/accounts stay out of the pickers, except the one this entry already uses.
+  const catOption = (c: Category): Option => { const v = categoryVisual(c); return { value: String(c.id), label: c.name, group: c.type, mark: <Mark Icon={v.Icon} color={v.color} size="sm" /> } }
+  const catOptions: Option[] = b.categories.filter((c) => c.active || c.id === cat).map(catOption)
+  // Split lines share one From/To, so they stay within the entry's category type.
+  const splitOptions: Option[] = b.categories.filter((c) => c.active && c.type === (category?.type ?? 'Spending')).map(catOption)
+  const acctOptions = (forTo: boolean, current: number | null): Option[] => b.accounts.filter((a) => (a.active || a.id === current) && (forTo || a.kind !== 'loan'))
     .map((a) => ({ value: String(a.id), label: a.name, group: { cash: 'Cash', card: 'Cards', investment: 'Investments', loan: 'Loans' }[a.kind], mark: <i className={s.dot} style={{ background: bankColor(a) }} /> }))
   const acctValue = (id: number | null) => { const a = id ? lk.acct.get(id) : undefined; return a ? <><i className={s.dot} style={{ background: bankColor(a) }} />{a.name}</> : undefined }
   const catVis = category ? categoryVisual(category) : undefined
   const canSave = cents !== 0 && !!cat && splitsOk && !save.isPending
+  canSaveRef.current = canSave
 
   return (
     <>
@@ -194,8 +208,8 @@ export function AddSheet({ open, seed, onClose }: Props) {
           )}
 
           <button type="button" className={s.amount} onClick={() => !splits && setPad(true)} aria-label="Edit amount">
-            <Amount cents={cents} size="display" tone={neg ? 'pos' : 'neutral'} sign={neg ? 'always' : 'never'} roll />
-            {neg && <span className={`caps ${s.negLabel}`}>refund · money back</span>}
+            <Amount cents={cents} size="display" tone={refund ? 'pos' : 'neutral'} sign={refund ? 'always' : 'never'} roll />
+            {refund && <span className={`caps ${s.negLabel}`}>refund · money back</span>}
           </button>
 
           {errors.length > 0 && <div className={s.errors} role="alert">{errors.map((e) => <div key={e}>{e}</div>)}</div>}
@@ -234,7 +248,7 @@ export function AddSheet({ open, seed, onClose }: Props) {
               </div>
             </FieldGroup>
           ) : (
-            <button type="button" className={s.moreBtn} onClick={() => { setSplits([{ category_id: cat, amount: digits ? (Number(digits) / 100).toFixed(2) : '' }, { category_id: null, amount: '' }]); setPad(false) }}>
+            <button type="button" className={s.moreBtn} onClick={() => { setSplits([{ category_id: cat, amount: digits ? ((neg ? -1 : 1) * Number(digits) / 100).toFixed(2) : '' }, { category_id: null, amount: '' }]); setNeg(false); setPad(false) }}>
               <SplitIcon strokeWidth={2} absoluteStrokeWidth style={{ width: 14, height: 14 }} />Split across categories
             </button>
           ))}
@@ -265,11 +279,11 @@ export function AddSheet({ open, seed, onClose }: Props) {
 
       <Picker open={picker === 'cat'} onClose={() => setPicker(null)} title="Category" options={catOptions} value={cat ? String(cat) : null} searchable
         onChange={(v) => { setCat(Number(v)); touchedCat.current = true }} />
-      <Picker open={picker === 'from'} onClose={() => setPicker(null)} title="From" options={acctOptions(false)} value={from ? String(from) : null}
+      <Picker open={picker === 'from'} onClose={() => setPicker(null)} title="From" options={acctOptions(false, from)} value={from ? String(from) : null}
         noneLabel={shape.from === 'optional' ? 'None' : undefined} onChange={(v) => setFrom(v ? Number(v) : null)} />
-      <Picker open={picker === 'to'} onClose={() => setPicker(null)} title="To" options={acctOptions(true)} value={to ? String(to) : null}
+      <Picker open={picker === 'to'} onClose={() => setPicker(null)} title="To" options={acctOptions(true, to)} value={to ? String(to) : null}
         noneLabel={shape.to === 'optional' ? 'None' : undefined} onChange={(v) => setTo(v ? Number(v) : null)} />
-      <Picker open={splitPick !== null} onClose={() => setSplitPick(null)} title="Category" options={catOptions} searchable
+      <Picker open={splitPick !== null} onClose={() => setSplitPick(null)} title="Category" options={splitOptions} searchable
         value={splitPick !== null && splits?.[splitPick]?.category_id ? String(splits[splitPick].category_id) : null}
         onChange={(v) => setSplits((cur) => cur ? cur.map((x, j) => (j === splitPick ? { ...x, category_id: Number(v) } : x)) : cur)} />
     </>

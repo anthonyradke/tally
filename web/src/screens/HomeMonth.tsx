@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { NavigateFunction } from 'react-router'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
-import type { Bootstrap, MonthRow } from '@/api/client'
+import type { MonthRow } from '@/api/client'
 import type { Pace } from '@/lib/pace'
 import { formatCents } from '@/lib/money'
 import { fromISO, monthLabel } from '@/lib/dates'
@@ -23,19 +23,20 @@ export function Delta({ cents, suffix }: { cents: number; suffix?: string }) {
   )
 }
 
-/** Net worth figure; once there are 3+ months, a scrubbable month-by-month chart under it rolls the figure. */
-export function NetWorthHero({ b, cur, prev }: { b: Bootstrap; cur: MonthRow; prev?: MonthRow }) {
+/** Net worth figure; once there are 3+ months, a scrubbable month-by-month chart under it rolls the figure.
+ *  `months` runs through the current month (later months only hold scheduled entries). */
+export function NetWorthHero({ months, cur, prev }: { months: MonthRow[]; cur: MonthRow; prev?: MonthRow }) {
   const [at, setAt] = useState<number | null>(null)
-  const m = at === null ? cur : b.months[at]
-  const before = at === null ? prev : b.months[at - 1]
+  const m = at === null ? cur : months[at]
+  const before = at === null ? prev : months[at - 1]
   const delta = before ? m.net_worth - before.net_worth : null
   return (
     <div className={s.heroBlock}>
       <Hero label={at === null ? 'Net worth' : `Net worth, ${monthLabel(m.month, 'long')}`} cents={m.net_worth} tone="neutral"
         sub={delta !== null && <span className={s.deltaRow}><Delta cents={delta} /><span>{at === null ? 'this month' : `in ${monthName(m.month)}`}</span></span>} />
-      {b.months.length >= 3 && (
-        <ScrubChart series={b.months.map((r) => r.net_worth)} slots={b.months.length} height={140} onScrub={setAt}
-          startLabel={monthLabel(b.months[0].month)} endLabel={monthLabel(cur.month)} ariaLabel="Net worth by month; drag to see each month" />
+      {months.length >= 3 && (
+        <ScrubChart series={months.map((r) => r.net_worth)} slots={months.length} height={140} onScrub={setAt}
+          startLabel={monthLabel(months[0].month)} endLabel={monthLabel(cur.month)} ariaLabel="Net worth by month; drag to see each month" />
       )}
     </div>
   )
@@ -56,8 +57,10 @@ export function MonthPanel({ cur, pace, nav }: { cur: MonthRow; pace: Pace | nul
         {pace && (
           <>
             <div className={s.paceLine}>
-              <span className={`${s.pill} ${diff <= 0 ? s.pillPos : s.pillNeg}`}>{formatCents(Math.abs(diff), { cents: false })} {diff <= 0 ? 'less' : 'more'}</span>
-              <span className="secondary">than {prevName} by day {i + 1}</span>
+              {Math.round(diff / 100) === 0
+                ? <><span className={`${s.pill} ${s.pillPos}`}>Even</span><span className="secondary">with {prevName} by day {i + 1}</span></>
+                : <><span className={`${s.pill} ${diff < 0 ? s.pillPos : s.pillNeg}`}>{formatCents(Math.abs(diff), { cents: false })} {diff < 0 ? 'less' : 'more'}</span>
+                    <span className="secondary">than {prevName} by day {i + 1}</span></>}
             </div>
             <div className={s.chart}>
               <ScrubChart series={pace.cur} compare={pace.prev} slots={pace.days} onScrub={setAt}

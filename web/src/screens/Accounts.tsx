@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router'
 import { ChevronRight } from 'lucide-react'
 import type { Account, Kind } from '@/api/client'
 import { useBootstrap } from '@/lib/data'
+import { monthsNow } from '@/lib/months'
 import { bankColor, KIND_LABEL } from '@/icons/banks'
 import { Hero } from '@/components/Hero'
 import { Amount } from '@/components/Amount'
@@ -18,9 +19,10 @@ export function Accounts() {
   const nav = useNavigate()
   const b = boot.data
   if (!b) return null
-  const cur = b.months[b.months.length - 1]
-  const prev = b.months[b.months.length - 2]
-  const groups = ORDER.map((k) => ({ kind: k, accounts: b.accounts.filter((a) => a.kind === k) })).filter((g) => g.accounts.length)
+  const { cur, prev } = monthsNow(b)
+  // Hidden accounts drop out of the list once they're at zero; one still holding money stays visible, since it counts.
+  const shown = (a: Account) => a.active || (cur.balances[String(a.id)] ?? 0) !== 0
+  const groups = ORDER.map((k) => ({ kind: k, accounts: b.accounts.filter((a) => a.kind === k && shown(a)) })).filter((g) => g.accounts.length)
   const total = (k: Kind) => ({ cash: cur.cash, card: cur.cards, investment: cur.invested, loan: cur.loans })[k]
 
   return (
@@ -44,7 +46,7 @@ export function Accounts() {
                   <AccountDot a={a} />
                   <span className={s.text}>
                     <span className={s.name}>{a.name}</span>
-                    <span className="secondary">{a.apy ? `${(a.apy * 100).toFixed(2)}% APY` : a.loan_rate ? `${(a.loan_rate * 100).toFixed(2)}% APR` : a.kind === 'investment' ? 'Typed monthly' : owed ? 'Balance owed' : 'Cash'}</span>
+                    <span className="secondary">{!a.active ? 'Hidden · still has a balance' : a.apy ? `${(a.apy * 100).toFixed(2)}% APY` : a.loan_rate ? `${(a.loan_rate * 100).toFixed(2)}% APR` : a.kind === 'investment' ? 'Typed monthly' : owed ? 'Balance owed' : 'Cash'}</span>
                   </span>
                   <span className={s.right}>
                     <Amount cents={bal} />

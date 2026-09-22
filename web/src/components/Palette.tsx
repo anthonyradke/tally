@@ -43,8 +43,8 @@ export function Palette() {
     ]
     if (b) {
       for (const f of b.favorites) { const c = b.categories.find((x) => x.id === f.category_id); const v = c && categoryVisual(c); list.push({ id: `fav${f.id}`, label: `Add: ${f.label}`, icon: v ? <Mark Icon={v.Icon} color={v.color} size="sm" /> : <Plus />, run: () => add.open({ favorite: f }) }) }
-      for (const a of b.accounts) list.push({ id: `acct${a.id}`, label: `Open ${a.name}`, icon: <Landmark />, run: go(`/accounts/${a.id}`) })
-      for (const c of b.categories) { const v = categoryVisual(c); list.push({ id: `cat${c.id}`, label: `Filter: ${c.name}`, icon: <Mark Icon={v.Icon} color={v.color} size="sm" />, run: go(`/activity?category=${c.id}`) }) }
+      for (const a of b.accounts.filter((x) => x.active)) list.push({ id: `acct${a.id}`, label: `Open ${a.name}`, icon: <Landmark />, run: go(`/accounts/${a.id}`) })
+      for (const c of b.categories.filter((x) => x.active)) { const v = categoryVisual(c); list.push({ id: `cat${c.id}`, label: `Filter: ${c.name}`, icon: <Mark Icon={v.Icon} color={v.color} size="sm" />, run: go(`/activity?category=${c.id}`) }) }
       for (const v of b.saved_views) list.push({ id: `view${v.id}`, label: `View: ${v.name}`, icon: <Bookmark />, run: go(`/activity?${v.query}`) })
       list.push({ id: 'budgets', label: 'Categories & budgets', icon: <Tag />, run: go('/settings/categories') })
     }
