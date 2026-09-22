@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { api, type Diagnosis } from '@/api/client'
 import { useBootstrap, useLookups, useTransactions } from '@/lib/data'
 import { useAdd } from '@/lib/add'
+import { useBack } from '@/lib/nav'
 import { useToast } from '@/components/Toast'
 import { formatCents, parseDollars } from '@/lib/money'
 import { monthLabel } from '@/lib/dates'
@@ -18,6 +19,7 @@ import s from './AccountDetail.module.css'
 export function AccountDetail() {
   const { id } = useParams()
   const aid = Number(id)
+  const back = useBack('/accounts')
   const nav = useNavigate()
   const boot = useBootstrap()
   const lk = useLookups(boot.data)
@@ -55,7 +57,7 @@ export function AccountDetail() {
 
   return (
     <div className={s.screen}>
-      <button type="button" className={s.back} onClick={() => nav('/accounts')}><ChevronLeft strokeWidth={2} absoluteStrokeWidth />Accounts</button>
+      <button type="button" className={s.back} onClick={back}><ChevronLeft strokeWidth={2} absoluteStrokeWidth />Accounts</button>
       <Hero label={a.name} cents={bal}
         trailing={prev && delta !== 0 ? <span className={`${s.delta} ${(owed ? delta < 0 : delta > 0) ? 'pos' : 'neg'}`}>{delta > 0 ? '+' : '−'}{formatCents(Math.abs(delta), { cents: false })} <span className={s.deltaLabel}>vs {monthLabel(prev.month)}</span></span> : undefined}
         sub={<><i className={s.dot} style={{ background: bankColor(a) }} />{{ cash: 'Cash account', card: 'Credit card · balance owed', investment: 'Investment · typed monthly', loan: 'Loan · accrues monthly' }[a.kind]}{a.apy ? ` · ${(a.apy * 100).toFixed(2)}% APY` : ''}{a.loan_rate ? ` · ${(a.loan_rate * 100).toFixed(2)}% APR` : ''}</>} />

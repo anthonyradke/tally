@@ -1,11 +1,13 @@
-.shell { min-height: 100dvh; padding-bottom: calc(var(--tabbar-h) + var(--tabbar-bottom) + var(--s-8)); }
-/* Titles sit where a native large title would: clear of the status bar and its scroll-edge blur. */
-.main {
-  position: relative;
-  max-width: var(--content-max); margin: 0 auto;
-  padding: calc(env(safe-area-inset-top, 0px) + var(--s-6)) var(--gutter) 0;
+/* overflow-x: clip keeps a page sliding in from the right edge from widening the document (and, unlike hidden,
+   doesn't create a scroll container, so sticky headers still work). */
+.shell { min-height: 100dvh; overflow-x: clip; }
+.main { position: relative; max-width: var(--content-max); margin: 0 auto; }
+/* Each page is an opaque layer the size of the screen, so one page can slide over another like a navigation stack.
+   Titles sit where a native large title would: clear of the status bar and its scroll-edge blur. */
+.page {
+  position: relative; width: 100%; min-height: 100dvh; background: var(--bg);
+  padding: calc(env(safe-area-inset-top, 0px) + var(--s-6)) var(--gutter) calc(var(--tabbar-h) + var(--tabbar-bottom) + var(--s-8));
 }
-.page { width: 100%; }
 /* Scrolled content fades out under the status bar instead of sitting behind the clock. */
 .topFade {
   position: fixed; top: 0; left: 0; right: 0; z-index: 40; pointer-events: none;
@@ -13,8 +15,13 @@
   background: linear-gradient(var(--bg) calc(100% - var(--s-5)), transparent);
 }
 
+@media (max-width: 899px) {
+  /* The edge shadow only shows while a page is mid-slide; at rest it falls off-screen. */
+  .page { box-shadow: -12px 0 32px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .5)); }
+}
 @media (min-width: 900px) {
-  .shell { padding-bottom: var(--s-12); padding-left: var(--rail-w); }
-  .main { margin: 0; padding-top: var(--s-6); max-width: calc(var(--content-max) + 2 * var(--gutter)); }
+  .shell { padding-left: var(--rail-w); }
+  .main { margin: 0; max-width: calc(var(--content-max) + 2 * var(--gutter)); }
+  .page { padding-top: var(--s-6); padding-bottom: var(--s-12); }
   .topFade { display: none; }
 }

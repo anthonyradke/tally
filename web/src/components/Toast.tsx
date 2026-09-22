@@ -27,7 +27,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         <div className={s.stack} aria-live="polite">
           <AnimatePresence>
             {items.map((t) => (
-              <motion.div key={t.id} layout role="status" className={`${s.toast} ${t.tone === 'error' ? s.error : ''}`}
+              <motion.div key={t.id} layout role="status" className={`glass-rim ${s.toast} ${t.tone === 'error' ? s.error : ''}`}
                 initial={{ opacity: 0, y: 16, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.98 }}
                 transition={{ type: 'spring', stiffness: 420, damping: 36 }}>
                 <span className={s.msg}>{t.message}</span>
