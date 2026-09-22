@@ -7,15 +7,17 @@ import { api, type AdminAccount, type AdminCategory, type Favorite, type Recurri
 import { useBootstrap } from '@/lib/data'
 import { useBack } from '@/lib/nav'
 import { formatCents, parseDollars } from '@/lib/money'
-import { monthLabel } from '@/lib/dates'
+import { dayLabel, monthLabel, toISO } from '@/lib/dates'
 import { monthsNow } from '@/lib/months'
 import { applyTheme, getTheme, type Theme } from '@/lib/theme'
 import { categoryVisual } from '@/icons/categories'
 import { bankColor, KIND_LABEL } from '@/icons/banks'
 import { FieldGroup, FieldRow, TextRow } from '@/components/Field'
+import { Picker } from '@/components/Picker'
 import { Mark } from '@/components/Mark'
 import { Chip } from '@/components/Chip'
 import { useToast } from '@/components/Toast'
+import { BudgetSetup } from './BudgetSetup'
 import { AccountSheet, CategorySheet, FavoriteSheet, RecurringSheet, ViewSheet } from './SettingsSheets'
 import s from './Settings.module.css'
 
@@ -27,7 +29,7 @@ const SECTIONS = [
   ['categories', 'Categories & budgets', 'Glyphs, tints, monthly targets'],
   ['recurring', 'Recurring', 'Bills that post themselves'],
   ['views', 'Saved views', 'Filters you keep coming back to'],
-  ['general', 'General', 'Emergency fund, Roth limit, log start'],
+  ['general', 'General', 'Emergency fund, Roth, interest, log start'],
 ] as const
 
 export function Settings() {
@@ -48,7 +50,7 @@ export function Settings() {
       {section === 'categories' && admin.data && <CategoriesSection categories={admin.data.categories} />}
       {section === 'recurring' && admin.data && <RecurringSection items={admin.data.recurring} />}
       {section === 'views' && admin.data && <ViewsSection views={admin.data.saved_views} />}
-      {section === 'general' && admin.data && <General settings={admin.data.settings} />}
+      {section === 'general' && admin.data && <General settings={admin.data.settings} categories={admin.data.categories} />}
     </div>
   )
 }
@@ -69,7 +71,7 @@ function Index() {
       </FieldGroup>
       <FieldGroup title="Data">
         <FieldRow label="Export" value={<span className={s.links}><a href="/export/log.csv">log.csv</a><a href="/export/months.csv">months.csv</a></span>} />
-        <FieldRow label="Backups" value={<span className="secondary">Nightly on x1 · 30 kept · mirrored to iCloud</span>} />
+        <BackupRow />
       </FieldGroup>
     </>
   )
@@ -143,7 +145,10 @@ function CategoriesSection({ categories }: { categories: AdminCategory[] }) {
               </button>
             </Reorder.Item>) })}
       </Reorder.Group>
-      <button type="button" className={s.add} onClick={() => setEdit('new')}><Plus strokeWidth={2.25} absoluteStrokeWidth />Add category</button>
+      <div className={s.actions}>
+        <button type="button" className={s.add} onClick={() => setEdit('new')}><Plus strokeWidth={2.25} absoluteStrokeWidth />Add category</button>
+        <BudgetSetup trigger={(open) => <button type="button" className={s.add} onClick={open}>Suggest budgets</button>} />
+      </div>
       <CategorySheet open={edit !== null} item={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />
     </>
   )
@@ -180,14 +185,38 @@ function ViewsSection({ views }: { views: SavedView[] }) {
   )
 }
 
-function General({ settings }: { settings: Record<string, string> }) {
+/** The nightly snapshot on x1 (scripts/backup-x1.sh via cron). Goes red when the newest one is over 36 hours old. */
+function BackupRow() {
+  const q = useQuery({ queryKey: ['backups'], queryFn: api.backups, staleTime: 60_000 })
+  const l = q.data?.latest
+  const at = l ? new Date(l.at) : null
+  const stale = !!at && Date.now() - at.getTime() > 36 * 3600_000
+  const when = at ? `${dayLabel(toISO(at))}, ${at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''
+  const value = q.isError ? <span className="secondary">Can't check right now</span>
+    : !q.data ? undefined
+    : !l ? <span className="neg">None found</span>
+    : <span className={stale ? 'neg' : 'secondary'}>{when}</span>
+  const hint = !q.data ? undefined
+    : !l || stale ? 'The nightly backup has stopped. Check the cron job on x1 (crontab -l) and scripts/backup-x1.sh.'
+    : `${q.data.count} nightly ${q.data.count === 1 ? 'copy' : 'copies'} kept on x1 (up to 30). The Mac copies them to iCloud each morning.`
+  return <FieldRow label="Last backup" value={value} placeholder="Checking…" hint={hint} />
+}
+
+function General({ settings, categories }: { settings: Record<string, string>; categories: AdminCategory[] }) {
   const qc = useQueryClient()
   const toast = useToast()
+  // Picked by id, so renaming the category keeps the Roth widget and month-end interest pointed at it.
+  const [rothCat, setRothCat] = useState(settings.roth_category ?? '')
+  const [intCat, setIntCat] = useState(settings.interest_category ?? '')
+  const [picker, setPicker] = useState<null | 'roth' | 'interest'>(null)
+  const catOpts = (types: string[], current: string) => categories.filter((c) => types.includes(c.type) && (c.active || String(c.id) === current))
+    .map((c) => { const v = categoryVisual(c); return { value: String(c.id), label: c.name, group: c.type, mark: <Mark Icon={v.Icon} color={v.color} size="sm" /> } })
+  const catName = (id: string) => categories.find((c) => String(c.id) === id)?.name
   const [ef, setEf] = useState(settings.ef_months ?? '6')
   const [roth, setRoth] = useState((Number(settings.roth_limit ?? 0) / 100).toFixed(2))
   const [start, setStart] = useState(settings.start_month ?? '')
   const save = useMutation({
-    mutationFn: () => api.putSettings({ ef_months: Number(ef), roth_limit: (parseDollars(roth) ?? 0) / 100, start_month: start }),
+    mutationFn: () => api.putSettings({ ef_months: Number(ef), roth_limit: (parseDollars(roth) ?? 0) / 100, start_month: start, roth_category: rothCat || null, interest_category: intCat || null }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin'] }); qc.invalidateQueries({ queryKey: ['bootstrap'] }); toast.show({ message: 'Settings saved' }) },
   })
   return (
@@ -197,6 +226,12 @@ function General({ settings }: { settings: Record<string, string> }) {
         <TextRow label="Roth IRA limit" value={roth} onChange={(e) => setRoth(e.target.value)} inputMode="decimal" />
         <TextRow label="Log starts" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
       </FieldGroup>
+      <FieldGroup title="Categories Tally watches">
+        <FieldRow label="Roth IRA" value={catName(rothCat)} placeholder="None" onClick={() => setPicker('roth')} hint="Entries in this category count toward the Roth limit on Home." />
+        <FieldRow label="Interest" value={catName(intCat)} placeholder="None" onClick={() => setPicker('interest')} hint="Month end logs savings interest into this category." />
+      </FieldGroup>
+      <Picker open={picker === 'roth'} onClose={() => setPicker(null)} title="Roth IRA contributions" options={catOpts(['Saving', 'Transfer'], rothCat)} value={rothCat || null} noneLabel="None" onChange={setRothCat} />
+      <Picker open={picker === 'interest'} onClose={() => setPicker(null)} title="Interest income" options={catOpts(['Money in'], intCat)} value={intCat || null} noneLabel="None" onChange={setIntCat} />
       <p className="secondary">Emergency fund goal = average monthly spending over completed months × this many months. The log start is the first month balances are computed from ({start ? monthLabel(start) : '—'}).</p>
       <button type="button" className={s.primary} onClick={() => save.mutate()} disabled={save.isPending}>Save</button>
     </>

@@ -11,7 +11,8 @@ from .api import Con
 from .engine import KINDS, TYPES, cents
 
 router = APIRouter(prefix="/api")
-SETTING_KEYS = {"start_month", "ef_months", "roth_limit", "home_layout", "theme", "merchant_marks"}
+SETTING_KEYS = {"start_month", "ef_months", "roth_limit", "home_layout", "theme", "merchant_marks", "roth_category",
+                "interest_category"}
 
 
 def _pct(v):
@@ -244,6 +245,10 @@ async def put_settings(request: Request, con: Con):
             v = str(cents(v or 0))
         elif k == "ef_months":
             v = str(int(v))
+        elif k in ("roth_category", "interest_category"):
+            v = str(int(v)) if v else ""
+            if v and not con.execute("SELECT 1 FROM categories WHERE id=?", (int(v),)).fetchone():
+                raise HTTPException(422, {"errors": ["That category doesn't exist."]})
         elif k in ("home_layout", "merchant_marks") and not isinstance(v, str):
             v = json.dumps(v)
         db.set_setting(con, k, str(v))

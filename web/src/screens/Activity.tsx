@@ -12,6 +12,7 @@ import { categoryVisual } from '@/icons/categories'
 import { bankColor } from '@/icons/banks'
 import { Chip, ChipRow } from '@/components/Chip'
 import { Mark } from '@/components/Mark'
+import { OutboxNotice } from '@/components/Outbox'
 import { Picker, type Option } from '@/components/Picker'
 import { Sheet } from '@/components/Sheet'
 import { FieldGroup, TextRow } from '@/components/Field'
@@ -119,6 +120,7 @@ export function Activity() {
   return (
     <div className={s.screen}>
       <h1 className={s.title}>Activity</h1>
+      <OutboxNotice />
       <label className={s.search}>
         <Search className={s.searchIcon} strokeWidth={2} absoluteStrokeWidth />
         <input type="search" value={q} onChange={(e) => set({ q: e.target.value })} placeholder="Search entries, notes, tags, amounts" enterKeyHint="search" autoComplete="off" />

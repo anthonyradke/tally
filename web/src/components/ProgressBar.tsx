@@ -6,8 +6,9 @@ import s from './ProgressBar.module.css'
 // read as the panel flickering, so after the first fill they mount at their value.
 const drawn = new Set<string>()
 
-/** Rounded meter. Fills once per launch when it first scrolls into view, then follows changes. */
-export function ProgressBar({ value, color = 'var(--fg)', label }: { value: number; color?: string; label: string }) {
+/** Rounded meter. Fills once per launch when it first scrolls into view, then follows changes. `mark` (0..1) notches
+ *  the track, e.g. how much of the month has gone by: a fill past the notch is ahead of pace. */
+export function ProgressBar({ value, color = 'var(--fg)', label, mark }: { value: number; color?: string; label: string; mark?: number }) {
   const ref = useRef<HTMLDivElement>(null)
   const [again] = useState(() => drawn.has(label))
   const inView = useInView(ref, { once: true, margin: '0px 0px -10% 0px' })
@@ -19,6 +20,7 @@ export function ProgressBar({ value, color = 'var(--fg)', label }: { value: numb
       style={{ '--c': color } as React.CSSProperties}>
       <motion.i className={s.fill} initial={again ? false : { scaleX: 0 }} animate={{ scaleX: seen ? Math.max(v, 0.012) : 0 }}
         transition={{ type: 'spring', stiffness: 90, damping: 20, delay: 0.05 }} />
+      {mark !== undefined && mark > 0 && mark < 1 && <i className={s.mark} style={{ left: `${mark * 100}%` }} aria-hidden />}
     </div>
   )
 }
