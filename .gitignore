@@ -5,3 +5,4 @@ __pycache__/
 data/
 web/node_modules/
 app/static/dist/
+*.tsbuildinfo
