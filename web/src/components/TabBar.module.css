@@ -32,6 +32,12 @@
 .addLabel { display: none; }
 .railOnly { display: none; }
 
+/* Touch phones: hidden under the keyboard while a field has focus (see lib/keyboard.ts). */
+@media (max-width: 899px) and (pointer: coarse) {
+  .bar { transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); }
+  .bar[data-typing] { opacity: 0; pointer-events: none; transform: translateZ(0) translateY(24px); }
+}
+
 @media (min-width: 900px) {
   .railOnly { display: flex; order: 20; margin-top: auto; }
   /* Doubled class: must beat the global .glass rule whatever order the stylesheets load in. */
