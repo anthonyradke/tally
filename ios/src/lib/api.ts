@@ -48,7 +48,9 @@ async function call<T>(method: string, path: string, body?: unknown, timeoutMs =
       body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     })
     if (res.status === 204) return undefined as T
-    const data = await res.json().catch(() => ({}))
+    const data = await res.json().catch(() => undefined)
+    // Anything that isn't Tally's JSON (a dev server's HTML page, a captive portal) counts as unreachable.
+    if (res.ok && data === undefined) throw new ApiError(502, ['Tally did not answer at this address.'])
     if (!res.ok) {
       const detail = data?.detail
       const errors: string[] = Array.isArray(detail?.errors) ? detail.errors : [typeof detail === 'string' ? detail : `Request failed (${res.status})`]
