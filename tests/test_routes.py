@@ -315,7 +315,6 @@ def test_month_end_outside_the_ledger_is_404(client, world, ym):
     assert client.get(f"/api/month-end/{ym}").status_code == 404
 
 
-@pytest.mark.xfail(strict=True, reason="bug: any start_month is stored, and a bad one breaks every screen")
 @pytest.mark.parametrize("value", ["", "abc", "2026-13-01", None, 5])
 def test_a_bad_start_month_is_refused(client, world, value):
     """start_month feeds every balance. Storing garbage there used to break every screen until fixed by hand."""
@@ -324,7 +323,6 @@ def test_a_bad_start_month_is_refused(client, world, value):
     assert client.get("/api/bootstrap").status_code == 200
 
 
-@pytest.mark.xfail(strict=True, reason="bug: a mid-month start_month disagrees with the app's daily balances")
 def test_start_month_is_stored_as_the_first(client, world):
     s = ok(client.put("/api/settings", json={"start_month": "2026-07-15"}))
     assert s["start_month"] == "2026-07-01"

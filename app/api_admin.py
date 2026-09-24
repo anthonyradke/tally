@@ -3,12 +3,13 @@ settings table (recurring templates live in api_recurring). Table/column names b
 from __future__ import annotations
 import json
 import sqlite3
+from datetime import date
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from . import db
 from .api import Con
-from .engine import KINDS, TYPES, cents
+from .engine import KINDS, TYPES, cents, month_of
 
 router = APIRouter(prefix="/api")
 SETTING_KEYS = {"start_month", "ef_months", "roth_limit", "home_layout", "theme", "merchant_marks", "roth_category",
@@ -241,7 +242,12 @@ async def put_settings(request: Request, con: Con):
     for k, v in (await request.json()).items():
         if k not in SETTING_KEYS:
             raise HTTPException(422, {"errors": [f"Unknown setting {k}."]})
-        if k == "roth_limit":
+        if k == "start_month":  # every balance starts here: a bad value would break every screen
+            try:
+                v = month_of(date.fromisoformat(str(v))).isoformat()
+            except ValueError:
+                raise HTTPException(422, {"errors": ["The start month must be a date like 2026-08-01."]})
+        elif k == "roth_limit":
             v = str(cents(v or 0))
         elif k == "ef_months":
             v = str(int(v))
