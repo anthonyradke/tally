@@ -13,8 +13,18 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "hypothesis>=6.168.1",
     "pytest>=8",
+    "ruff>=0.16.8",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["ios"]
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "W"]
+ignore = ["E401", "E731", "B008", "E501", "B904", "B007"]

@@ -19,6 +19,13 @@ export function addDays(iso: string, n: number): string {
 
 export const monthOf = (iso: string): string => iso.slice(0, 7) + '-01'
 
+/** The first day of the month before the one containing `iso`. */
+export function monthBefore(iso: string): string {
+  const d = new Date(`${monthOf(iso)}T00:00:00`)
+  d.setMonth(d.getMonth() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
 export function monthLabel(iso: string, style: 'short' | 'long' = 'short'): string {
   return fromISO(iso).toLocaleDateString('en-US', { month: style, year: 'numeric' })
 }

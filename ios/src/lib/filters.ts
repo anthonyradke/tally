@@ -23,3 +23,15 @@ export const toQuery = (f: Filters): TxnQuery => ({
   q: f.q || undefined, type: f.type || undefined, category: f.category, account: f.account, start: f.start, end: f.end,
   tag: f.tag, group: f.group, sort: f.sort, dir: f.dir,
 })
+
+/** A saved view stores the filters as a query string. */
+export const viewQuery = (f: Filters): string =>
+  new URLSearchParams(Object.entries(f).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])).toString()
+
+/** The filters a saved view's query string stands for. */
+export function fromViewQuery(query: string): Filters {
+  const p = new URLSearchParams(query)
+  const n = (k: string) => (p.get(k) ? Number(p.get(k)) : undefined)
+  return { q: p.get('q') ?? '', type: (p.get('type') ?? '') as CatType | '', category: n('category'), account: n('account'), start: p.get('start') ?? undefined,
+    end: p.get('end') ?? undefined, tag: p.get('tag') ?? undefined, sort: (p.get('sort') as Filters['sort']) ?? 'date', dir: (p.get('dir') as Filters['dir']) ?? 'desc' }
+}

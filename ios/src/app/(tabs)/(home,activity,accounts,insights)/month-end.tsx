@@ -12,7 +12,8 @@ import { Txt } from '@/components/Txt'
 import { api, ApiError, type Account } from '@/lib/api'
 import { invalidateAll } from '@/lib/data'
 import { dayLabel, monthLabel, monthOf } from '@/lib/dates'
-import { fromCents, toCents } from '@/lib/draft'
+import { fromCents } from '@/lib/draft'
+import { amountsById } from '@/lib/forms'
 import { formatCents } from '@/lib/money'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
@@ -44,14 +45,14 @@ export default function MonthEnd() {
   const refresh = async () => { await qc.invalidateQueries({ queryKey: ['month-end'] }); await invalidateAll() }
   const saveTyped = async () => {
     try {
-      await api.monthEndTyped(ym, Object.fromEntries(Object.entries(typed).filter(([, v]) => v !== '').map(([k, v]) => [Number(k), toCents(v)])))
+      await api.monthEndTyped(ym, amountsById(typed))
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       toast({ text: 'Balances saved' }); await refresh()
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
   }
   const saveInterest = async () => {
     try {
-      await api.monthEndInterest(ym, Object.fromEntries(Object.entries(interest).filter(([, v]) => v !== '' && toCents(v) > 0).map(([k, v]) => [Number(k), toCents(v)])))
+      await api.monthEndInterest(ym, amountsById(interest, true))
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       toast({ text: 'Interest logged' }); await refresh()
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }

@@ -18,12 +18,12 @@ import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import { merchantKey } from '@/icons/merchants'
-import { api, ApiError, unreachable, type CatType, type Txn, type TxnInput } from '@/lib/api'
+import { api, ApiError, unreachable, type CatType, type Txn } from '@/lib/api'
 import { close } from '@/lib/nav'
 import { deleteTxns } from '@/lib/actions'
 import { useTransactions, invalidateAll } from '@/lib/data'
 import { addDays, dayLabel } from '@/lib/dates'
-import { blank, fromCents, fromTxn, press, toCents, useDraft, type Draft } from '@/lib/draft'
+import { blank, fromCents, fromTxn, press, toCents, toInputs, useDraft, type Draft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { enqueue, newClientId, send } from '@/lib/outbox'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
@@ -140,11 +140,8 @@ export default function Entry() {
 
   async function save() {
     if (!t.b) return
-    const sign = d.refund ? -1 : 1
-    const base = { date: d.date, what: d.what.trim(), from_id: shape.from === 'blank' ? null : d.from_id, to_id: shape.to === 'blank' ? null : d.to_id, note: d.note.trim(), tags: d.tags }
-    const lines: TxnInput[] = d.split
-      ? d.split.map((l) => ({ ...base, category_id: l.category_id ?? 0, amount: toCents(l.amount) * sign }))
-      : [{ ...base, category_id: d.category_id ?? 0, amount: cents * sign }]
+    const lines = toInputs(d)
+    const base = lines[0]
     const errs: string[] = []
     if (!cents) errs.push('Enter an amount.')
     if (!d.split && !d.category_id) errs.push('Pick a category.')
