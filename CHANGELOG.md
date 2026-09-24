@@ -8,6 +8,14 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## 3.0.2 (2026-09-24)
+Fixed
+- Big rolling figures (net worth, the month's spending, the keypad amount) no longer leave gaps around narrow digits
+  like 1. Each digit takes its own width and eases to the next one's as it rolls.
+- The entry form fades out above the keypad instead of stopping at a hard line, and the keypad slides in and out.
+- Pull to refresh only spins on the screen you pulled. A pull on one tab, or a background refresh, used to leave a
+  frozen spinner at the top of the other tabs.
+
 ## 3.0.1 (2026-09-24)
 Fixed
 - Activity's filter, select and + buttons were missing on the phone. They sat in a React fragment, which the native
