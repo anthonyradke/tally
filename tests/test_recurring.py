@@ -88,7 +88,6 @@ def test_posts_ahead_once_and_is_idempotent(client, world, monkeypatch):
     assert {x["amount"] for x in rows} == {140000} and all(x["recurring_id"] for x in rows)
 
 
-@pytest.mark.xfail(strict=True, reason="bug: horizon_days 0 becomes 45 and has no bounds")
 def test_a_past_start_posts_the_backlog(client, world, monkeypatch):
     freeze(monkeypatch, TODAY)
     client.post("/api/recurring", json=tmpl(world, freq="weekly", next_date="2026-09-01", horizon_days=0))
@@ -103,7 +102,6 @@ def test_the_31st_through_the_api(client, world, monkeypatch):
     assert dates(client) == ["2027-01-31", "2027-02-28", "2027-03-31", "2027-04-30"]
 
 
-@pytest.mark.xfail(strict=True, reason="bug: horizon_days 0 becomes 45 and has no bounds")
 def test_pause_and_resume_skips_the_gap(client, world, monkeypatch):
     freeze(monkeypatch, TODAY)
     t = client.post("/api/recurring", json=tmpl(world, horizon_days=0, next_date="2026-09-24")).json()
@@ -165,7 +163,6 @@ def test_templates_follow_the_from_to_rules(client, world):
     assert client.post("/api/recurring", json=tmpl(world, amount=0)).status_code == 422
 
 
-@pytest.mark.xfail(strict=True, reason="bug: horizon_days 0 becomes 45 and has no bounds")
 def test_a_huge_horizon_is_refused(client, world):
     """horizon_days is how far ahead rows post. A typo like 45000 would write thousands of rows on the next open."""
     r = client.post("/api/recurring", json=tmpl(world, freq="weekly", horizon_days=45000))
