@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Optional
 from . import db
-from .engine import (Account, Category, Txn, MonthRow, month_table, month_range, month_of,
-                     emergency_fund, diagnose, expected_balance, propose_interest, month_end, cents)
+from .engine import (Account, Category, MonthRow, month_table, month_range, month_of,
+                     emergency_fund, diagnose, expected_balance, propose_interest, month_end)
 
 
 @dataclass
@@ -51,9 +51,6 @@ class State:
 
     def by_kind(self, kind: str) -> list[Account]:
         return [a for a in self.accounts if a.kind == kind and a.id not in self.hidden]
-
-    def recent(self, n: int = 80) -> list[Txn]:
-        return sorted(self.txns, key=lambda t: (t.date, t.id or 0), reverse=True)[:n]
 
     def diagnose(self, account: Account, actual: int, as_of: Optional[date] = None):
         return diagnose(account, self.accounts, self.txns, self.typed, self.start,
@@ -101,12 +98,3 @@ def load(con, today: Optional[date] = None) -> State:
     months = month_range(start, last)
     rows = month_table(accounts, cats, txns, typed, months)
     return State(con, accounts, cats, txns, typed, start, today, months, rows, hidden)
-
-
-def txn_from_form(f, txn_id: Optional[int] = None) -> Txn:
-    def opt(k):
-        v = f.get(k)
-        return int(v) if v else None
-    return Txn(txn_id, date.fromisoformat(f["date"]), (f.get("what") or "").strip(),
-               int(f["category_id"]), opt("from_account_id"), opt("to_account_id"),
-               cents(f["amount"] or 0))
