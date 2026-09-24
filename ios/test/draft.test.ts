@@ -57,7 +57,7 @@ test('toInputs: refunds are negative, blank sides are dropped, splits send a lin
   assert.deepEqual(s.map((l) => [l.category_id, l.amount]), [[2, 1000], [3, 250]])
 })
 
-test('the settings editor shows stored amounts with their sign', { todo: 'bug: fromCents drops the sign' }, () => {
+test('the settings editor shows stored amounts with their sign', () => {
   const a = {
     accounts: [{ id: 1, name: 'Card', kind: 'card', bank: null, start_balance: -2550, apy: null, loan_rate: null, ef: false, color: null, icon: null, sort: 0, active: 1 }],
     categories: [{ id: 2, name: 'Refunds', type: 'Spending', icon: null, color: null, budget: 5000, sort: 0, active: 1 }],
