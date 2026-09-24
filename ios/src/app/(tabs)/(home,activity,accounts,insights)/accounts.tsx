@@ -13,6 +13,7 @@ import type { Account, Bootstrap, Kind } from '@/lib/api'
 import { groupTotal, split, useBalancesToday } from '@/lib/balances'
 import { formatCents } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
+import { usePullRefresh } from '@/lib/refresh'
 import { useTally } from '@/lib/tally'
 import { font as ramp, radius, space, useTheme } from '@/theme'
 
@@ -22,6 +23,7 @@ export const bankKey = (a: Pick<Account, 'bank' | 'kind'>) => a.bank ?? (a.kind 
 
 export default function Accounts() {
   const { q, b } = useTally()
+  const pull = usePullRefresh(q.refetch)
   const { c } = useTheme()
   const bal = useBalancesToday(b)
   return (
@@ -31,7 +33,7 @@ export default function Accounts() {
       </Stack.Toolbar>
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, paddingBottom: 120, gap: space.xxl }}
-        refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => q.refetch()} />}>
+        refreshControl={<RefreshControl {...pull} />}>
         {b ? <Body b={b} bal={bal} /> : <StateView q={q} />}
       </ScrollView>
     </>
