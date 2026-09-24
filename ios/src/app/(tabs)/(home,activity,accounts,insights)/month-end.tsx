@@ -43,16 +43,26 @@ export default function MonthEnd() {
   if (!b || !d) return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}><StateView q={b ? q : t.q} /></ScrollView>
 
   const refresh = async () => { await qc.invalidateQueries({ queryKey: ['month-end'] }); await invalidateAll() }
+  const typos = (bad: string[]) => {
+    if (!bad.length) return false
+    toast({ text: `Check the amount for ${bad.map((k) => acct(k)?.name ?? k).join(' and ')}.`, tone: 'error' })
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
+    return true
+  }
   const saveTyped = async () => {
+    const { cents, bad } = amountsById(typed)
+    if (typos(bad)) return
     try {
-      await api.monthEndTyped(ym, amountsById(typed))
+      await api.monthEndTyped(ym, cents)
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       toast({ text: 'Balances saved' }); await refresh()
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
   }
   const saveInterest = async () => {
+    const { cents, bad } = amountsById(interest, true)
+    if (typos(bad)) return
     try {
-      await api.monthEndInterest(ym, amountsById(interest, true))
+      await api.monthEndInterest(ym, cents)
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       toast({ text: 'Interest logged' }); await refresh()
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
