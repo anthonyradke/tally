@@ -5,8 +5,7 @@ from datetime import date
 from typing import Optional
 from . import db
 from .engine import (Account, Category, Txn, MonthRow, month_table, month_range, month_of,
-                     emergency_fund, diagnose, expected_balance, propose_interest, validate,
-                     month_end, cents)
+                     emergency_fund, diagnose, expected_balance, propose_interest, month_end, cents)
 
 
 @dataclass
@@ -111,15 +110,3 @@ def txn_from_form(f, txn_id: Optional[int] = None) -> Txn:
     return Txn(txn_id, date.fromisoformat(f["date"]), (f.get("what") or "").strip(),
                int(f["category_id"]), opt("from_account_id"), opt("to_account_id"),
                cents(f["amount"] or 0))
-
-
-def save_txn(con, st: State, t: Txn) -> list[str]:
-    errs = validate(t, st.cat[t.category_id].type, st.acct)
-    if errs:
-        return errs
-    if t.id:
-        db.update_txn(con, t)
-    else:
-        db.insert_txn(con, t)
-    con.commit()
-    return []

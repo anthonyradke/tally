@@ -164,19 +164,25 @@ def _landed(con, pattern: str) -> list[dict]:
     return _full(con, ids) if ids else []
 
 
-def _save(st, t: Txn, meta: dict) -> dict:
+def _write(st, t: Txn, meta: dict) -> int:
+    """Validate and write one entry with its extras and client_id, without committing. Each request commits once,
+    so a split, or a create and its client_id, lands whole or not at all: a half-written split used to look finished
+    to the outbox's retry, and a row saved without its client_id got added again."""
     if t.category_id not in st.cat:
         raise HTTPException(422, {"errors": ["Pick a category."]})
-    errs = service.save_txn(st.con, st, t)
+    errs = validate(t, st.cat[t.category_id].type, st.acct)
     if errs:
         raise HTTPException(422, {"errors": errs})
-    tid = t.id or st.con.execute("SELECT last_insert_rowid()").fetchone()[0]
-    cols = [k for k in ("note", "tags", "split_group") if k in meta]
-    st.con.execute(f"UPDATE transactions SET {''.join(k + '=?, ' for k in cols)}client_id=COALESCE(?, client_id) "
-                   "WHERE id=?", (*[meta[k] for k in cols], meta.get("client_id"), tid))
-    st.con.commit()
-    row = st.con.execute(f"SELECT id,{','.join(META_COLS)} FROM transactions WHERE id=?", (tid,)).fetchone()
-    return _txn(Txn(tid, t.date, t.what, t.category_id, t.from_id, t.to_id, t.amount), dict(row))
+    cols = {"date": t.date.isoformat(), "what": t.what, "category_id": t.category_id, "from_account_id": t.from_id,
+            "to_account_id": t.to_id, "amount": t.amount, **{k: meta[k] for k in ("note", "tags", "split_group") if k in meta}}
+    if t.id is None:
+        cols["client_id"] = meta.get("client_id")
+        return st.con.execute(f"INSERT INTO transactions({','.join(cols)}) VALUES({','.join('?' * len(cols))})",
+                              list(cols.values())).lastrowid
+    if not st.con.execute(f"UPDATE transactions SET {', '.join(k + '=?' for k in cols)} WHERE id=?",
+                          [*cols.values(), t.id]).rowcount:
+        raise HTTPException(404)  # deleted while this edit was on its way
+    return t.id
 
 
 @router.post("/transactions", status_code=201)
@@ -187,7 +193,15 @@ async def create_txn(request: Request, con: Con):
         return done[0]
     st = service.load(con)
     t, meta = _parse(b)
-    return _save(st, t, {**meta, "client_id": cid})
+    try:
+        tid = _write(st, t, {**meta, "client_id": cid})
+    except sqlite3.IntegrityError:  # the same entry arrived twice at once and the other one won
+        con.rollback()
+        if cid and (done := _landed(con, cid)):
+            return done[0]
+        raise
+    con.commit()
+    return _full(con, [tid])[0]
 
 
 @router.post("/transactions/split", status_code=201)
@@ -208,8 +222,11 @@ async def create_split(request: Request, con: Con):
     errs = [e for t, _ in lines for e in validate(t, st.cat[t.category_id].type, st.acct)]
     if errs:
         raise HTTPException(422, {"errors": sorted(set(errs))})
-    return [_save(st, t, {**m, "split_group": group, "client_id": f"{cid}:{i}" if cid else None})
-            for i, (t, m) in enumerate(lines)]
+    ids = [_write(st, t, {**m, "split_group": group, "client_id": f"{cid}:{i}" if cid else None})
+           for i, (t, m) in enumerate(lines)]
+    con.commit()
+    rows = {r["id"]: r for r in _full(con, ids)}
+    return [rows[i] for i in ids]
 
 
 @router.put("/transactions/{txn_id}")
@@ -219,7 +236,9 @@ async def update_txn(txn_id: int, request: Request, con: Con):
         raise HTTPException(404)
     b = await request.json()
     t, meta = _parse(b, txn_id)
-    return _save(st, t, _sent(b, meta))
+    _write(st, t, _sent(b, meta))
+    con.commit()
+    return _full(con, [txn_id])[0]
 
 
 def _full(con, ids: list[int]) -> list[dict]:

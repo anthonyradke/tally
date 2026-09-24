@@ -56,22 +56,18 @@ def test_a_create_id_and_a_split_id_dont_collide(client, world):
     assert len(rows) == 2 and client.get("/api/transactions").json()["total"] == 3
 
 
-@pytest.mark.xfail(strict=True, reason="bug: split lines commit one by one")
-def test_a_split_is_all_or_nothing(client, world, monkeypatch):
+def test_a_split_is_all_or_nothing(client, world):
     """If writing line 2 fails, line 1 must not stay behind: the retry would find it and report the split done."""
     from app import db
-    real, calls = db.insert_txn, []
-
-    def flaky(con, t):
-        calls.append(t)
-        if len(calls) == 2:
-            raise RuntimeError("disk hiccup")
-        return real(con, t)
-    monkeypatch.setattr(db, "insert_txn", flaky)
+    con = db.connect()
+    con.execute("CREATE TRIGGER boom BEFORE INSERT ON transactions WHEN NEW.amount = 2000 "
+                "BEGIN SELECT RAISE(ABORT, 'disk hiccup'); END")
+    con.commit()
     body = {"lines": [txn(world, amount=30), txn(world, amount=20)], "client_id": CID}
     assert client.post("/api/transactions/split", json=body).status_code == 500
-    monkeypatch.setattr(db, "insert_txn", real)
     assert client.get("/api/transactions").json()["total"] == 0
+    con.execute("DROP TRIGGER boom")
+    con.commit()
     rows = client.post("/api/transactions/split", json=body).json()
     assert len(rows) == 2
 
@@ -91,7 +87,7 @@ class CrashingCommit:
         return getattr(self._con, name)
 
 
-@pytest.mark.parametrize("fail_at", [1, pytest.param(2, marks=pytest.mark.xfail(strict=True, reason="bug: row and client_id are two commits"))])
+@pytest.mark.parametrize("fail_at", [1, 2])
 def test_a_create_is_one_write(client, world, monkeypatch, fail_at):
     """The row and its client_id must land together. If they are two commits and the server dies between them,
     the row stays without its id and the outbox retry adds a second one."""
@@ -191,7 +187,6 @@ def test_edits_while_the_app_opens_do_not_lock_up(server):
     assert len(gym) == len({x["date"] for x in gym})
 
 
-@pytest.mark.xfail(reason="bug: an edit that loses a race with a delete is a 500 (timing-dependent)")
 def test_delete_and_edit_racing(server):
     url, w = server
     ids = [httpx.post(f"{url}/api/transactions", json=txn(w)).json()["id"] for _ in range(40)]
