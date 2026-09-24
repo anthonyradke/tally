@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { create } from 'zustand'
 import { themeById, TINTS, type Palette, type ThemeId, type Tint } from './themes'
 
-export { THEMES, TINTS, themeById, type Palette, type ThemeId, type Tint } from './themes'
+export { THEMES, TINTS, themeById, type Palette, type ThemeId, type ThemeSpec, type Tint } from './themes'
 export const isTint = (t: string | null | undefined): t is Tint => !!t && (TINTS as readonly string[]).includes(t)
 
 // Bank identity: each bank's own color, whatever the theme.

@@ -3,12 +3,16 @@
 import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
+import Animated from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
 import { useQueryClient } from '@tanstack/react-query'
+import { CheckDraw } from '@/components/CheckDraw'
+import { Confetti } from '@/components/Confetti'
 import { Icon } from '@/components/Icon'
 import { Keypad } from '@/components/Keypad'
 import { Hairline } from '@/components/Panel'
 import { RollingText } from '@/components/Rolling'
+import { useShake } from '@/components/Shake'
 import { Button } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
@@ -29,6 +33,8 @@ export default function Reconcile() {
   const [amount, setAmount] = useState('')
   const [dx, setDx] = useState<Diagnosis | null>(null)
   const [busy, setBusy] = useState(false)
+  const [party, setParty] = useState(0)
+  const [shakeStyle, shake] = useShake()
   if (!a || !t.b) return null
   const owed = a.kind === 'card'
 
@@ -44,6 +50,7 @@ export default function Reconcile() {
         close()
       } else {
         Haptics.notificationAsync(r.gap === 0 ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning).catch(() => {})
+        if (r.gap === 0) setParty((n) => n + 1) // matched to the cent
       }
     } catch (e) {
       toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' })
@@ -58,12 +65,16 @@ export default function Reconcile() {
           <Txt variant="callout" tone="label2">{owed ? 'What does the card show as the current balance?' : 'What does the bank show right now?'}</Txt>
         </View>
         <View style={{ alignItems: 'center', paddingVertical: space.s }}>
-          <RollingText text={formatCents(toCents(amount))} style={{ fontSize: 52, fontWeight: '700', letterSpacing: -1.2, color: amount ? c.label : c.label3 }} />
+          <Animated.View style={shakeStyle}><RollingText text={formatCents(toCents(amount))} style={{ fontSize: 52, fontWeight: '700', letterSpacing: -1.2, color: amount ? c.label : c.label3 }} /></Animated.View>
         </View>
         {dx && <Result dx={dx} />}
       </ScrollView>
       <View style={{ paddingHorizontal: space.l, paddingBottom: 34, gap: space.s }}>
-        {!dx && <Keypad onKey={(k) => setAmount((s) => press(s, k))} onClear={() => setAmount('')} />}
+        {!dx && <Keypad onKey={(k) => {
+          const next = press(amount, k)
+          if (next === amount && amount && k !== 'del') { shake(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
+          setAmount(next)
+        }} onClear={() => setAmount('')} />}
         {!dx ? (
           <Button label={busy ? 'Checking…' : 'Check'} onPress={() => check(false)} disabled={busy || !amount} style={{ height: 52 }} />
         ) : dx.gap === 0 ? (
@@ -75,6 +86,7 @@ export default function Reconcile() {
           </View>
         )}
       </View>
+      <Confetti fire={party} origin={{ x: 0.5, y: 0.32 }} />
     </View>
   )
 }
@@ -85,7 +97,7 @@ function Result({ dx }: { dx: Diagnosis }) {
   return (
     <View style={{ gap: space.l }}>
       <View style={{ flexDirection: 'row', gap: space.m, alignItems: 'center', padding: space.l, borderRadius: radius.panel, backgroundColor: c.panel }}>
-        <Icon sf={ok ? 'checkmark.circle.fill' : 'exclamationmark.triangle.fill'} md={ok ? 'check_circle' : 'warning'} size={28} color={ok ? c.pos : c.warn} />
+        {ok ? <CheckDraw size={30} color={c.pos} /> : <Icon sf="exclamationmark.triangle.fill" md="warning" size={28} color={c.warn} />}
         <View style={{ flex: 1, gap: 2 }}>
           <Txt variant="headline">{ok ? 'It matches' : `Off by ${formatCents(Math.abs(dx.gap))}`}</Txt>
           <Txt variant="sub" tone="label2" num>Tally has {formatCents(dx.expected)}, the bank says {formatCents(dx.actual)}.</Txt>

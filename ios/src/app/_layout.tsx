@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
+import { ThemeWash } from '@/components/ThemeWash'
 import { Toaster } from '@/components/Toaster'
 import { queryClient } from '@/lib/data'
 import { flush, loadOutbox } from '@/lib/outbox'
@@ -69,6 +70,7 @@ export default function RootLayout() {
           <RootStack />
           <OutboxSync />
           <Toaster />
+          <ThemeWash />
         </ThemeProvider>
       </PersistQueryClientProvider>
     </GestureHandlerRootView>
