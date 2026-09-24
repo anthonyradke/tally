@@ -231,6 +231,15 @@ async def create_split(request: Request, con: Con):
     return [rows[i] for i in ids]
 
 
+@router.get("/transactions/{txn_id}")
+def one_txn(txn_id: int, con: Con):
+    """One entry, for the composer: editing an old entry no longer depends on it being among the newest few."""
+    rows = _full(con, [txn_id])
+    if not rows:
+        raise HTTPException(404)
+    return rows[0]
+
+
 @router.put("/transactions/{txn_id}")
 async def update_txn(txn_id: int, request: Request, con: Con):
     st = service.load(con)
