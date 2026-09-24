@@ -44,14 +44,16 @@ export const fromCents = (c: number) => {
   return s.endsWith('.00') ? s.slice(0, -3) : s
 }
 
-/** A keypad press applied to a typed amount: at most two decimals, no leading zeros, capped at $9,999,999. */
+/** A keypad press applied to a typed amount. Digits shift in from the right like a till (1 5 0 reads 1.50) and 00
+ *  adds two at once. Returns "" or two decimals ("1.50"); capped at $9,999,999.99. */
 export function press(cur: string, key: string): string {
-  if (key === 'del') return cur.slice(0, -1)
-  if (key === '.') return cur.includes('.') ? cur : (cur || '0') + '.'
-  const [, dec] = cur.split('.')
-  if (dec !== undefined && dec.length >= 2) return cur
-  const next = cur === '0' ? key : cur + key
-  return Number(next) > 9_999_999 ? cur : next
+  let digits = String(toCents(cur)).replace(/^0$/, '')
+  if (key === 'del') digits = digits.slice(0, -1)
+  else if (/^\d+$/.test(key)) {
+    const next = (digits + key).replace(/^0+/, '')
+    if (next.length <= 9) digits = next
+  }
+  return digits ? (Number(digits) / 100).toFixed(2) : ''
 }
 
 export const fromTxn = (t: Txn, type: CatType): Draft => ({

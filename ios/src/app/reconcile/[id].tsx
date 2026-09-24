@@ -58,7 +58,7 @@ export default function Reconcile() {
           <Txt variant="callout" tone="label2">{owed ? 'What does the card show as the current balance?' : 'What does the bank show right now?'}</Txt>
         </View>
         <View style={{ alignItems: 'center', paddingVertical: space.s }}>
-          <RollingText text={`$${amount || '0'}`} style={{ fontSize: 52, fontWeight: '700', letterSpacing: -1.2, color: amount ? c.label : c.label3 }} />
+          <RollingText text={formatCents(toCents(amount))} style={{ fontSize: 52, fontWeight: '700', letterSpacing: -1.2, color: amount ? c.label : c.label3 }} />
         </View>
         {dx && <Result dx={dx} />}
       </ScrollView>
