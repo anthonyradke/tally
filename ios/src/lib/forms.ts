@@ -17,7 +17,7 @@ export function initial(kind: string, id: number | undefined, a: AdminData, toda
   switch (kind) {
     case 'account': {
       const x = a.accounts.find((r) => r.id === id)
-      return x ? { name: x.name, kind: x.kind, bank: x.bank, start_balance: dollarsText(x.start_balance), apy: pctStr(x.apy), loan_rate: pctStr(x.loan_rate), ef: x.ef, sort: x.sort, active: !!x.active, color: x.color, icon: x.icon }
+      return x ? { name: x.name, kind: x.kind, bank: x.bank, start_balance: dollarsText(x.start_balance), apy: pctStr(x.apy), loan_rate: pctStr(x.loan_rate), ef: !!x.ef, sort: x.sort, active: !!x.active, color: x.color, icon: x.icon }
         : { name: '', kind: 'cash', bank: null, start_balance: '', apy: '', loan_rate: '', ef: false, sort: a.accounts.length, active: true, color: null, icon: null }
     }
     case 'category': {

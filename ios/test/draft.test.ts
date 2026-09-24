@@ -59,7 +59,7 @@ test('toInputs: refunds are negative, blank sides are dropped, splits send a lin
 
 test('the settings editor shows stored amounts with their sign', () => {
   const a = {
-    accounts: [{ id: 1, name: 'Card', kind: 'card', bank: null, start_balance: -2550, apy: null, loan_rate: null, ef: false, color: null, icon: null, sort: 0, active: 1 }],
+    accounts: [{ id: 1, name: 'Card', kind: 'card', bank: null, start_balance: -2550, apy: null, loan_rate: null, ef: 0, color: null, icon: null, sort: 0, active: 1 }],
     categories: [{ id: 2, name: 'Refunds', type: 'Spending', icon: null, color: null, budget: 5000, sort: 0, active: 1 }],
     favorites: [{ id: 3, label: 'Return', category_id: 2, from_account_id: 1, to_account_id: null, amount: -1999, sort: 0, icon: null, color: null }],
     recurring: [{ id: 4, label: 'Rebate', category_id: 2, from_account_id: 1, to_account_id: null, amount: -500, what: '', freq: 'monthly', next_date: '2026-10-01', horizon_days: 45, active: 1 }],
