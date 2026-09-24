@@ -44,7 +44,9 @@ export function formatCentsW(c: number, cents = true, sign: Sign = 'auto'): stri
 export function compactCents(c: number): string {
   const d = Math.abs(c) / 100
   const s = c < 0 ? '−' : ''
-  if (d >= 1e6) return `${s}$${(d / 1e6).toFixed(d >= 1e7 ? 0 : 1).replace(/\.0$/, '')}M`
-  if (d >= 1e3) return `${s}$${(d / 1e3).toFixed(d >= 1e4 ? 0 : 1).replace(/\.0$/, '')}k`
-  return `${s}$${Math.round(d)}`
+  const short = (v: number) => v.toFixed(v >= 10 ? 0 : 1).replace(/\.0$/, '')
+  // Pick the unit after rounding, so $999.60 reads $1k (not $1000) and $999,950 reads $1M (not $1000k).
+  if (Math.round(d) < 1e3) return `${s}$${Math.round(d)}`
+  if (Number(short(d / 1e3)) < 1e3) return `${s}$${short(d / 1e3)}k`
+  return `${s}$${short(d / 1e6)}M`
 }
