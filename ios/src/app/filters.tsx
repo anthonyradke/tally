@@ -8,11 +8,11 @@ import { Group, Row } from '@/components/Row'
 import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
-import { api, type CatType } from '@/lib/api'
+import { api } from '@/lib/api'
 import { close } from '@/lib/nav'
 import { invalidateAll } from '@/lib/data'
-import { addDays, monthOf } from '@/lib/dates'
-import { extraCount, useFilters, type Filters } from '@/lib/filters'
+import { addDays, monthBefore, monthOf } from '@/lib/dates'
+import { extraCount, fromViewQuery, useFilters, viewQuery, type Filters } from '@/lib/filters'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
@@ -28,7 +28,7 @@ export default function FiltersSheet() {
   const [viewName, setViewName] = useState('')
   if (!t.b) return null
   const today = t.b.today
-  const lastStart = (() => { const d = new Date(`${monthOf(today)}T00:00:00`); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10) })()
+  const lastStart = monthBefore(today)
   const ranges: Record<Range, [string, Partial<Filters>]> = {
     all: ['All time', { start: undefined, end: undefined }],
     month: ['This month', { start: monthOf(today), end: undefined }],
@@ -43,16 +43,12 @@ export default function FiltersSheet() {
   const sorts: [string, Partial<Filters>][] = [['Newest', { sort: 'date', dir: 'desc' }], ['Oldest', { sort: 'date', dir: 'asc' }], ['Largest', { sort: 'amount', dir: 'desc' }], ['Smallest', { sort: 'amount', dir: 'asc' }]]
 
   const saveView = async () => {
-    const qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])).toString()
-    try { await api.saveView({ name: viewName.trim(), query: qs }); await invalidateAll(); setViewName(''); toast({ text: `Saved "${viewName.trim()}"` }) }
+    try { await api.saveView({ name: viewName.trim(), query: viewQuery(f) }); await invalidateAll(); setViewName(''); toast({ text: `Saved "${viewName.trim()}"` }) }
     catch { toast({ text: 'Could not save the view.', tone: 'error' }) }
   }
   const applyView = (query: string) => {
-    const p = new URLSearchParams(query)
-    const n = (k: string) => (p.get(k) ? Number(p.get(k)) : undefined)
     reset()
-    set({ q: p.get('q') ?? '', type: (p.get('type') ?? '') as CatType | '', category: n('category'), account: n('account'), start: p.get('start') ?? undefined,
-      end: p.get('end') ?? undefined, tag: p.get('tag') ?? undefined, sort: (p.get('sort') as Filters['sort']) ?? 'date', dir: (p.get('dir') as Filters['dir']) ?? 'desc' })
+    set(fromViewQuery(query))
     close()
   }
 

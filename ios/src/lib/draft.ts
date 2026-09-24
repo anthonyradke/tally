@@ -1,8 +1,9 @@
 // The entry being composed. It lives in a store (not screen state) so the picker sheets stacked over the composer
 // can edit it and the composer re-renders underneath.
 import { create } from 'zustand'
-import type { CatType, Txn } from './api'
+import type { CatType, Txn, TxnInput } from './api'
 import { todayISO } from './dates'
+import { SHAPES } from './shapes'
 
 export interface Line { key: string; category_id: number | null; amount: string }
 export type Target = 'main' | string // 'main' or a split line key
@@ -65,3 +66,13 @@ export const useDraft = create<S>((set) => ({
   reset: (d) => set({ d }),
   setLine: (key, p) => set((s) => ({ d: { ...s.d, split: s.d.split?.map((l) => (l.key === key ? { ...l, ...p } : l)) ?? null } })),
 }))
+
+/** What Save sends: one line, or one per split line. Accounts a kind leaves blank are dropped; a refund is negative. */
+export function toInputs(d: Draft): TxnInput[] {
+  const shape = SHAPES[d.kind]
+  const sign = d.refund ? -1 : 1
+  const base = { date: d.date, what: d.what.trim(), from_id: shape.from === 'blank' ? null : d.from_id, to_id: shape.to === 'blank' ? null : d.to_id, note: d.note.trim(), tags: d.tags }
+  return d.split
+    ? d.split.map((l) => ({ ...base, category_id: l.category_id ?? 0, amount: toCents(l.amount) * sign }))
+    : [{ ...base, category_id: d.category_id ?? 0, amount: toCents(d.amount) * sign }]
+}

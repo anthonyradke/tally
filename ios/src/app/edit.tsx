@@ -18,13 +18,11 @@ import { categoryVisual, GLYPH_NAMES, GLYPHS } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
 import { close } from '@/lib/nav'
 import { api, type AdminData, type CatType, type Freq, type Kind } from '@/lib/api'
-import { fromCents } from '@/lib/draft'
+import { budgetAmount, initial, pctStr, type Form } from '@/lib/forms'
 import { monthOf } from '@/lib/dates'
 import { SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
 import { radius, space, TINTS, useTheme, type Tint } from '@/theme'
-
-type Form = Record<string, string | number | boolean | null>
 
 const TITLE: Record<string, [string, string]> = {
   account: ['New account', 'Account'], category: ['New category', 'Category'], quick: ['New quick action', 'Quick action'],
@@ -64,7 +62,7 @@ export default function Edit() {
         case 'quick': return api.saveFavorite(f, n)
         case 'recurring': return api.saveRecurring(f, n)
         case 'view': return api.saveView(f, n)
-        case 'budget': return api.setBudget(n!, f.amount === '' ? null : Math.round(Number(f.amount) * 100), f.thisMonth ? monthOf(t.b!.today) : undefined)
+        case 'budget': return api.setBudget(n!, budgetAmount(String(f.amount ?? '')), f.thisMonth ? monthOf(t.b!.today) : undefined)
         default: return Promise.resolve()
       }
     }, 'Saved')
@@ -109,44 +107,6 @@ export default function Edit() {
       </KeyboardAvoidingView>
     </>
   )
-}
-
-const pctStr = (v: number | null) => (v == null ? '' : String(+(v * 100).toFixed(4)))
-
-function initial(kind: string, id: number | undefined, a: AdminData, today: string): Form {
-  switch (kind) {
-    case 'account': {
-      const x = a.accounts.find((r) => r.id === id)
-      return x ? { name: x.name, kind: x.kind, bank: x.bank, start_balance: fromCents(x.start_balance), apy: pctStr(x.apy), loan_rate: pctStr(x.loan_rate), ef: x.ef, sort: x.sort, active: !!x.active, color: x.color, icon: x.icon }
-        : { name: '', kind: 'cash', bank: null, start_balance: '', apy: '', loan_rate: '', ef: false, sort: a.accounts.length, active: true, color: null, icon: null }
-    }
-    case 'category': {
-      const x = a.categories.find((r) => r.id === id)
-      return x ? { name: x.name, type: x.type, sort: x.sort, active: !!x.active, icon: x.icon, color: x.color, budget: x.budget ? fromCents(x.budget) : '' }
-        : { name: '', type: 'Spending', sort: a.categories.length, active: true, icon: null, color: null, budget: '' }
-    }
-    case 'quick': {
-      const x = a.favorites.find((r) => r.id === id)
-      return x ? { label: x.label, category_id: x.category_id, from_account_id: x.from_account_id, to_account_id: x.to_account_id, amount: x.amount ? fromCents(x.amount) : '', sort: x.sort, icon: x.icon, color: x.color }
-        : { label: '', category_id: a.categories.find((r) => r.type === 'Spending' && r.active)?.id ?? null, from_account_id: null, to_account_id: null, amount: '', sort: a.favorites.length, icon: null, color: null }
-    }
-    case 'recurring': {
-      const x = a.recurring.find((r) => r.id === id)
-      return x ? { label: x.label, what: x.what, category_id: x.category_id, from_account_id: x.from_account_id, to_account_id: x.to_account_id, amount: fromCents(x.amount), freq: x.freq, next_date: x.next_date, horizon_days: x.horizon_days, active: !!x.active }
-        : { label: '', what: '', category_id: a.categories.find((r) => r.type === 'Spending' && r.active)?.id ?? null, from_account_id: null, to_account_id: null, amount: '', freq: 'monthly', next_date: today, horizon_days: 45, active: true }
-    }
-    case 'view': {
-      const x = a.saved_views.find((r) => r.id === id)
-      return { name: x?.name ?? '', query: x?.query ?? '', icon: x?.icon ?? null, sort: x?.sort ?? 0 }
-    }
-    case 'budget': {
-      const x = a.categories.find((r) => r.id === id)
-      const month = monthOf(today)
-      const over = a.budgets.find((r) => r.category_id === id && r.month === month)
-      return { amount: over ? fromCents(over.amount) : x?.budget ? fromCents(x.budget) : '', thisMonth: !!over }
-    }
-  }
-  return {}
 }
 
 function Field({ label, value, onChange, money, pct, placeholder, auto }: { label: string; value: string; onChange: (v: string) => void; money?: boolean; pct?: boolean; placeholder?: string; auto?: boolean }) {
