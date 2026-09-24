@@ -1,17 +1,23 @@
 # Changelog
 
 Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
-- **MAJOR** (3.0.0): a big shift, such as a redesign or a change to how your data works.
-- **MINOR** (2.2.0): new features. Existing things keep working.
-- **PATCH** (2.1.1): fixes and polish, no new features.
+- **MAJOR** (4.0.0): a big shift, such as a redesign or a change to how your data works.
+- **MINOR** (3.1.0): new features. Existing things keep working.
+- **PATCH** (3.0.1): fixes and polish, no new features.
 
-The number lives in `web/package.json` (shown at the bottom of Settings) and `pyproject.toml`. Each release gets a git
-tag (`v2.1.0`) and an entry here, newest first.
+The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
+release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## Unreleased
-- Reorderable lists (categories, quick actions, Edit Home) now scroll normally. Only the grip handle on the left drags a row.
-- The tab bar no longer floats partway up the screen after typing in a search box or field. It tucks away only while the keyboard is on screen and returns once it has closed.
-- Rows in Settings and Accounts no longer stay highlighted when you swipe back to the list.
+## 3.0.0 (2026-09-24)
+Changed
+- **Tally is an iPhone app now.** The native app I built as "Tallyho" moved into this repo under `ios/`, with its
+  history, and replaced the web app. It has the Liquid Glass tab bar, native sheets and navigation, SF Symbols and
+  haptics.
+- The web app (the React PWA in `web/`) is retired. The server now only answers `/api` and the CSV exports. The last
+  web version is in git history just before this release.
+
+Unchanged
+- The backend, the database and its rules, the address, and the nightly backups. No data moved.
 
 ## 2.1.0 (2026-09-22)
 Added

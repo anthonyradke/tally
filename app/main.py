@@ -1,10 +1,10 @@
-"""FastAPI app: the JSON API (api*.py), CSV exports, and the built React app (web/ → app/static/dist) at /.
-The Jinja + HTMX pages were retired on 2026-09-18 (see git history before that date).
+"""FastAPI app: the JSON API (api*.py) and CSV exports. The iPhone app in ios/ is the only client.
+The web apps were retired: Jinja + HTMX on 2026-09-18, the React PWA on 2026-09-24 (see git history).
 Run: uvicorn app.main:app --host 127.0.0.1 --port 8000"""
 from __future__ import annotations
-import csv, io, os
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+import csv, io
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from . import service
 from .api import Con, router as api_router
 from .api_ops import router as ops_router
@@ -16,8 +16,6 @@ from .engine import month_of
 app = FastAPI(title="Tally")
 for r in (api_router, ops_router, admin_router, recurring_router, files_router):
     app.include_router(r)
-
-DIST = "app/static/dist"
 
 
 # ---------- export ----------
@@ -54,18 +52,3 @@ def export_months(con: Con):
                     [r.cash / 100, r.invested / 100, r.net_worth / 100])
     return _csv(rows, "months.csv")
 
-
-# ---------- single-page app ----------
-@app.get("/{path:path}", include_in_schema=False)
-def spa(path: str):
-    """Built files by name; anything else falls back to index.html so client-side routes deep-link.
-    Hashed assets are immutable; index.html, sw.js and the manifest must always revalidate."""
-    if path.startswith(("api/", "export/")):
-        raise HTTPException(404)
-    file = os.path.normpath(os.path.join(DIST, path))
-    if path and file.startswith(DIST) and os.path.isfile(file):
-        cache = "public, max-age=31536000, immutable" if path.startswith("assets/") else "no-cache"
-        return FileResponse(file, headers={"Cache-Control": cache})
-    if not os.path.isfile(f"{DIST}/index.html"):
-        return HTMLResponse("<p>Frontend not built. Run <code>cd web && npm run build</code>.</p>", 503)
-    return FileResponse(f"{DIST}/index.html", headers={"Cache-Control": "no-cache"})

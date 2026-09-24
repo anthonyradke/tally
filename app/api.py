@@ -1,5 +1,5 @@
 """JSON API core: bootstrap + transactions. Thin by design: rules live in engine/service; this shapes I/O.
-Amounts are integer cents on the wire except request bodies, which carry dollars (see web/src/api/client.ts).
+Amounts are integer cents on the wire except request bodies, which carry dollars (see ios/src/lib/api.ts).
 Companion routers: api_ops (reconcile, month end), api_admin (settings CRUD), api_recurring, api_files (receipts).
 Every route takes `con: Con`, a connection that lives exactly as long as the request (db.session)."""
 from __future__ import annotations

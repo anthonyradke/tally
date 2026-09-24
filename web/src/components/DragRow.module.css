@@ -1,4 +1,0 @@
-/* 44px-tall hit area around an 18px glyph; the negative margin keeps the row's own spacing. */
-.grip { display: flex; align-items: center; justify-content: center; align-self: stretch; flex: none; width: 34px; margin: 0 -8px; color: var(--fg-3); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-.grip:active { cursor: grabbing; }
-.grip svg { width: 18px; height: 18px; }

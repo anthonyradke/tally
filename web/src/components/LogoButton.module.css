@@ -1,2 +1,0 @@
-.btn { display: inline-flex; flex: none; margin-left: var(--s-2); border-radius: 8px; transition: transform var(--d-micro) var(--ease-out); }
-.btn:active { transform: scale(.9); }
