@@ -13,7 +13,8 @@ export interface Txn { id: number; date: string; what: string; category_id: numb
 export interface TxnInput { date: string; what: string; category_id: number; from_id: number | null; to_id: number | null; amount: number; note?: string; tags?: string[]; split_group?: string | null }
 export interface Favorite { id: number; label: string; category_id: number; from_account_id: number | null; to_account_id: number | null; amount: number | null; sort: number; icon: string | null; color: string | null }
 export interface Budget { category_id: number; month: string; amount: number }
-export interface Recurring { id: number; label: string; category_id: number; from_account_id: number | null; to_account_id: number | null; amount: number; what: string; freq: Freq; next_date: string; horizon_days: number; active: number }
+/** `anchor_day` is the day a monthly/yearly template aims for (the 31st stays the 31st after February). */
+export interface Recurring { id: number; label: string; category_id: number; from_account_id: number | null; to_account_id: number | null; amount: number; what: string; freq: Freq; next_date: string; horizon_days: number; active: number; anchor_day: number | null; created_at: string }
 export interface SavedView { id: number; name: string; query: string; icon: string | null; sort: number }
 export interface MonthRow { month: string; money_in: number; spent: number; loan: number; saving: number; left_over: number; by_category: Record<string, number>; balances: Record<string, number>; cash: number; invested: number; cards: number; loans: number; net_worth: number }
 export interface Bootstrap { today: string; start: string; accounts: Account[]; categories: Category[]; favorites: Favorite[]; budgets: Budget[]; recurring: Recurring[]; saved_views: SavedView[]; settings: Record<string, string>; months: MonthRow[]; ef: { goal: number; progress: number }; roth: { ytd: number; limit: number; category_id: number | null } }
@@ -23,8 +24,8 @@ export interface Diagnosis { expected: number; actual: number; gap: number; save
 export interface MonthEnd { month: string; typed: Record<string, number | null>; recon: Record<string, { actual: number; expected: number; date: string } | null>; interest: Record<string, { logged: Txn[]; proposed: number }>; typed_done: boolean; interest_done: boolean; recon_done: boolean }
 export interface Reconciliation { id: number; account_id: number; date: string; actual: number; expected: number }
 export interface Backups { latest: { name: string; size: number; at: string } | null; count: number; folder: string }
-/** Settings rows straight from the tables: `active` is SQLite's 0/1 here. */
-export type AdminAccount = Omit<Account, 'active'> & { sort: number; active: number }
+/** Settings rows straight from the tables: `active` and `ef` are SQLite's 0/1 here. Saving one returns the same. */
+export type AdminAccount = Omit<Account, 'active' | 'ef'> & { sort: number; active: number; ef: number }
 export type AdminCategory = Omit<Category, 'active'> & { sort: number; active: number }
 export interface AdminData { accounts: AdminAccount[]; categories: AdminCategory[]; favorites: Favorite[]; recurring: Recurring[]; saved_views: SavedView[]; budgets: Budget[]; settings: Record<string, string> }
 
@@ -104,9 +105,9 @@ export const api = {
   // settings-style CRUD (dollar fields converted at the call site)
   orderAccounts: (ids: number[]) => call<{ ok: true }>('PUT', '/accounts/order', { ids }),
   orderCategories: (ids: number[]) => call<{ ok: true }>('PUT', '/categories/order', { ids }),
-  saveAccount: (body: object, id?: number) => id ? call<Account>('PUT', `/accounts/${id}`, body) : call<Account>('POST', '/accounts', body),
+  saveAccount: (body: object, id?: number) => id ? call<AdminAccount>('PUT', `/accounts/${id}`, body) : call<AdminAccount>('POST', '/accounts', body),
   deleteAccount: (id: number) => call<void>('DELETE', `/accounts/${id}`),
-  saveCategory: (body: object, id?: number) => id ? call<Category>('PUT', `/categories/${id}`, body) : call<Category>('POST', '/categories', body),
+  saveCategory: (body: object, id?: number) => id ? call<AdminCategory>('PUT', `/categories/${id}`, body) : call<AdminCategory>('POST', '/categories', body),
   deleteCategory: (id: number) => call<void>('DELETE', `/categories/${id}`),
   setBudget: (categoryId: number, amountCents: number | null, month?: string) =>
     call<{ ok: true }>('PUT', `/budgets/${categoryId}`, { amount: amountCents === null ? null : amountCents / 100, month }),

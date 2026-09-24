@@ -35,7 +35,6 @@ def facts() -> dict:
     return {"dollars": {str(v): dollars(v) for v in values}, "validate": combos}
 
 
-@pytest.mark.xfail(strict=True, reason="bug: api.ts types admin rows as booleans; the server sends 0/1")
 def test_app_shapes_match_the_api(tmp_path, monkeypatch):
     demo = tmp_path / "demo.db"
     seeded = subprocess.run([sys.executable, "scripts/seed_demo.py", str(demo)], cwd=ROOT, capture_output=True, text=True)
