@@ -1,7 +1,0 @@
-.wrap { position: relative; overflow: hidden; }
-.actions { position: absolute; top: 0; bottom: 0; right: 0; display: flex; }
-.dup, .del { width: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: var(--t-11); font-weight: 600; letter-spacing: .02em; }
-.dup { background: var(--surface-3); color: var(--fg); }
-.del { background: var(--neg); color: white; }
-.dup svg, .del svg { width: 18px; height: 18px; }
-.content { position: relative; background: var(--bg); touch-action: pan-y; }

@@ -32,7 +32,7 @@ Changes to anything below get written here first.
 - **Ink is the only accent**: black in light, white in dark. Primary buttons, selected chips, the prominent + and
   the chart line. The tab bar tints with it too.
 - One semantic pair, green and red, for money direction only.
-- Category tints are the web app's validated eight-hue ring (converted from OKLCH exactly), plus a cool grey. Bank
+- Category tints are the retired web app's validated eight-hue ring (converted from OKLCH exactly), plus a cool grey. Bank
   marks use each bank's own color.
 
 ## Type

@@ -3,6 +3,4 @@ __pycache__/
 *.db
 *.db-*
 data/
-web/node_modules/
-app/static/dist/
 *.tsbuildinfo

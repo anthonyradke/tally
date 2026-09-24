@@ -1,4 +1,4 @@
-// Renders the app icon (four tally strokes and the cross-stroke, paper on black, same mark as the web app) and the
+// Renders the app icon (four tally strokes and the cross-stroke, paper on black, same mark as the old web app) and the
 // splash mark. Run after changing the mark: node scripts/icons.mjs
 import sharp from 'sharp'
 

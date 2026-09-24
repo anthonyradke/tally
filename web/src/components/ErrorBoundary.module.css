@@ -1,3 +1,0 @@
-.box { display: grid; gap: var(--s-2); justify-items: start; padding: var(--s-8) 0; }
-.title { font-size: var(--t-20); font-weight: 700; }
-.btn { margin-top: var(--s-3); height: 44px; padding: 0 var(--s-5); border-radius: var(--r-control); background: var(--ink); color: var(--on-ink); font-weight: 600; }

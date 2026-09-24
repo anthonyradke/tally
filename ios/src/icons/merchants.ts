@@ -1,5 +1,5 @@
 // Merchant marks: a real brand glyph where simple-icons has one, otherwise a brand-colored monogram. Same registry
-// and ids as Tally's web app (ids are stored in the `merchant_marks` setting; never rename one).
+// and ids as Tally's old web app (ids are stored in the `merchant_marks` setting; never rename one).
 import { BRANDS } from './brands'
 
 /** Colors: a hex, 'fg' (label color, for black/white brands), 'pos', 'bank:<bank>' or 'tint:<tint>' (theme resolves). */
