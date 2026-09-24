@@ -1,12 +1,12 @@
 // The signature: every trend chart is touchable. Dragging moves a hairline cursor and dot, the line past the finger
 // dims, and the figure above (ScrubFigure) is rewritten on the UI thread to the value under the finger. Releasing
 // hands the chart back to "now". No axes: the figure is the axis.
-import { useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { View } from 'react-native'
 import Svg, { ClipPath, Defs, G, Line, Path, Rect } from 'react-native-svg'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
-  useAnimatedProps, useAnimatedStyle, useSharedValue, withTiming, type SharedValue,
+  Easing, useAnimatedProps, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue,
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 import * as Haptics from 'expo-haptics'
@@ -39,7 +39,7 @@ function monotonePath(xs: number[], ys: number[]): string {
   return d
 }
 
-export function ScrubChart({ series, slots, height = 150, scrub, zero = false, guide }: {
+export function ScrubChart({ series, slots, height = 150, scrub, zero = false, guide, live }: {
   /** series[0] is the one the finger reads. Values are cents, one per slot from the left. */
   series: Series[]
   /** Total slots across the width (e.g. days in the month); series may be shorter (month to date). */
@@ -51,6 +51,8 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
   zero?: boolean
   /** A dashed horizontal reference (a budget), in cents. */
   guide?: number | null
+  /** The line ends at today: its end dot breathes while the chart is at rest. */
+  live?: boolean
 }) {
   const { c } = useTheme()
   const [w, setW] = useState(0)
@@ -74,6 +76,12 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
   const xs = geo.xs
   const ys = geo.ys
   const shown = useSharedValue(0) // cursor opacity
+  const reduce = useReducedMotion()
+  const breath = useSharedValue(0)
+  useEffect(() => {
+    if (!live || reduce) return
+    breath.set(withRepeat(withTiming(1, { duration: 2200, easing: Easing.out(Easing.quad) }), -1, false))
+  }, [live, reduce, breath])
 
   const toIndex = (x: number) => {
     'worklet'
@@ -115,6 +123,14 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
     const k = i >= 0 && i < xs.length ? i : xs.length - 1
     return { transform: [{ translateX: (xs[k] ?? 0) - 5 }, { translateY: (ys[k] ?? 0) - 5 }] }
   }, [xs, ys])
+  const halo = useAnimatedStyle(() => {
+    const k = breath.get()
+    const n = xs.length - 1
+    return {
+      opacity: (1 - k) * 0.45 * (1 - shown.get()),
+      transform: [{ translateX: (xs[n] ?? 0) - 5 }, { translateY: (ys[n] ?? 0) - 5 }, { scale: 1 + k * 1.9 }],
+    }
+  }, [xs, ys])
   // Everything right of the finger fades back; at rest the full line shows.
   const clip = useAnimatedProps(() => {
     const i = scrub.get()
@@ -151,6 +167,9 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
         {w > 0 && primary && primary.values.length > 0 && (
           <>
             <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: c.label3 }, line]} />
+            {live && !reduce && (
+              <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: primary.color }, halo]} />
+            )}
             <Animated.View pointerEvents="none" style={[{
               position: 'absolute', left: 0, top: 0, width: 10, height: 10, borderRadius: 5,
               backgroundColor: primary.color, borderWidth: 2, borderColor: c.panel,

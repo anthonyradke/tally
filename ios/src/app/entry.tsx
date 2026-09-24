@@ -2,7 +2,7 @@
 // New entries go through the outbox, so saving never fails just because the phone is off Tailscale.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
-import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated'
+import Animated, { FadeInDown, FadeOutDown, ZoomIn } from 'react-native-reanimated'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
@@ -10,12 +10,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
+import { CheckDraw } from '@/components/CheckDraw'
 import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
 import { Keypad } from '@/components/Keypad'
 import { Mark } from '@/components/Mark'
 import { Segmented } from '@/components/native/Segmented'
 import { RollingText } from '@/components/Rolling'
+import { useShake } from '@/components/Shake'
 import { Group, Row } from '@/components/Row'
 import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
@@ -28,6 +30,7 @@ import { useTransactions, invalidateAll } from '@/lib/data'
 import { addDays, dayLabel } from '@/lib/dates'
 import { blank, fromCents, fromTxn, press, toCents, toInputs, useDraft, type Draft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
+import { markFresh, useQuickFloat } from '@/lib/motion'
 import { enqueue, newClientId, send } from '@/lib/outbox'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
@@ -46,6 +49,8 @@ export default function Entry() {
   const [pad, setPad] = useState(!id)
   const [tagText, setTagText] = useState<string | null>(null) // raw text while editing tags
   const [saving, setSaving] = useState(false)
+  const [done, setDone] = useState(false)
+  const [shakeStyle, shake] = useShake()
   const [errors, setErrors] = useState<string[]>([])
   const history = useTransactions({ limit: 600 }, !!t.b)
   // The entry being edited or duplicated, fetched by id: it may be older than the newest 600 used for suggestions.
@@ -126,10 +131,16 @@ export default function Entry() {
     set({ what: x.what, category_id: x.category_id, from_id: x.from_id, to_id: x.to_id, kind: ty })
     setTyping(false)
   }
+  // A digit that can't go in (the amount is at its cap) shakes the figure instead of silently doing nothing.
   const onKey = (k: string) => {
-    if (d.target === 'main') set({ amount: press(d.amount, k) })
-    else { const l = d.split?.find((x) => x.key === d.target); if (l) setLine(l.key, { amount: press(l.amount, k) }) }
+    const line = d.target === 'main' ? null : d.split?.find((x) => x.key === d.target)
+    const cur = line ? line.amount : d.amount
+    const next = press(cur, k)
+    if (next === cur && cur && k !== 'del') { refuse(); return }
+    if (line) setLine(line.key, { amount: next })
+    else set({ amount: next })
   }
+  const refuse = () => { shake(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
   const onClear = () => (d.target === 'main' ? set({ amount: '' }) : setLine(d.target, { amount: '' }))
 
   const splitSum = d.split?.reduce((n, l) => n + toCents(l.amount), 0) ?? 0
@@ -146,7 +157,7 @@ export default function Entry() {
     if (d.split && left !== 0) errs.push(`The split is ${formatCents(Math.abs(left))} ${left > 0 ? 'short' : 'over'}.`)
     if (!fits(base, d.kind)) errs.push(HINT[d.kind])
     setErrors(errs)
-    if (errs.length) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}); return }
+    if (errs.length) { if (!cents) shake(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}); return }
     setSaving(true)
     try {
       let saved: Txn[] = []
@@ -169,7 +180,11 @@ export default function Entry() {
       }
       if (d.photo && saved[0]) await api.uploadReceipt(saved[0].id, d.photo).catch(() => toast({ text: 'Saved, but the receipt photo did not upload.', tone: 'error' }))
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      markFresh(saved.map((x) => x.id))
+      if (fav && !editing) useQuickFloat.getState().show(Number(fav), cents)
       await invalidateAll()
+      setDone(true) // the button draws a check before the sheet goes
+      await new Promise((r) => setTimeout(r, 560))
       close()
       toast({ text: editing ? 'Saved' : `Added ${formatCents(cents)}${cat && !d.split ? ` to ${cat.name}` : ''}` })
     } catch (e) {
@@ -230,7 +245,9 @@ export default function Entry() {
 
           <Tap feedback="opacity" onPress={() => { set({ target: 'main' }); setPad(true) }} accessibilityLabel={`Amount ${display}`}
             style={{ alignItems: 'center', paddingVertical: space.s }}>
-            <RollingText text={display} style={{ fontSize: display.length > 11 ? 46 : display.length > 9 ? 52 : 60, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
+            <Animated.View style={shakeStyle}>
+              <RollingText text={display} style={{ fontSize: display.length > 11 ? 46 : display.length > 9 ? 52 : 60, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
+            </Animated.View>
             {d.split && (
               <Txt variant="sub" tone={left === 0 ? 'pos' : 'label2'} num>
                 {left === 0 ? 'Split adds up' : `${formatCents(Math.abs(left))} ${left > 0 ? 'left to split' : 'over the total'}`}
@@ -338,7 +355,15 @@ export default function Entry() {
           {!typing && pad && !mainActive && (
             <Txt variant="foot" tone="label2" style={{ textAlign: 'center', marginTop: -space.xs }}>Typing into the split line. Tap the total to edit it.</Txt>
           )}
-          <Button label={saving ? 'Saving…' : editing ? 'Save changes' : cents ? `Add ${formatCents(cents)}` : 'Add entry'} onPress={save} disabled={saving} style={{ height: 52 }} />
+          {done ? (
+            <Animated.View entering={ZoomIn.duration(180)} accessibilityLiveRegion="polite"
+              style={{ height: 52, borderRadius: radius.pill, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
+              <CheckDraw size={24} color={c.onInk} />
+              <Txt variant="headline" tone="onInk">{editing ? 'Saved' : 'Added'}</Txt>
+            </Animated.View>
+          ) : (
+            <Button label={saving ? 'Saving…' : editing ? 'Save changes' : cents ? `Add ${formatCents(cents)}` : 'Add entry'} onPress={save} disabled={saving} style={{ height: 52 }} />
+          )}
         </View>
       </KeyboardAvoidingView>
     </>

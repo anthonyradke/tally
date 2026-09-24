@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Linking, RefreshControl, ScrollView, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
-import { useSharedValue } from 'react-native-reanimated'
+import Animated, { useSharedValue, ZoomIn } from 'react-native-reanimated'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
 import { Bar } from '@/components/Bar'
+import { Confetti } from '@/components/Confetti'
 import { Donut } from '@/components/Donut'
 import { Glow } from '@/components/Glow'
 import { Icon } from '@/components/Icon'
@@ -19,14 +21,14 @@ import { StateView } from '@/components/StateView'
 import { Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
-import { api, type Bootstrap } from '@/lib/api'
+import { api, type Bootstrap, type MonthRow } from '@/lib/api'
 import { budgetFor, elapsed } from '@/lib/budgets'
 import { fromISO, monthLabel, monthOf } from '@/lib/dates'
 import { compactCents, formatCents, pct } from '@/lib/money'
 import { usePullRefresh } from '@/lib/refresh'
 import { getServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
-import { font as ramp, space, useTheme } from '@/theme'
+import { font as ramp, radius, space, useTheme } from '@/theme'
 
 const name = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'long' })
 const shortName = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'short' })
@@ -52,6 +54,48 @@ export default function Insights() {
   )
 }
 
+/** How far under its total budget a month's budgeted spending finished, or null (no budgets, or over). */
+function underBy(b: Bootstrap, m: MonthRow): number | null {
+  let budget = 0, spent = 0
+  for (const x of b.categories) {
+    if (x.type !== 'Spending') continue
+    const cap = budgetFor(b, x, m.month)
+    if (!cap) continue
+    budget += cap
+    spent += m.by_category[String(x.id)] ?? 0
+  }
+  return budget > 0 && spent <= budget ? budget - spent : null
+}
+
+const CELEBRATED = 'tally.celebrated'
+
+/** A finished month that came in under budget: a badge, and confetti the first time you see it. */
+function UnderBudget({ month, by }: { month: string; by: number }) {
+  const { c } = useTheme()
+  const [fire, setFire] = useState(0)
+  useEffect(() => {
+    let live = true
+    AsyncStorage.getItem(CELEBRATED).then((v) => {
+      const seen: string[] = v ? JSON.parse(v) : []
+      if (!live || seen.includes(month)) return
+      setFire((n) => n + 1)
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      return AsyncStorage.setItem(CELEBRATED, JSON.stringify([...seen, month].slice(-36)))
+    }).catch(() => {})
+    return () => { live = false }
+  }, [month])
+  return (
+    <View style={{ zIndex: 10, alignItems: 'center', marginTop: -space.s, marginBottom: space.l }}>
+      <Animated.View entering={ZoomIn.springify().damping(14)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: space.m, height: 32,
+        borderRadius: radius.pill, backgroundColor: c.panel }}>
+        <Icon sf="sparkles" md="auto_awesome" size={14} color={c.pos} />
+        <Txt variant="sub" tone="pos" num style={{ fontWeight: '700' }}>Under budget by {formatCents(by, { cents: false })}</Txt>
+      </Animated.View>
+      <Confetti fire={fire} origin={{ x: 0.5, y: 0.5 }} />
+    </View>
+  )
+}
+
 function Body({ b }: { b: Bootstrap }) {
   const { c, tint } = useTheme()
   const months = b.months.filter((m) => m.month <= monthOf(b.today))
@@ -67,6 +111,9 @@ function Body({ b }: { b: Bootstrap }) {
   const go = (d: number) => { Haptics.selectionAsync().catch(() => {}); setSel(null); setI((k) => Math.max(0, Math.min(months.length - 1, k + d))) }
   const delta = prev ? m.spent - prev.spent : null
   const selected = cats.find((r) => String(r.x.id) === sel)
+  const under = isNow ? null : underBy(b, m)
+  // Early in a month, point back at last month if it came in under budget.
+  const last = isNow && prev && Number(b.today.slice(8)) <= 10 ? underBy(b, prev) : null
 
   return (
     <>
@@ -80,6 +127,16 @@ function Body({ b }: { b: Bootstrap }) {
           <Icon sf="chevron.right" md="chevron_right" size={18} color={c.label} weight="bold" />
         </Tap>
       </View>
+
+      {under != null && <UnderBudget month={m.month} by={under} />}
+      {last != null && prev && (
+        <Tap feedback="scale" onPress={() => go(-1)} style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -space.s, marginBottom: space.l,
+          paddingHorizontal: space.m, height: 32, borderRadius: radius.pill, backgroundColor: c.panel }}>
+          <Icon sf="sparkles" md="auto_awesome" size={13} color={c.pos} />
+          <Txt variant="sub" num>{name(prev.month)} came in {formatCents(last, { cents: false })} under budget</Txt>
+          <Icon sf="chevron.left" md="chevron_left" size={11} color={c.label3} weight="bold" />
+        </Tap>
+      )}
 
       {/* Spending share */}
       <Panel style={{ alignItems: 'center', gap: space.l, marginBottom: space.section - 4, paddingVertical: space.xxl }}>

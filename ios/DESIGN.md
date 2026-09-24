@@ -54,11 +54,24 @@ Changes to anything below get written here first.
   once when they appear. Toasts slide up from the tab bar.
 - Scrubbing runs on the UI thread (Reanimated worklets); a selection tick marks each day passed.
 - Press feedback: buttons and cards scale to 0.97, list rows highlight. Reduce Motion turns rolls and draws into
-  instant changes.
+  instant changes, and skips the moments below.
+- Small moments, each once and short (the pieces live in `components/`: CheckDraw, Confetti, Sheen, Shake,
+  ThemeWash; the state that triggers them in `lib/motion.ts`):
+  - Keypad labels pop on each press; a digit that won't fit, or saving $0, shakes the amount.
+  - Saving draws a check in the button before the sheet closes. The new rows unfold into the lists with a brief glow
+    in the accent; rows brought back by Undo do the same, and a deleted row folds shut before it goes.
+  - A quick action's mark hops when tapped, and once saved its amount floats up off the chip on Home.
+  - Reconcile to the cent draws its check and bursts confetti; so does the first look at a finished month that came
+    in under budget (Insights badge; early in a month, a pill points back to it).
+  - A budget bar ahead of its pace notch breathes three times after it fills.
+  - Net worth higher than when Home last showed it: a band of green light sweeps across the figure.
+  - The month chart's end dot (today) breathes while the chart is at rest.
+  - Changing theme fades the old background off and spreads a ripple of the new accent from the tapped card.
 
 ## Haptics
-Selection ticks on the keypad, chips and scrubbing; success on save and reconcile; warning when an entry is saved
-offline; error when a save is refused.
+Selection ticks on the keypad, chips and scrubbing; success on save, reconcile and an under-budget month; warning when
+an entry is saved offline; error when a save is refused or a keypad digit won't fit; a light tap for the tab bar's +
+and a theme change.
 
 ## Open questions
 - Car and Entertainment share the blue tint, and Dining Out and Pets share orange. Worth giving one of each pair a

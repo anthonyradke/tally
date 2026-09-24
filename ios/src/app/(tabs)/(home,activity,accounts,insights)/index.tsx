@@ -1,9 +1,11 @@
-import { useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
 import { router, Stack } from 'expo-router'
-import { useSharedValue } from 'react-native-reanimated'
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Bar } from '@/components/Bar'
 import { Chip } from '@/components/Chip'
+import { EASE } from '@/components/ease'
 import { Glow } from '@/components/Glow'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
@@ -13,6 +15,7 @@ import { Ring } from '@/components/Ring'
 import { RollingMoney } from '@/components/Rolling'
 import { ScrubChart } from '@/components/ScrubChart'
 import { ScrubFigure } from '@/components/ScrubFigure'
+import { Sheen } from '@/components/Sheen'
 import { StateView } from '@/components/StateView'
 import { Button, Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
@@ -24,10 +27,11 @@ import { useTransactions } from '@/lib/data'
 import { addDays, fromISO, monthLabel } from '@/lib/dates'
 import { compactCents, formatCents, pct } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
+import { useQuickFloat } from '@/lib/motion'
 import { usePace } from '@/lib/pace'
 import { usePullRefresh } from '@/lib/refresh'
 import { useTally } from '@/lib/tally'
-import { space, font as ramp, useTheme } from '@/theme'
+import { radius, space, font as ramp, useTheme } from '@/theme'
 
 const DEFAULT_ORDER = ['networth', 'review', 'stats', 'quick', 'budgets', 'spending', 'ef', 'upcoming', 'recent', 'roth', 'chart']
 
@@ -106,14 +110,28 @@ function Delta({ cents, suffix }: { cents: number; suffix: string }) {
   )
 }
 
+const SEEN = 'tally.seen.networth'
+
 function NetWorth({ b }: { b: Bootstrap }) {
   const { c } = useTheme()
   const { cur, prev } = monthsNow(b)
+  const now = cur?.net_worth
+  // Net worth up since the last time Home showed it: a band of green light sweeps across the figure once.
+  const [rose, setRose] = useState(false)
+  useEffect(() => {
+    if (now == null) return
+    let live = true
+    AsyncStorage.getItem(SEEN).then((v) => {
+      if (live && v != null && now > Number(v)) setRose(true)
+      return AsyncStorage.setItem(SEEN, String(now))
+    }).catch(() => {})
+    return () => { live = false }
+  }, [now])
   if (!cur) return null
   return (
     <Tap href="/accounts" feedback="opacity" style={{ gap: 2, paddingHorizontal: space.xs, marginBottom: space.section - 4 }}>
         <Txt variant="sub" tone="label2" style={{ fontSize: 15 }}>Net worth</Txt>
-        <RollingMoney cents={cur.net_worth} style={{ ...ramp.hero, color: c.label }} rollIn />
+        <Sheen play={rose} color={c.pos} render={(tone) => <RollingMoney cents={cur.net_worth} style={{ ...ramp.hero, color: tone ?? c.label }} rollIn />} />
         {prev && <Delta cents={cur.net_worth - prev.net_worth} suffix={`since ${monthName(prev.month)}`} />}
     </Tap>
   )
@@ -150,7 +168,7 @@ function ThisMonth({ b }: { b: Bootstrap }) {
             </Txt>
           ) : <Txt variant="callout" tone="label2">Spent so far</Txt>} />
         {pace ? (
-          <ScrubChart scrub={scrub} slots={pace.days} zero height={140} guide={totalBudget}
+          <ScrubChart scrub={scrub} slots={pace.days} zero height={140} guide={totalBudget} live
             series={[{ values: pace.cur, color: c.ink }, ...(prev ? [{ values: pace.prev, color: c.chartPrev, dashed: true }] : [])]} />
         ) : <View style={{ height: 140 }} />}
         <View style={{ flexDirection: 'row', gap: space.l, alignItems: 'center' }}>
@@ -190,21 +208,48 @@ function Stat({ label, cents, tone }: { label: string; cents: number; tone?: 'po
 function QuickAdd({ b }: { b: Bootstrap }) {
   const { tint } = useTheme()
   const cats = new Map(b.categories.map((x) => [x.id, x]))
+  const float = useQuickFloat((s) => s.last)
+  // The scroller clips its content, so it reaches up over the title with padding to give a floating amount room.
   return (
     <Section title="Quick add">
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l }}
-        contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l, marginTop: -FLOAT }}
+        contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l, paddingTop: FLOAT }}>
         {b.favorites.map((f) => {
           const cat = cats.get(f.category_id)
           const v = cat ? categoryVisual({ ...cat, icon: f.icon ?? cat.icon, color: f.color ?? cat.color }) : null
           return (
-            <Chip key={f.id} label={f.label}
-              leading={v ? <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={28} /> : undefined}
-              onPress={() => router.push({ pathname: '/entry', params: { fav: String(f.id) } })} />
+            <View key={f.id}>
+              <Chip label={f.label}
+                leading={v ? <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={28} /> : undefined}
+                onPress={() => router.push({ pathname: '/entry', params: { fav: String(f.id) } })} />
+              {float?.fav === f.id && <FloatUp key={float.key} text={formatCents(float.cents)} color={v ? tint(v.tint) : undefined} />}
+            </View>
           )
         })}
       </ScrollView>
     </Section>
+  )
+}
+
+const FLOAT = 34
+
+/** The amount just saved from a quick action, rising off its chip and fading. */
+function FloatUp({ text, color }: { text: string; color?: string }) {
+  const { c } = useTheme()
+  const reduce = useReducedMotion()
+  const t = useSharedValue(0)
+  useEffect(() => { t.set(withDelay(450, withTiming(1, { duration: 1300, easing: EASE }))) }, [t])
+  const style = useAnimatedStyle(() => {
+    const k = t.get()
+    return { opacity: k < 0.15 ? k / 0.15 : k > 0.65 ? (1 - k) / 0.35 : 1, transform: [{ translateY: reduce ? -20 : -8 - k * 26 }, { scale: 0.9 + Math.min(k * 3, 1) * 0.1 }] }
+  })
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, right: 0, top: 0, alignItems: 'center' }, style]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: space.s, height: 24, borderRadius: radius.pill, backgroundColor: color ?? c.ink }}>
+        <Icon sf="checkmark" md="check" size={11} color="#FFFFFF" weight="bold" />
+        <Txt variant="sub" num style={{ color: '#FFFFFF', fontWeight: '700' }}>{text}</Txt>
+      </View>
+    </Animated.View>
   )
 }
 
