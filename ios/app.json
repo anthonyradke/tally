@@ -29,6 +29,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/with-scene-delegate",
       [
         "expo-splash-screen",
         {
