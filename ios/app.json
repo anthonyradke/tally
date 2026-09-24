@@ -2,7 +2,7 @@
   "expo": {
     "name": "Tally",
     "slug": "tally",
-    "version": "3.1.0",
+    "version": "3.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "tally",
