@@ -2,6 +2,8 @@
 // New entries go through the outbox, so saving never fails just because the phone is off Tailscale.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
+import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated'
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -212,7 +214,7 @@ export default function Entry() {
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={100}>
         <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentInsetAdjustmentBehavior="automatic"
           onScrollBeginDrag={() => setPad(false)}
-          contentContainerStyle={{ padding: space.l, gap: space.l, paddingBottom: space.xxl }}>
+          contentContainerStyle={{ padding: space.l, gap: space.l, paddingBottom: space.xxl + FADE }}>
           <Segmented options={KINDS} value={d.kind} onChange={setKind} />
 
           {!editing && !id && t.b && t.b.favorites.length > 0 && !d.what && !d.amount && (
@@ -327,7 +329,12 @@ export default function Entry() {
         </ScrollView>
 
         <View style={{ backgroundColor: c.bg, paddingHorizontal: space.l, paddingBottom: typing ? space.s : insets.bottom + space.s, gap: space.s }}>
-          {!typing && pad && <Keypad onKey={onKey} onClear={onClear} />}
+          <Fade color={c.bg} />
+          {!typing && pad && (
+            <Animated.View entering={FadeInDown.duration(220)} exiting={FadeOutDown.duration(160)}>
+              <Keypad onKey={onKey} onClear={onClear} />
+            </Animated.View>
+          )}
           {!typing && pad && !mainActive && (
             <Txt variant="foot" tone="label2" style={{ textAlign: 'center', marginTop: -space.xs }}>Typing into the split line. Tap the total to edit it.</Txt>
           )}
@@ -335,6 +342,22 @@ export default function Entry() {
         </View>
       </KeyboardAvoidingView>
     </>
+  )
+}
+
+// The form scrolls under the keypad; this fades it out above the keypad instead of cutting it off at a hard edge.
+const FADE = 28
+function Fade({ color }: { color: string }) {
+  return (
+    <Svg pointerEvents="none" width="100%" height={FADE} style={{ position: 'absolute', left: 0, right: 0, top: -FADE }}>
+      <Defs>
+        <LinearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={color} stopOpacity={0} />
+          <Stop offset="1" stopColor={color} stopOpacity={1} />
+        </LinearGradient>
+      </Defs>
+      <Rect width="100%" height="100%" fill="url(#fade)" />
+    </Svg>
   )
 }
 
