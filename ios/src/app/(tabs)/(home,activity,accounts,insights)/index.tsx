@@ -24,6 +24,7 @@ import { addDays, fromISO, monthLabel } from '@/lib/dates'
 import { compactCents, formatCents, pct } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
 import { usePace } from '@/lib/pace'
+import { usePullRefresh } from '@/lib/refresh'
 import { useTally } from '@/lib/tally'
 import { space, font as ramp, useTheme } from '@/theme'
 
@@ -44,6 +45,7 @@ const monthName = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { mo
 
 export default function Home() {
   const { q, b } = useTally()
+  const pull = usePullRefresh(q.refetch)
   const { c } = useTheme()
   return (
     <>
@@ -53,7 +55,7 @@ export default function Home() {
       </Stack.Toolbar>
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
-        refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => q.refetch()} />}>
+        refreshControl={<RefreshControl {...pull} />}>
         {b ? <Widgets b={b} /> : <StateView q={q} />}
       </ScrollView>
     </>

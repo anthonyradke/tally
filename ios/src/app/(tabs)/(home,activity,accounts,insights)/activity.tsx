@@ -18,6 +18,7 @@ import { dayLabel } from '@/lib/dates'
 import { extraCount, toQuery, useFilters } from '@/lib/filters'
 import { formatCents } from '@/lib/money'
 import { useOutbox } from '@/lib/outbox'
+import { usePullRefresh } from '@/lib/refresh'
 import { useTally } from '@/lib/tally'
 import { radius, space, useTheme } from '@/theme'
 
@@ -55,6 +56,7 @@ export default function Activity() {
     initialPageParam: 0,
     getNextPageParam: (last, pages) => (pages.length * PAGE < last.total ? pages.length * PAGE : undefined),
   })
+  const pull = usePullRefresh(() => Promise.all([q.refetch(), t.q.refetch()]))
   const rows = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data])
   const first = q.data?.pages[0]
 
@@ -142,7 +144,7 @@ export default function Activity() {
           keyboardDismissMode="on-drag"
           contentContainerStyle={{ paddingBottom: selecting ? 180 : 120 }}
           ListHeaderComponent={header}
-          refreshControl={<RefreshControl refreshing={q.isRefetching && !q.isFetchingNextPage} onRefresh={() => { q.refetch(); t.q.refetch() }} />}
+          refreshControl={<RefreshControl {...pull} />}
           onEndReached={() => { if (q.hasNextPage && !q.isFetchingNextPage) q.fetchNextPage() }}
           onEndReachedThreshold={0.6}
           ListEmptyComponent={

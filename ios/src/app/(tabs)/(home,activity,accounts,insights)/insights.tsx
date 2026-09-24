@@ -22,6 +22,7 @@ import { api, type Bootstrap } from '@/lib/api'
 import { budgetFor, elapsed } from '@/lib/budgets'
 import { fromISO, monthLabel, monthOf } from '@/lib/dates'
 import { compactCents, formatCents, pct } from '@/lib/money'
+import { usePullRefresh } from '@/lib/refresh'
 import { getServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
 import { font as ramp, space, useTheme } from '@/theme'
@@ -31,6 +32,7 @@ const shortName = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { mo
 
 export default function Insights() {
   const { q, b } = useTally()
+  const pull = usePullRefresh(q.refetch)
   const { c } = useTheme()
   return (
     <>
@@ -42,7 +44,7 @@ export default function Insights() {
         <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" variant="prominent" tintColor={c.ink} onPress={() => router.push('/entry')} />
       </Stack.Toolbar>
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
-        refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => q.refetch()} />}>
+        refreshControl={<RefreshControl {...pull} />}>
         {b ? <Body b={b} /> : <StateView q={q} />}
       </ScrollView>
     </>
