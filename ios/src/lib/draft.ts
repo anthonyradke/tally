@@ -17,7 +17,7 @@ export interface Draft {
   to_id: number | null
   /** What the keypad typed, e.g. "12.5". Cents come from `toCents`. */
   amount: string
-  /** Spending entered as a refund is stored negative. */
+  /** The amount is negative: a refund for spending, or a correction imported from the spreadsheet for other kinds. */
   refund: boolean
   note: string
   tags: string[]
@@ -56,7 +56,7 @@ export function press(cur: string, key: string): string {
 
 export const fromTxn = (t: Txn, type: CatType): Draft => ({
   ...blank(t.date), id: t.id, date: t.date, what: t.what, category_id: t.category_id, from_id: t.from_id, to_id: t.to_id,
-  amount: fromCents(t.amount), refund: type === 'Spending' && t.amount < 0, note: t.note, tags: t.tags, receipt: t.receipt, kind: type,
+  amount: fromCents(t.amount), refund: t.amount < 0, note: t.note, tags: t.tags, receipt: t.receipt, kind: type,
 })
 
 interface S { d: Draft; set: (p: Partial<Draft>) => void; reset: (d: Draft) => void; setLine: (key: string, p: Partial<Line>) => void }

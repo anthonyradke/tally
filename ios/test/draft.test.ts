@@ -42,7 +42,7 @@ const shaped = (ty: CatType, amount: number): Txn => row('2026-09-10', amount, {
   from_id: ty === 'Money in' ? null : 1, to_id: ty === 'Spending' || ty === 'Saving' ? null : 2,
 })
 
-test('editing an entry and saving it unchanged sends the same entry back', { todo: 'bug: negative non-spending amounts flip sign' }, () => {
+test('editing an entry and saving it unchanged sends the same entry back', () => {
   for (const ty of TYPES) for (const amount of [1234, -1234]) {
     const t = shaped(ty, amount)
     const [line] = toInputs(fromTxn(t, ty))
