@@ -81,21 +81,7 @@ export default function Reconcile() {
 
 function Result({ dx }: { dx: Diagnosis }) {
   const { c } = useTheme()
-  const t = useTally()
   const ok = dx.gap === 0
-  const Rows = ({ title, rows, why }: { title: string; rows: Txn[]; why: string }) => rows.length === 0 ? null : (
-    <View style={{ gap: 6 }}>
-      <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>{title}</Txt>
-      <View style={{ backgroundColor: c.panel, borderRadius: radius.panel, overflow: 'hidden' }}>
-        {rows.map((x, i) => (
-          <View key={x.id}>{i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-            <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={t.b!.today} showDate={x.date} />
-          </View>
-        ))}
-      </View>
-      <Txt variant="foot" tone="label2" style={{ paddingHorizontal: space.l }}>{why}</Txt>
-    </View>
-  )
   return (
     <View style={{ gap: space.l }}>
       <View style={{ flexDirection: 'row', gap: space.m, alignItems: 'center', padding: space.l, borderRadius: radius.panel, backgroundColor: c.panel }}>
@@ -111,10 +97,30 @@ function Result({ dx }: { dx: Diagnosis }) {
           <Rows title="Exactly the gap" rows={dx.single} why="One entry the size of the gap: maybe it hasn't posted at the bank yet, or it's on the wrong account." />
           <Rows title="Dated in the future" rows={dx.future} why="Future-dated entries don't count yet." />
           {dx.doubled.length + dx.single.length + dx.future.length === 0 && (
-            <Txt variant="callout" tone="label2" style={{ paddingHorizontal: space.xs }}>Nothing obvious. Look for an entry you haven't logged yet, or one with a typo in the amount.</Txt>
+            <Txt variant="callout" tone="label2" style={{ paddingHorizontal: space.xs }}>{"Nothing obvious. Look for an entry you haven't logged yet, or one with a typo in the amount."}</Txt>
           )}
         </>
       )}
+    </View>
+  )
+}
+
+/** The rows behind one likely cause of a gap. */
+function Rows({ title, rows, why }: { title: string; rows: Txn[]; why: string }) {
+  const { c } = useTheme()
+  const t = useTally()
+  if (rows.length === 0) return null
+  return (
+    <View style={{ gap: 6 }}>
+      <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>{title}</Txt>
+      <View style={{ backgroundColor: c.panel, borderRadius: radius.panel, overflow: 'hidden' }}>
+        {rows.map((x, i) => (
+          <View key={x.id}>{i > 0 && <Hairline inset={space.l + 40 + space.m} />}
+            <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={t.b!.today} showDate={x.date} />
+          </View>
+        ))}
+      </View>
+      <Txt variant="foot" tone="label2" style={{ paddingHorizontal: space.l }}>{why}</Txt>
     </View>
   )
 }

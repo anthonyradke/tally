@@ -71,18 +71,6 @@ export default function MonthEnd() {
   // Steps number themselves: a month with no savings APY skips the interest step.
   const hasTyped = Object.keys(d.typed).length > 0, hasInterest = Object.keys(d.interest).length > 0
   const nInterest = hasTyped ? 2 : 1, nRecon = 1 + (hasTyped ? 1 : 0) + (hasInterest ? 1 : 0)
-  const Step = ({ n, title, done, sub }: { n: number; title: string; done: boolean; sub: string }) => (
-    <View style={{ flexDirection: 'row', gap: space.m, alignItems: 'center', paddingHorizontal: space.xs }}>
-      <View style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: done ? c.pos : c.fill }}>
-        {done ? <Icon sf="checkmark" md="check" size={14} color="#FFFFFF" weight="bold" /> : <Txt variant="sub" style={{ fontWeight: '700' }}>{n}</Txt>}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Txt variant="headline">{title}</Txt>
-        <Txt variant="foot" tone="label2">{sub}</Txt>
-      </View>
-    </View>
-  )
-
   return (
     <>
       <Stack.Screen options={{ title: `${monthLabel(`${ym}-01`, 'long')} close`, headerLargeTitle: false }} />
@@ -136,6 +124,22 @@ function Field({ value, onChange }: { value: string; onChange: (v: string) => vo
       <Txt variant="body" tone="label2">$</Txt>
       <TextInput value={value} onChangeText={(v) => onChange(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.label3}
         style={{ flex: 1, minWidth: 48, fontSize: 17, color: c.label, textAlign: 'right', fontVariant: ['tabular-nums'] }} />
+    </View>
+  )
+}
+
+/** A numbered step that turns into a check once it's done. */
+function Step({ n, title, done, sub }: { n: number; title: string; done: boolean; sub: string }) {
+  const { c } = useTheme()
+  return (
+    <View style={{ flexDirection: 'row', gap: space.m, alignItems: 'center', paddingHorizontal: space.xs }}>
+      <View style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: done ? c.pos : c.fill }}>
+        {done ? <Icon sf="checkmark" md="check" size={14} color="#FFFFFF" weight="bold" /> : <Txt variant="sub" style={{ fontWeight: '700' }}>{n}</Txt>}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Txt variant="headline">{title}</Txt>
+        <Txt variant="foot" tone="label2">{sub}</Txt>
+      </View>
     </View>
   )
 }

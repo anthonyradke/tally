@@ -14,7 +14,7 @@ const brand = (name: string, color?: string): MarkSpec => {
 const mono = (letter: string, color: string, title: string): MarkSpec => ({ kind: 'mono', letter, color, title })
 
 // id → [pattern, mark]. First match wins, so specific names sit above generic words (Uber Eats before Uber).
-const REGISTRY: Array<[string, RegExp, MarkSpec]> = [
+const REGISTRY: [string, RegExp, MarkSpec][] = [
   ['mcdonalds', /mcdonald/i, brand('siMcdonalds')],
   ['tesla', /tesla/i, brand('siTesla')],
   ['icloud', /icloud/i, brand('siIcloud')],
