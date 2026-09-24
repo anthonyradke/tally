@@ -1,75 +1,41 @@
-// Design tokens. One accent (ink: the label color), one cool grey family (Apple's system greys), one semantic pair
-// (pos/neg) for money direction only, and the category identity ring. Hex values mirror UIKit's system colors so they
-// can feed Reanimated and SVG directly; both themes are defined together and nothing reads a color any other way.
+// Design tokens. One accent (ink: black and white in Classic, one vivid hue in the other themes), one grey family,
+// one semantic pair (pos/neg) for money direction only, and the category identity ring. Hex values so they can feed
+// Reanimated and SVG directly; palettes live in themes.ts and nothing reads a color any other way.
 import { useColorScheme } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { create } from 'zustand'
+import { themeById, TINTS, type Palette, type ThemeId, type Tint } from './themes'
 
-const light = {
-  bg: '#F2F2F7',          // systemGroupedBackground
-  panel: '#FFFFFF',       // secondarySystemGroupedBackground
-  panelRaised: '#FFFFFF',
-  fill: '#E9E9EE',        // tertiarySystemFill on grouped bg
-  fillStrong: '#DCDCE1',
-  sep: 'rgba(60,60,67,0.18)',
-  label: '#000000',
-  label2: '#6C6C70',      // secondaryLabel, 4.9:1 on bg
-  label3: '#AEAEB2',      // tertiary: decorative only
-  ink: '#000000',
-  onInk: '#FFFFFF',
-  pos: '#1F8A3B',
-  neg: '#D70015',
-  warn: '#B25000',
-  chartPrev: 'rgba(60,60,67,0.30)',
-  scrim: 'rgba(0,0,0,0.25)',
-}
-
-const dark: typeof light = {
-  bg: '#000000',
-  panel: '#1C1C1E',
-  panelRaised: '#2C2C2E',
-  fill: '#2C2C2E',
-  fillStrong: '#3A3A3C',
-  sep: 'rgba(84,84,88,0.55)',
-  label: '#FFFFFF',
-  label2: '#98989F',
-  label3: '#636366',
-  ink: '#FFFFFF',
-  onInk: '#000000',
-  pos: '#30D158',
-  neg: '#FF6961',
-  warn: '#FF9F0A',
-  chartPrev: 'rgba(235,235,245,0.28)',
-  scrim: 'rgba(0,0,0,0.5)',
-}
-
-export type Palette = typeof light
-
-// Category identity ring, carried over from Tally's validated OKLCH ring (converted exactly); gray made cool to stay
-// in the one grey family.
-export const TINTS = ['red', 'orange', 'amber', 'green', 'teal', 'blue', 'violet', 'pink', 'gray'] as const
-export type Tint = (typeof TINTS)[number]
-const TINT_LIGHT: Record<Tint, string> = {
-  red: '#FE8B82', orange: '#BE6438', amber: '#D5AC1B', green: '#267625', teal: '#24BCB0',
-  blue: '#3175C4', violet: '#B691E1', pink: '#B8437B', gray: '#8E8E93',
-}
-const TINT_DARK: Record<Tint, string> = {
-  red: '#E86156', orange: '#B13D0C', amber: '#C18434', green: '#2C713A', teal: '#11A6AA',
-  blue: '#4672B1', violet: '#793EAB', pink: '#CD7190', gray: '#98989F',
-}
+export { THEMES, TINTS, themeById, type Palette, type ThemeId, type Tint } from './themes'
 export const isTint = (t: string | null | undefined): t is Tint => !!t && (TINTS as readonly string[]).includes(t)
 
-// Bank identity: each bank's own color.
+// Bank identity: each bank's own color, whatever the theme.
 const BANK: Record<string, [string, string]> = {
   chase: ['#1570D1', '#59A0F9'], amex: ['#008A48', '#43C07A'], sofi: ['#D35F00', '#F98942'],
   hsa: ['#8E8E93', '#98989F'], roth: ['#7D5FAD', '#AA8DDE'],
 }
 
+// The chosen theme is a setting on this phone, not on the server.
+const KEY = 'tally.theme'
+export const useThemeChoice = create<{ id: ThemeId; set: (id: ThemeId) => void }>((set) => ({
+  id: 'classic',
+  set: (id) => { set({ id }); AsyncStorage.setItem(KEY, id).catch(() => {}) },
+}))
+export async function loadTheme() {
+  const saved = await AsyncStorage.getItem(KEY).catch(() => null)
+  if (saved) useThemeChoice.setState({ id: themeById(saved).id })
+}
+
 export function useTheme() {
   const dark_ = useColorScheme() === 'dark'
-  const c = dark_ ? dark : light
+  const spec = themeById(useThemeChoice((s) => s.id))
+  const c: Palette = dark_ ? spec.dark : spec.light
+  const ring = dark_ ? spec.ring.dark : spec.ring.light
   return {
     c,
     dark: dark_,
-    tint: (t: Tint) => (dark_ ? TINT_DARK : TINT_LIGHT)[t],
+    theme: spec.id,
+    tint: (t: Tint) => ring[t],
     bank: (b: string) => (BANK[b] ?? BANK.hsa)[dark_ ? 1 : 0],
   }
 }

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Linking, RefreshControl, ScrollView, View } from 'react-native'
-import { router, Stack } from 'expo-router'
+import { Stack } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { useSharedValue } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
 import { Bar } from '@/components/Bar'
 import { Donut } from '@/components/Donut'
+import { Glow } from '@/components/Glow'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
@@ -41,10 +42,10 @@ export default function Insights() {
           <Stack.Toolbar.MenuAction icon="list.bullet.rectangle" onPress={() => Linking.openURL(`${getServer()}/export/log.csv`)}>Export every entry (CSV)</Stack.Toolbar.MenuAction>
           <Stack.Toolbar.MenuAction icon="calendar" onPress={() => Linking.openURL(`${getServer()}/export/months.csv`)}>Export months (CSV)</Stack.Toolbar.MenuAction>
         </Stack.Toolbar.Menu>
-        <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" variant="prominent" tintColor={c.ink} onPress={() => router.push('/entry')} />
       </Stack.Toolbar>
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
         refreshControl={<RefreshControl {...pull} />}>
+        <Glow />
         {b ? <Body b={b} /> : <StateView q={q} />}
       </ScrollView>
     </>

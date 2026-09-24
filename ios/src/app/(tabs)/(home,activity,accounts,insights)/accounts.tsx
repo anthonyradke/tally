@@ -1,5 +1,5 @@
 import { RefreshControl, ScrollView, View } from 'react-native'
-import { router, Stack } from 'expo-router'
+import { Glow } from '@/components/Glow'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
@@ -28,12 +28,10 @@ export default function Accounts() {
   const bal = useBalancesToday(b)
   return (
     <>
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" variant="prominent" tintColor={c.ink} onPress={() => router.push('/entry')} />
-      </Stack.Toolbar>
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, paddingBottom: 120, gap: space.xxl }}
         refreshControl={<RefreshControl {...pull} />}>
+        <Glow />
         {b ? <Body b={b} bal={bal} /> : <StateView q={q} />}
       </ScrollView>
     </>

@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics'
 import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
 import { Money } from '@/components/Money'
+import { Glow } from '@/components/Glow'
 import { Hairline } from '@/components/Panel'
 import { StateView } from '@/components/StateView'
 import { Tap } from '@/components/Tap'
@@ -85,6 +86,7 @@ export default function Activity() {
 
   const header = (
     <View style={{ gap: space.m, paddingBottom: space.s }}>
+      <Glow />
       {process.env.EXPO_OS === 'web' && (
         <View style={{ height: 40, borderRadius: radius.input, backgroundColor: c.fill, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.m, gap: space.s, marginHorizontal: space.l }}>
           <Icon sf="magnifyingglass" md="search" size={16} color={c.label2} />
@@ -132,7 +134,6 @@ export default function Activity() {
           <Stack.Toolbar.Button key="filters" icon={extra ? 'line.3.horizontal.decrease.circle.fill' : 'line.3.horizontal.decrease.circle'}
             accessibilityLabel={extra ? `Filters, ${extra} on` : 'Filters'} onPress={() => router.push('/filters')} />,
           <Stack.Toolbar.Button key="select" icon="checkmark.circle" accessibilityLabel="Select entries" onPress={() => setSelecting(true)} />,
-          <Stack.Toolbar.Button key="add" icon="plus" accessibilityLabel="Add an entry" variant="prominent" tintColor={c.ink} onPress={() => router.push('/entry')} />,
         ]}
       </Stack.Toolbar>
       <View style={{ flex: 1, backgroundColor: c.bg }} collapsable={false}>

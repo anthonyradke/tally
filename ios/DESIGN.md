@@ -16,24 +16,29 @@ Changes to anything below get written here first.
 - **Budgets as bars with a pace notch.** The notch marks how much of the month has gone by; a bar past its notch is
   on pace to go over, and says by how much.
 - **A keypad for money.** Entering an amount is a full-width keypad with the figure rolling as you type (Cash App),
-  never the system number pad.
+  never the system number pad. Digits shift in from the right like a till (1 5 0 reads $1.50); 00 replaces the
+  decimal point.
 
 ## Structure
-- Native tab bar (Liquid Glass on iOS 26): Home, Activity, Accounts, Insights. Tabs are peers; re-tapping one pops to
-  its root. Settings is a gear on Home.
+- Native tab bar (Liquid Glass on iOS 26): Home, Activity, +, Accounts, Insights. It stays full size (never
+  minimizes on scroll). The + in the middle opens the composer from anywhere; it's the only way in, so tab headers carry
+  no + of their own. Tabs are peers; re-tapping one pops to its root. Settings is a gear on Home.
 - Each tab is a native stack with a large title. Detail screens (account, category, month end, settings) push.
 - Adding or editing an entry is a modal with its own close and save. Short choices (category, account, date, bulk
   actions, filters, reconcile) are form sheets with a grabber. Nothing uses a confirm dialog: deletes happen and
   offer Undo.
 
 ## Color
-- Neutrals are Apple's system grouped palette (`#F2F2F7` / true black; panels white / `#1C1C1E`). One cool grey
-  family.
-- **Ink is the only accent**: black in light, white in dark. Primary buttons, selected chips, the prominent + and
-  the chart line. The tab bar tints with it too.
-- One semantic pair, green and red, for money direction only.
-- Category tints are the retired web app's validated eight-hue ring (converted from OKLCH exactly), plus a cool grey. Bank
-  marks use each bank's own color.
+- Themes (Settings → Theme, stored on the phone; palettes in `src/theme/themes.ts`). **Classic** is the original:
+  Apple's system grouped palette (`#F2F2F7` / true black; panels white / `#1C1C1E`) with black/white ink.
+  **Aurora, Sunset, Ocean, Citrus, Blossom** each wash the background in their hue, put two soft pools of color
+  (the glow) behind the top of each tab, and use one vivid accent.
+- **Ink is the only accent**: the theme's accent (black/white in Classic). Primary buttons, selected chips, the tab
+  bar's +, checkmarks and the chart line. The tab bar tints with it too. The + images are drawn per theme by
+  `scripts/tab-icons.mjs`; rerun it after changing an ink.
+- One semantic pair, green and red, for money direction only, the same in every theme.
+- Category tints: Classic keeps the retired web app's validated eight-hue ring (converted from OKLCH exactly); the
+  other themes use the same eight hues at full chroma. Both have a cool grey. Bank marks use each bank's own color.
 
 ## Type
 - SF Pro (system). Hero 44/700 with tight tracking, titles 28 and 22, body 17, rows 16/500, captions 13 and 12.

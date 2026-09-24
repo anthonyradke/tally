@@ -10,7 +10,7 @@ import { Toaster } from '@/components/Toaster'
 import { queryClient } from '@/lib/data'
 import { flush, loadOutbox } from '@/lib/outbox'
 import { loadServer } from '@/lib/server'
-import { useTheme } from '@/theme'
+import { loadTheme, useTheme } from '@/theme'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
@@ -53,9 +53,11 @@ function RootStack() {
 
 export default function RootLayout() {
   const scheme = useColorScheme()
+  const { c } = useTheme()
+  const nav = scheme === 'dark' ? DarkTheme : DefaultTheme
   const [ready, setReady] = useState(false)
   useEffect(() => {
-    Promise.all([loadServer(), loadOutbox()]).finally(() => setReady(true))
+    Promise.all([loadServer(), loadOutbox(), loadTheme()]).finally(() => setReady(true))
   }, [])
   if (!ready) return null
   return (
@@ -63,7 +65,7 @@ export default function RootLayout() {
       <PersistQueryClientProvider client={queryClient}
         persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 7, buster: 'v1' }}
         onSuccess={() => SplashScreen.hideAsync().catch(() => {})}>
-        <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <ThemeProvider value={{ ...nav, colors: { ...nav.colors, primary: c.ink, background: c.bg, card: c.bg } }}>
           <RootStack />
           <OutboxSync />
           <Toaster />
