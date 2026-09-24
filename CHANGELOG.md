@@ -8,6 +8,30 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## 3.0.1 (2026-09-24)
+Fixed
+- Activity's filter, select and + buttons were missing on the phone. They sat in a React fragment, which the native
+  toolbar drops in Release builds.
+- Editing an entry that belongs to a split no longer unlinks it from the split.
+- Editing a negative entry that isn't spending (a correction or a reversal) no longer turns it positive, and the
+  settings editor keeps the minus on a negative starting balance or amount.
+- A typo in a month-end balance or a budget is flagged. It used to save as $0, or clear the budget.
+- Undo says so when it can't reach Tally, instead of doing nothing.
+- A new entry or split is saved in one step, so a retry from the offline outbox can never add it twice or leave half a
+  split behind.
+- The server answers a malformed request with a reason instead of an error 500, refuses a start month that isn't a
+  date (one bad value broke every screen), and refuses duplicate account and category names.
+- A recurring template can post on its own day (0 days ahead), and posting ahead is capped at a year.
+- The composer loads the entry being edited by its id, so old entries open and delete like new ones.
+- Smaller things: "$1k" instead of "$1000" in compact amounts, a card in credit reads "credit" instead of "−$6.88
+  owed", saved views keep the split filter, month-end account names fit, and dates stay right east of UTC.
+
+Added
+- The + button on Insights, so every tab can start a new entry.
+- Tests: the backend went from 29 tests to 189 (routes, money and date math with Hypothesis, recurring, migrations,
+  the importer, receipts, exports, outbox retries and real concurrent requests), and the app got its first 55
+  (`cd ios && npm test`), plus a contract check that validates every API answer against the app's TypeScript types.
+
 ## 3.0.0 (2026-09-24)
 Changed
 - **Tally is an iPhone app now.** The native app I built as "Tallyho" moved into this repo under `ios/`, with its
