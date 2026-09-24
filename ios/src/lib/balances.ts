@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 import type { Account, Bootstrap, Txn } from './api'
 import { useTransactions } from './data'
 import { addDays } from './dates'
+import { formatCents } from './money'
 
 /** Every row, oldest first reused by Accounts and account detail (one cached request). */
 export const useAllTxns = (enabled = true) => useTransactions({ limit: 10000, sort: 'date', dir: 'asc' }, enabled)
@@ -57,4 +58,10 @@ export function split(b: Bootstrap, bal: Map<number, number>) {
     else assets += v
   }
   return { assets, debts, net: assets - debts }
+}
+
+/** A group's total on Accounts. Cards and loans read "owed"; one paid past zero is a credit, not "−$6.88 owed". */
+export function groupTotal(cents: number, kind: Account['kind']): string {
+  if (kind !== 'card' && kind !== 'loan') return formatCents(cents)
+  return cents < 0 ? `${formatCents(-cents)} credit` : `${formatCents(cents)} owed`
 }
