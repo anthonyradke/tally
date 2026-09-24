@@ -1,6 +1,7 @@
 // Starting values for the Settings editor (edit.tsx): each form's fields as the text inputs show them.
 import type { AdminData } from './api'
-import { fromCents, toCents } from './draft'
+import { fromCents } from './draft'
+import { parseDollars } from './money'
 import { monthOf } from './dates'
 
 export type Form = Record<string, string | number | boolean | null>
@@ -48,9 +49,19 @@ export function initial(kind: string, id: number | undefined, a: AdminData, toda
   return {}
 }
 
-/** Dollar fields keyed by account id (month-end balances and interest) as cents, leaving out empty ones. */
-export const amountsById = (fields: Record<string, string>, positiveOnly = false): Record<number, number> =>
-  Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== '' && (!positiveOnly || toCents(v) > 0)).map(([k, v]) => [Number(k), toCents(v)]))
+/** Dollar fields keyed by account id (month-end balances and interest) as cents, leaving out empty ones. A field
+ *  that isn't a number ("1.2.3") comes back in `bad` so the screen can say so: it used to be saved as $0. */
+export function amountsById(fields: Record<string, string>, positiveOnly = false): { cents: Record<number, number>; bad: string[] } {
+  const cents: Record<number, number> = {}, bad: string[] = []
+  for (const [k, v] of Object.entries(fields)) {
+    if (v.trim() === '') continue
+    const c = parseDollars(v)
+    if (c === null) bad.push(k)
+    else if (!positiveOnly || c > 0) cents[Number(k)] = c
+  }
+  return { cents, bad }
+}
 
-/** The budget editor's amount in cents; empty clears the budget. */
-export const budgetAmount = (text: string): number | null => (text === '' ? null : Math.round(Number(text) * 100))
+/** The budget editor's amount in cents: null clears the budget, undefined means it isn't a number (a typo used to
+ *  clear the budget). */
+export const budgetAmount = (text: string): number | null | undefined => (text.trim() === '' ? null : parseDollars(text) ?? undefined)

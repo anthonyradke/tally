@@ -71,14 +71,14 @@ test('the settings editor shows stored amounts with their sign', () => {
   assert.equal(initial('category', 2, a, '2026-09-24').budget, '50')
 })
 
-test('month-end fields: a typo is flagged, never saved as $0', { todo: 'bug: unparsable amounts become 0' }, () => {
-  const r = amountsById({ 4: '1.2.3', 5: '10', 6: '' }) as unknown as { cents: Record<number, number>; bad: string[] }
+test('month-end fields: a typo is flagged, never saved as $0', () => {
+  const r = amountsById({ 4: '1.2.3', 5: '10', 6: '' })
   assert.deepEqual(r.bad, ['4'])
   assert.deepEqual(r.cents, { 5: 1000 })
-  assert.deepEqual((amountsById({ 7: '0', 8: '3.5' }, true) as unknown as { cents: Record<number, number> }).cents, { 8: 350 })
+  assert.deepEqual(amountsById({ 7: '0', 8: '3.5' }, true).cents, { 8: 350 })
 })
 
-test('budget field: empty clears, a typo is not a number', { todo: 'bug: a typo clears the budget' }, () => {
+test('budget field: empty clears, a typo is not a number', () => {
   assert.equal(budgetAmount(''), null)
   assert.equal(budgetAmount('12.50'), 1250)
   assert.equal(budgetAmount('1.2.3'), undefined)

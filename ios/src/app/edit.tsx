@@ -17,7 +17,7 @@ import { Txt } from '@/components/Txt'
 import { categoryVisual, GLYPH_NAMES, GLYPHS } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
 import { close } from '@/lib/nav'
-import { api, type AdminData, type CatType, type Freq, type Kind } from '@/lib/api'
+import { api, ApiError, type AdminData, type CatType, type Freq, type Kind } from '@/lib/api'
 import { budgetAmount, initial, pctStr, type Form } from '@/lib/forms'
 import { monthOf } from '@/lib/dates'
 import { SHAPES } from '@/lib/shapes'
@@ -62,7 +62,11 @@ export default function Edit() {
         case 'quick': return api.saveFavorite(f, n)
         case 'recurring': return api.saveRecurring(f, n)
         case 'view': return api.saveView(f, n)
-        case 'budget': return api.setBudget(n!, budgetAmount(String(f.amount ?? '')), f.thisMonth ? monthOf(t.b!.today) : undefined)
+        case 'budget': {
+          const amount = budgetAmount(String(f.amount ?? ''))
+          if (amount === undefined) return Promise.reject(new ApiError(422, ['The budget must be a number.']))
+          return api.setBudget(n!, amount, f.thisMonth ? monthOf(t.b!.today) : undefined)
+        }
         default: return Promise.resolve()
       }
     }, 'Saved')
