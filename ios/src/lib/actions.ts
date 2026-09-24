@@ -14,10 +14,21 @@ export async function deleteTxns(rows: Txn[]) {
     await invalidateAll()
     toast({
       text: gone.length === 1 ? `Deleted ${gone[0].what || 'entry'}` : `Deleted ${gone.length} entries`,
-      action: { label: 'Undo', run: async () => { await api.restore(gone); await invalidateAll() } },
+      action: { label: 'Undo', run: () => undo(gone) },
     })
   } catch (e) {
     toast({ text: why(e), tone: 'error' })
+  }
+}
+
+/** Put deleted rows back. Failing says so: the toast's button has nothing to catch it, so Undo used to just do
+ *  nothing when the phone was offline. */
+async function undo(gone: Txn[]) {
+  try {
+    await api.restore(gone)
+    await invalidateAll()
+  } catch (e) {
+    toast({ text: e instanceof ApiError ? e.errors.join(' ') : "Couldn't undo: Tally is unreachable.", tone: 'error' })
   }
 }
 
