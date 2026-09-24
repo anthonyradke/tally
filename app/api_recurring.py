@@ -8,7 +8,8 @@ from fastapi.responses import Response
 from . import db
 from .api import Con
 from .api_admin import _get, _opt_int, _upsert
-from .engine import Txn, cents, validate
+from .engine import Txn, validate
+from .inputs import body, day, flag, money, text, whole
 from .recurring import first_on_or_after
 
 router = APIRouter(prefix="/api")
@@ -18,17 +19,16 @@ FREQS = ("weekly", "biweekly", "monthly", "yearly")
 def _fields(con, b: dict) -> dict:
     if b.get("freq") not in FREQS:
         raise HTTPException(422, {"errors": ["Bad frequency."]})
-    if not (b.get("label") or "").strip():
+    if not text(b.get("label"), "Label"):
         raise HTTPException(422, {"errors": ["Label is required."]})
-    try:
-        nxt = date.fromisoformat(b["next_date"])
-        f = {"label": b["label"].strip(), "category_id": int(b["category_id"]),
-             "from_account_id": _opt_int(b.get("from_account_id")), "to_account_id": _opt_int(b.get("to_account_id")),
-             "amount": cents(b.get("amount") or 0), "what": (b.get("what") or "").strip(), "freq": b["freq"],
-             "next_date": nxt.isoformat(), "horizon_days": int(b.get("horizon_days") or 45),
-             "active": int(b.get("active", True)), "anchor_day": nxt.day}
-    except (KeyError, ValueError, TypeError) as e:
-        raise HTTPException(422, {"errors": [f"Bad field: {e}"]})
+    if b.get("category_id") in (None, ""):
+        raise HTTPException(422, {"errors": ["Pick a category."]})
+    nxt = day(b.get("next_date"), "Next date")
+    f = {"label": text(b["label"], "Label"), "category_id": whole(b["category_id"], "Category"),
+         "from_account_id": _opt_int(b.get("from_account_id"), "From"), "to_account_id": _opt_int(b.get("to_account_id"), "To"),
+         "amount": money(b.get("amount") or 0), "what": text(b.get("what"), "Shows as"), "freq": b["freq"],
+         "next_date": nxt.isoformat(), "horizon_days": whole(b.get("horizon_days") or 45, "Days ahead"),
+         "active": flag(b.get("active", True), "Active"), "anchor_day": nxt.day}
     cat = con.execute("SELECT type FROM categories WHERE id=?", (f["category_id"],)).fetchone()
     if not cat:
         raise HTTPException(422, {"errors": ["Pick a category."]})
@@ -42,7 +42,7 @@ def _fields(con, b: dict) -> dict:
 
 @router.post("/recurring", status_code=201)
 async def create_recurring(request: Request, con: Con):
-    id = _upsert(con, "recurring", _fields(con, await request.json()), None)
+    id = _upsert(con, "recurring", _fields(con, await body(request)), None)
     con.commit()
     return _get(con, "recurring", id)
 
@@ -50,7 +50,7 @@ async def create_recurring(request: Request, con: Con):
 @router.put("/recurring/{id}")
 async def update_recurring(id: int, request: Request, con: Con):
     old = _get(con, "recurring", id)
-    f = _fields(con, await request.json())
+    f = _fields(con, await body(request))
     if f["next_date"] == old["next_date"] and old["anchor_day"]:
         f["anchor_day"] = old["anchor_day"]  # unchanged date: keep aiming for the 31st even if next is Feb 28
     if f["active"] and not old["active"]:

@@ -1,12 +1,13 @@
 """JSON API — reconcile and month-end. Moved out of api.py to keep files short; same conventions."""
 from __future__ import annotations
 import os
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from . import db, service
 from .api import Con, _txn
-from .engine import Txn, cents, month_end as eom
+from .engine import Txn, month_end as eom
+from .inputs import body, money, month as parse_month, whole
 
 router = APIRouter(prefix="/api")
 
@@ -15,11 +16,11 @@ router = APIRouter(prefix="/api")
 async def reconcile(account_id: int, request: Request, con: Con):
     """Body: {"actual": dollars, "save": bool}. Compares rows dated on or before today."""
     st = service.load(con)
-    b = await request.json()
+    b = await body(request)
     a = st.acct.get(account_id)
     if not a:
         raise HTTPException(404)
-    d = st.diagnose(a, cents(b.get("actual") or 0))
+    d = st.diagnose(a, money(b.get("actual") or 0, "Balance"))
     if b.get("save"):
         st.con.execute("INSERT INTO reconciliations(account_id,date,actual,expected) VALUES(?,?,?,?)",
                        (a.id, st.today.isoformat(), d.actual, d.expected))
@@ -37,8 +38,10 @@ def reconciliations(con: Con, limit: int = 50):
 
 @router.get("/month-end/{ym}")
 def month_end(ym: str, con: Con):
+    m = parse_month(ym)
     st = service.load(con)
-    m = date.fromisoformat(ym + "-01")
+    if m not in st.months:
+        raise HTTPException(404, {"errors": ["Tally has no such month."]})
     s = st.month_end_status(m)
     return {"month": m.isoformat(), "typed": s["typed"], "recon": s["recon"],
             "interest": {aid: {"logged": [_txn(t) for t in v["logged"]], "proposed": v["proposed"]}
@@ -49,10 +52,14 @@ def month_end(ym: str, con: Con):
 @router.post("/month-end/{ym}/typed")
 async def month_end_typed(ym: str, request: Request, con: Con):
     """Body: {"<account_id>": dollars, ...}"""
-    m = date.fromisoformat(ym + "-01")
-    for k, v in (await request.json()).items():
+    m = parse_month(ym)
+    known = {r[0] for r in con.execute("SELECT id FROM accounts")}
+    for k, v in (await body(request)).items():
         if v not in (None, ""):
-            db.set_typed(con, int(k), m, cents(v))
+            aid = whole(k, "Account")
+            if aid not in known:
+                raise HTTPException(404)
+            db.set_typed(con, aid, m, money(v, "Balance"))
     con.commit()
     return {"ok": True}
 
@@ -60,17 +67,17 @@ async def month_end_typed(ym: str, request: Request, con: Con):
 @router.post("/month-end/{ym}/interest")
 async def month_end_interest(ym: str, request: Request, con: Con):
     """Body: {"<account_id>": dollars, ...} — logs an interest income row (Settings' interest_category) dated the last day of the month."""
+    m = parse_month(ym)
     st = service.load(con)
-    m = date.fromisoformat(ym + "-01")
     income = st.category_for("interest_category", "Other Income")
     if income is None:
         raise HTTPException(422, {"errors": ["Pick an interest income category in Settings, General first."]})
-    for k, v in (await request.json()).items():
-        if v not in (None, "") and cents(v):
-            aid = int(k)
+    for k, v in (await body(request)).items():
+        if v not in (None, "") and (amount := money(v, "Interest")):
+            aid = whole(k, "Account")
             if aid not in st.acct:
                 raise HTTPException(404)
-            db.insert_txn(st.con, Txn(None, eom(m), f"{st.acct[aid].name} interest", income, None, aid, cents(v)))
+            db.insert_txn(st.con, Txn(None, eom(m), f"{st.acct[aid].name} interest", income, None, aid, amount))
     st.con.commit()
     return {"ok": True}
 

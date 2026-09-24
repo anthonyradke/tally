@@ -11,7 +11,8 @@ from datetime import date
 from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from . import db, service, recurring
-from .engine import Txn, cents, validate
+from .engine import Txn, validate
+from .inputs import body, day, ids as id_list, money, opt_id, opt_text, text, whole, words
 
 router = APIRouter(prefix="/api")
 META_COLS = ("note", "tags", "split_group", "receipt", "recurring_id")
@@ -84,6 +85,7 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
                  sort: str = "date", dir: str = "desc", limit: int = 200, offset: int = 0):
     """Filtered list. Search matches description, note, tags, category, account names and the amount.
     `by_type` sums the matches per category type, so the client can show a real net across types."""
+    first, last = day(start, "Start") if start else None, day(end, "End") if end else None
     st = service.load(con)
     meta = _meta(st.con)
     items = list(st.txns)
@@ -103,14 +105,14 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
         items = [t for t in items if account in (t.from_id, t.to_id)]
     if type:
         items = [t for t in items if st.cat[t.category_id].type == type]
-    if start:
-        items = [t for t in items if t.date >= date.fromisoformat(start)]
-    if end:
-        items = [t for t in items if t.date <= date.fromisoformat(end)]
+    if first:
+        items = [t for t in items if t.date >= first]
+    if last:
+        items = [t for t in items if t.date <= last]
     if amount_min is not None:
-        items = [t for t in items if abs(t.amount) >= cents(amount_min)]
+        items = [t for t in items if abs(t.amount) >= money(amount_min, "Minimum")]
     if amount_max is not None:
-        items = [t for t in items if abs(t.amount) <= cents(amount_max)]
+        items = [t for t in items if abs(t.amount) <= money(amount_max, "Maximum")]
     if tag:
         items = [t for t in items if tag.lower().lstrip("#") in (meta.get(t.id, {}).get("tags") or "").split()]
     if group:
@@ -127,18 +129,16 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
 
 # ---------- write ----------
 def _parse(b: dict, txn_id: Optional[int] = None) -> tuple[Txn, dict]:
-    try:
-        t = Txn(txn_id, date.fromisoformat(b["date"]), (b.get("what") or "").strip(), int(b["category_id"]),
-                int(b["from_id"]) if b.get("from_id") else None, int(b["to_id"]) if b.get("to_id") else None,
-                cents(b.get("amount") or 0))
-    except (KeyError, ValueError, TypeError) as e:
-        raise HTTPException(422, {"errors": [f"Bad field: {e}"]})
-    tags = b.get("tags") or []
-    if isinstance(tags, str):
-        tags = tags.split()
-    meta = {"note": (b.get("note") or "").strip(),
+    if not isinstance(b, dict):
+        raise HTTPException(422, {"errors": ["Each entry should be a JSON object."]})
+    if b.get("category_id") in (None, ""):
+        raise HTTPException(422, {"errors": ["Pick a category."]})
+    t = Txn(txn_id, day(b.get("date")), text(b.get("what"), "Description"), whole(b["category_id"], "Category"),
+            opt_id(b.get("from_id"), "From"), opt_id(b.get("to_id"), "To"), money(b.get("amount") or 0))
+    tags = words(b.get("tags"))
+    meta = {"note": text(b.get("note"), "Note"),
             "tags": " ".join(sorted({x.strip().lstrip("#").lower() for x in tags if x.strip()})),
-            "split_group": b.get("split_group") or None, "client_id": None}
+            "split_group": opt_text(b.get("split_group"), "Split"), "client_id": None}
     return t, meta
 
 
@@ -187,7 +187,7 @@ def _write(st, t: Txn, meta: dict) -> int:
 
 @router.post("/transactions", status_code=201)
 async def create_txn(request: Request, con: Con):
-    b = await request.json()
+    b = await body(request)
     cid = _client_id(b)
     if cid and (done := _landed(con, cid)):
         return done[0]
@@ -208,12 +208,14 @@ async def create_txn(request: Request, con: Con):
 async def create_split(request: Request, con: Con):
     """Body: {"lines": [TxnInput, ...], "client_id"?: str}. All lines validate before any is written; they share one
     split_group. Line i stores client_id "<id>:<i>", so a retried split returns the rows already written."""
-    body = await request.json()
-    cid = _client_id(body)
+    b = await body(request)
+    cid = _client_id(b)
     if cid and (done := _landed(con, f"{cid}:%")):
         return done
     st = service.load(con)
-    lines = [_parse(b) for b in body.get("lines", [])]
+    if not isinstance(b.get("lines", []), list):
+        raise HTTPException(422, {"errors": ["lines must be a list."]})
+    lines = [_parse(x) for x in b.get("lines", [])]
     if len(lines) < 2:
         raise HTTPException(422, {"errors": ["A split needs at least two lines."]})
     if any(t.category_id not in st.cat for t, _ in lines):
@@ -234,7 +236,7 @@ async def update_txn(txn_id: int, request: Request, con: Con):
     st = service.load(con)
     if not any(t.id == txn_id for t in st.txns):
         raise HTTPException(404)
-    b = await request.json()
+    b = await body(request)
     t, meta = _parse(b, txn_id)
     _write(st, t, _sent(b, meta))
     con.commit()
@@ -273,16 +275,18 @@ async def restore(request: Request, con: Con):
     (so it sorts where it was), note, tags, split, receipt and recurring link."""
     from .api_files import has_receipt
     st = service.load(con)
-    rows = (await request.json()).get("rows", [])
+    rows = (await body(request)).get("rows", [])
+    if not isinstance(rows, list) or not all(isinstance(b, dict) for b in rows):
+        raise HTTPException(422, {"errors": ["rows must be a list of entries."]})
     ids = []
     for b in rows:
-        t, meta = _parse(b, int(b["id"]))
+        t, meta = _parse(b, whole(b.get("id"), "id"))
         if con.execute("SELECT 1 FROM transactions WHERE id=?", (t.id,)).fetchone():
             raise HTTPException(409, {"errors": ["That entry is already back."]})
         if t.category_id not in st.cat or any(a and a not in st.acct for a in (t.from_id, t.to_id)):
             raise HTTPException(422, {"errors": ["Its category or account no longer exists."]})
-        receipt = b.get("receipt") if has_receipt(b.get("receipt")) else None
-        rid = b.get("recurring_id")
+        receipt = b.get("receipt") if isinstance(b.get("receipt"), str) and has_receipt(b["receipt"]) else None
+        rid = opt_id(b.get("recurring_id"), "recurring_id")
         if rid and not con.execute("SELECT 1 FROM recurring WHERE id=?", (rid,)).fetchone():
             rid = None
         con.execute(
@@ -300,8 +304,8 @@ async def bulk(request: Request, con: Con):
     """Body: {"ids": [...], "action": "delete" | "recategorize" | "tag", "category_id"?: int, "tags"?: [..]}.
     Delete returns the removed rows for Undo. Recategorize checks every row against the new category's
     From/To rules first: moving spending into an income category would count it as income."""
-    b = await request.json()
-    ids = [int(i) for i in b.get("ids", [])]
+    b = await body(request)
+    ids = id_list(b.get("ids", []))
     if not ids:
         raise HTTPException(422, {"errors": ["No rows selected."]})
     marks = ",".join("?" * len(ids))
@@ -309,7 +313,7 @@ async def bulk(request: Request, con: Con):
         return {"ok": True, "count": len(ids), "deleted": _remove(con, ids)}
     if b.get("action") == "recategorize":
         st = service.load(con)
-        c = st.cat.get(int(b.get("category_id") or 0))
+        c = st.cat.get(opt_id(b.get("category_id"), "Category") or 0)
         if not c:
             raise HTTPException(422, {"errors": ["Pick a category."]})
         rows = [t for t in st.txns if t.id in set(ids)]
@@ -319,7 +323,9 @@ async def bulk(request: Request, con: Con):
                                                  f"{c.name} ({c.type}).", *errs]})
         con.execute(f"UPDATE transactions SET category_id=? WHERE id IN ({marks})", [c.id, *ids])
     elif b.get("action") == "tag":
-        add = {x.strip().lstrip("#").lower() for x in b.get("tags", []) if x.strip()}
+        add = {x.strip().lstrip("#").lower() for x in words(b.get("tags")) if x.strip()}
+        if not add:
+            raise HTTPException(422, {"errors": ["Type a tag."]})
         for r in con.execute(f"SELECT id, tags FROM transactions WHERE id IN ({marks})", ids).fetchall():
             merged = " ".join(sorted(set((r["tags"] or "").split()) | add))
             con.execute("UPDATE transactions SET tags=? WHERE id=?", (merged, r["id"]))

@@ -9,28 +9,35 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from . import db
 from .api import Con
-from .engine import KINDS, TYPES, cents, month_of
+from .engine import KINDS, TYPES, month_of
+from .inputs import body, day, flag, ids, money, number, opt_id, opt_text, text, whole
 
 router = APIRouter(prefix="/api")
 SETTING_KEYS = {"start_month", "ef_months", "roth_limit", "home_layout", "theme", "merchant_marks", "roth_category",
                 "interest_category"}
 
 
-def _pct(v):
-    return float(v) / 100 if v not in (None, "") else None
+def _pct(v, what: str):
+    return number(v, what) / 100 if v not in (None, "") else None
 
 
-def _opt_int(v):
-    return int(v) if v not in (None, "", 0, "0") else None
+def _opt_int(v, what: str = "Account"):
+    return opt_id(v, what)
 
 
 def _upsert(con, table: str, fields: dict, id: Optional[int]) -> int:
     cols = list(fields)
-    if id:
-        con.execute(f"UPDATE {table} SET {', '.join(c + '=?' for c in cols)} WHERE id=?", [*fields.values(), id])
-        return id
-    cur = con.execute(f"INSERT INTO {table}({', '.join(cols)}) VALUES({', '.join('?' * len(cols))})",
-                      list(fields.values()))
+    try:
+        if id:
+            con.execute(f"UPDATE {table} SET {', '.join(c + '=?' for c in cols)} WHERE id=?", [*fields.values(), id])
+            return id
+        cur = con.execute(f"INSERT INTO {table}({', '.join(cols)}) VALUES({', '.join('?' * len(cols))})",
+                          list(fields.values()))
+    except sqlite3.IntegrityError as e:
+        con.rollback()
+        if "UNIQUE" in str(e):
+            raise HTTPException(409, {"errors": [f"There's already one called {fields.get('name')}."]})
+        raise HTTPException(422, {"errors": ["That category or account doesn't exist."]})
     return cur.lastrowid
 
 
@@ -54,7 +61,7 @@ def _delete(con, table: str, id: int):
 
 def _reorder(con, table: str, ids: list[int]):
     for i, id in enumerate(ids):
-        con.execute(f"UPDATE {table} SET sort=? WHERE id=?", (i, int(id)))
+        con.execute(f"UPDATE {table} SET sort=? WHERE id=?", (i, id))
     con.commit()
     return {"ok": True}
 
@@ -78,23 +85,24 @@ def _account_fields(b: dict) -> dict:
     rounded figure would nudge a rate imported to full precision."""
     if b.get("kind") not in KINDS:
         raise HTTPException(422, {"errors": ["Bad account kind."]})
-    if not (b.get("name") or "").strip():
+    if not text(b.get("name"), "Name"):
         raise HTTPException(422, {"errors": ["Name is required."]})
-    fields = {"name": b["name"].strip(), "kind": b["kind"], "bank": b.get("bank") or None,
-              "start_balance": cents(b.get("start_balance") or 0), "apy": _pct(b.get("apy")),
-              "loan_rate": _pct(b.get("loan_rate")), "ef": int(bool(b.get("ef"))), "sort": int(b.get("sort") or 0),
-              "active": int(b.get("active", True)), "color": b.get("color") or None, "icon": b.get("icon") or None}
+    fields = {"name": text(b["name"], "Name"), "kind": b["kind"], "bank": opt_text(b.get("bank"), "Bank"),
+              "start_balance": money(b.get("start_balance") or 0, "Starting balance"), "apy": _pct(b.get("apy"), "APY"),
+              "loan_rate": _pct(b.get("loan_rate"), "Interest rate"), "ef": flag(bool(b.get("ef")), "Emergency fund"),
+              "sort": whole(b.get("sort") or 0, "sort"), "active": flag(b.get("active", True), "Active"),
+              "color": opt_text(b.get("color"), "Color"), "icon": opt_text(b.get("icon"), "Icon")}
     return {k: v for k, v in fields.items() if k not in ("apy", "loan_rate") or k in b}
 
 
 @router.put("/accounts/order")  # before /accounts/{id} so "order" is never parsed as an id
 async def order_accounts(request: Request, con: Con):
-    return _reorder(con, "accounts", (await request.json()).get("ids", []))
+    return _reorder(con, "accounts", ids((await body(request)).get("ids", [])))
 
 
 @router.post("/accounts", status_code=201)
 async def create_account(request: Request, con: Con):
-    id = _upsert(con, "accounts", _account_fields(await request.json()), None)
+    id = _upsert(con, "accounts", _account_fields(await body(request)), None)
     con.commit()
     return _get(con, "accounts", id)
 
@@ -102,7 +110,7 @@ async def create_account(request: Request, con: Con):
 @router.put("/accounts/{id}")
 async def update_account(id: int, request: Request, con: Con):
     _get(con, "accounts", id)
-    _upsert(con, "accounts", _account_fields(await request.json()), id)
+    _upsert(con, "accounts", _account_fields(await body(request)), id)
     con.commit()
     return _get(con, "accounts", id)
 
@@ -116,21 +124,22 @@ def delete_account(id: int, con: Con):
 def _category_fields(b: dict) -> dict:
     if b.get("type") not in TYPES:
         raise HTTPException(422, {"errors": ["Bad category type."]})
-    if not (b.get("name") or "").strip():
+    if not text(b.get("name"), "Name"):
         raise HTTPException(422, {"errors": ["Name is required."]})
-    return {"name": b["name"].strip(), "type": b["type"], "sort": int(b.get("sort") or 0),
-            "active": int(b.get("active", True)), "icon": b.get("icon") or None, "color": b.get("color") or None,
-            "budget": cents(b["budget"]) if b.get("budget") not in (None, "") else None}
+    return {"name": text(b["name"], "Name"), "type": b["type"], "sort": whole(b.get("sort") or 0, "sort"),
+            "active": flag(b.get("active", True), "Active"), "icon": opt_text(b.get("icon"), "Icon"),
+            "color": opt_text(b.get("color"), "Color"),
+            "budget": money(b["budget"], "Budget") if b.get("budget") not in (None, "") else None}
 
 
 @router.put("/categories/order")  # before /categories/{id}
 async def order_categories(request: Request, con: Con):
-    return _reorder(con, "categories", (await request.json()).get("ids", []))
+    return _reorder(con, "categories", ids((await body(request)).get("ids", [])))
 
 
 @router.post("/categories", status_code=201)
 async def create_category(request: Request, con: Con):
-    id = _upsert(con, "categories", _category_fields(await request.json()), None)
+    id = _upsert(con, "categories", _category_fields(await body(request)), None)
     con.commit()
     return _get(con, "categories", id)
 
@@ -138,7 +147,7 @@ async def create_category(request: Request, con: Con):
 @router.put("/categories/{id}")
 async def update_category(id: int, request: Request, con: Con):
     _get(con, "categories", id)
-    _upsert(con, "categories", _category_fields(await request.json()), id)
+    _upsert(con, "categories", _category_fields(await body(request)), id)
     con.commit()
     return _get(con, "categories", id)
 
@@ -153,10 +162,11 @@ def delete_category(id: int, con: Con):
 async def set_budget(category_id: int, request: Request, con: Con):
     """Body: {"amount": dollars | null, "month"?: "YYYY-MM-01"}. With month → override for that month only;
     without → the category's default. null clears."""
-    b = await request.json()
+    b = await body(request)
     _get(con, "categories", category_id)
-    amount = cents(b["amount"]) if b.get("amount") not in (None, "") else None
+    amount = money(b["amount"], "Budget") if b.get("amount") not in (None, "") else None
     if b.get("month"):
+        b["month"] = month_of(day(b["month"], "Month")).isoformat()
         if amount is None:
             con.execute("DELETE FROM budgets WHERE category_id=? AND month=?", (category_id, b["month"]))
         else:
@@ -169,30 +179,32 @@ async def set_budget(category_id: int, request: Request, con: Con):
 
 # ---------- favorites (quick actions) ----------
 def _favorite_fields(b: dict) -> dict:
-    if not (b.get("label") or "").strip():
+    if not text(b.get("label"), "Label"):
         raise HTTPException(422, {"errors": ["Label is required."]})
-    return {"label": b["label"].strip(), "category_id": int(b["category_id"]),
-            "from_account_id": _opt_int(b.get("from_account_id")), "to_account_id": _opt_int(b.get("to_account_id")),
-            "amount": cents(b["amount"]) if b.get("amount") not in (None, "") else None,
-            "sort": int(b.get("sort") or 0), "icon": b.get("icon") or None, "color": b.get("color") or None}
+    if b.get("category_id") in (None, ""):
+        raise HTTPException(422, {"errors": ["Pick a category."]})
+    return {"label": text(b["label"], "Label"), "category_id": whole(b["category_id"], "Category"),
+            "from_account_id": _opt_int(b.get("from_account_id"), "From"), "to_account_id": _opt_int(b.get("to_account_id"), "To"),
+            "amount": money(b["amount"]) if b.get("amount") not in (None, "") else None,
+            "sort": whole(b.get("sort") or 0, "sort"), "icon": opt_text(b.get("icon"), "Icon"), "color": opt_text(b.get("color"), "Color")}
 
 
 @router.post("/favorites", status_code=201)
 async def create_favorite(request: Request, con: Con):
-    id = _upsert(con, "favorites", _favorite_fields(await request.json()), None)
+    id = _upsert(con, "favorites", _favorite_fields(await body(request)), None)
     con.commit()
     return _get(con, "favorites", id)
 
 
 @router.put("/favorites/order")
 async def order_favorites(request: Request, con: Con):
-    return _reorder(con, "favorites", (await request.json()).get("ids", []))
+    return _reorder(con, "favorites", ids((await body(request)).get("ids", [])))
 
 
 @router.put("/favorites/{id}")
 async def update_favorite(id: int, request: Request, con: Con):
     _get(con, "favorites", id)
-    _upsert(con, "favorites", _favorite_fields(await request.json()), id)
+    _upsert(con, "favorites", _favorite_fields(await body(request)), id)
     con.commit()
     return _get(con, "favorites", id)
 
@@ -204,28 +216,28 @@ def delete_favorite(id: int, con: Con):
 
 # ---------- saved views ----------
 def _view_fields(b: dict) -> dict:
-    if not (b.get("name") or "").strip():
+    if not text(b.get("name"), "Name"):
         raise HTTPException(422, {"errors": ["Name is required."]})
-    return {"name": b["name"].strip(), "query": b.get("query") or "", "icon": b.get("icon") or None,
-            "sort": int(b.get("sort") or 0)}
+    return {"name": text(b["name"], "Name"), "query": text(b.get("query"), "query"), "icon": opt_text(b.get("icon"), "Icon"),
+            "sort": whole(b.get("sort") or 0, "sort")}
 
 
 @router.post("/saved-views", status_code=201)
 async def create_view(request: Request, con: Con):
-    id = _upsert(con, "saved_views", _view_fields(await request.json()), None)
+    id = _upsert(con, "saved_views", _view_fields(await body(request)), None)
     con.commit()
     return _get(con, "saved_views", id)
 
 
 @router.put("/saved-views/order")
 async def order_views(request: Request, con: Con):
-    return _reorder(con, "saved_views", (await request.json()).get("ids", []))
+    return _reorder(con, "saved_views", ids((await body(request)).get("ids", [])))
 
 
 @router.put("/saved-views/{id}")
 async def update_view(id: int, request: Request, con: Con):
     _get(con, "saved_views", id)
-    _upsert(con, "saved_views", _view_fields(await request.json()), id)
+    _upsert(con, "saved_views", _view_fields(await body(request)), id)
     con.commit()
     return _get(con, "saved_views", id)
 
@@ -239,7 +251,7 @@ def delete_view(id: int, con: Con):
 @router.put("/settings")
 async def put_settings(request: Request, con: Con):
     """Body: {key: value}. roth_limit arrives in dollars; home_layout and merchant_marks may be objects (stored as JSON)."""
-    for k, v in (await request.json()).items():
+    for k, v in (await body(request)).items():
         if k not in SETTING_KEYS:
             raise HTTPException(422, {"errors": [f"Unknown setting {k}."]})
         if k == "start_month":  # every balance starts here: a bad value would break every screen
@@ -248,15 +260,17 @@ async def put_settings(request: Request, con: Con):
             except ValueError:
                 raise HTTPException(422, {"errors": ["The start month must be a date like 2026-08-01."]})
         elif k == "roth_limit":
-            v = str(cents(v or 0))
+            v = str(money(v or 0, "Roth limit"))
         elif k == "ef_months":
-            v = str(int(v))
+            v = str(whole(v, "Months of spending"))
         elif k in ("roth_category", "interest_category"):
-            v = str(int(v)) if v else ""
+            v = str(whole(v, "Category")) if v else ""
             if v and not con.execute("SELECT 1 FROM categories WHERE id=?", (int(v),)).fetchone():
                 raise HTTPException(422, {"errors": ["That category doesn't exist."]})
         elif k in ("home_layout", "merchant_marks") and not isinstance(v, str):
             v = json.dumps(v)
+        elif not isinstance(v, str):
+            raise HTTPException(422, {"errors": [f"{k} must be text."]})
         db.set_setting(con, k, str(v))
     con.commit()
     return {r["key"]: r["value"] for r in con.execute("SELECT * FROM settings")}

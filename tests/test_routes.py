@@ -204,8 +204,9 @@ def test_transaction_rules(client, world):
     assert any("same account" in e for e in errs(txn(world, "move", to_id=world["chk"])))
     assert "Unknown account." in errs(txn(world, from_id=424242))
     assert errs(txn(world, category_id=424242)) == ["Pick a category."]
-    assert any("Bad field" in e for e in errs(txn(world, date="2026-02-30")))
-    assert any("Bad field" in e for e in errs({k: v for k, v in txn(world).items() if k != "date"}))
+    assert errs(txn(world, date="2026-02-30")) == ["Date must be a date like 2026-09-24."]
+    assert errs({k: v for k, v in txn(world).items() if k != "date"}) == ["Date must be a date like 2026-09-24."]
+    assert errs(txn(world, amount="12,50")) == ["Amount must be a number."]
 
 
 def test_negative_amounts_are_refunds(client, world):
@@ -276,7 +277,6 @@ def _bad_bodies(w):
     yield "PUT", "/api/settings", []
 
 
-@pytest.mark.xfail(strict=True, reason="bug: malformed values crash with a 500")
 def test_bad_input_is_4xx(client, world):
     ok(client.post("/api/transactions", json=txn(world)), 201)
     crashed = []
@@ -292,9 +292,7 @@ def test_bad_input_is_4xx(client, world):
     assert ok(client.get("/api/bootstrap"))  # and nothing above broke the database
 
 
-BAD_DATE = pytest.mark.xfail(strict=True, reason="bug: a bad date filter is a 500")
-BAD_QUERIES = [pytest.param("start=bad", marks=BAD_DATE), pytest.param("end=2026-13-01", marks=BAD_DATE),
-               "amount_min=abc", "category=abc", "limit=abc"]
+BAD_QUERIES = ["start=bad", "end=2026-13-01", "amount_min=abc", "category=abc", "limit=abc"]
 
 
 @pytest.mark.parametrize("qs", BAD_QUERIES)
@@ -303,13 +301,11 @@ def test_bad_list_queries_are_422(client, world, qs):
     assert client.get(f"/api/transactions?{qs}").status_code == 422
 
 
-@pytest.mark.xfail(strict=True, reason="bug: a malformed month is a 500")
 @pytest.mark.parametrize("ym", ["bad", "2026-13", "2026-9"])
 def test_bad_month_end_month_is_422(client, world, ym):
     assert client.get(f"/api/month-end/{ym}").status_code == 422
 
 
-@pytest.mark.xfail(strict=True, reason="bug: a month outside the ledger is a 500")
 @pytest.mark.parametrize("ym", ["1999-01", "2099-01"])
 def test_month_end_outside_the_ledger_is_404(client, world, ym):
     assert client.get(f"/api/month-end/{ym}").status_code == 404
