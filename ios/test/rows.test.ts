@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatType } from '@/lib/api'
-import { dailyBalances, split } from '@/lib/balances'
+import { dailyBalances, groupTotal, split } from '@/lib/balances'
 import { extraCount, fromViewQuery, toQuery, viewQuery, type Filters } from '@/lib/filters'
 import { fits, SHAPES } from '@/lib/shapes'
 import { groupByDay, rowAmount } from '@/lib/txn'
@@ -71,4 +71,11 @@ test('a saved view brings back the filters it saved', () => {
   assert.deepEqual(fromViewQuery(viewQuery(f)), f)
   const plain: Filters = { q: '', type: '', sort: 'date', dir: 'desc' }
   assert.deepEqual(fromViewQuery(viewQuery(plain)), { ...plain, category: undefined, account: undefined, start: undefined, end: undefined, tag: undefined, group: undefined })
+})
+
+test('a card or loan paid past zero reads as a credit, not negative owed', () => {
+  assert.equal(groupTotal(68800, 'card'), '$688.00 owed')
+  assert.equal(groupTotal(-688, 'card'), '$6.88 credit')
+  assert.equal(groupTotal(-688, 'cash'), '−$6.88')
+  assert.equal(groupTotal(1373603, 'loan'), '$13,736.03 owed')
 })
