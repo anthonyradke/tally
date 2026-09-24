@@ -8,6 +8,17 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## 3.1.0 (2026-09-24)
+Added
+- Themes, in Settings → Theme. Classic is the original black and white; Aurora, Sunset, Ocean, Citrus and Blossom each
+  bring a vivid accent, a tinted background, a soft glow at the top of each tab and brighter category colors. The
+  choice is saved on the phone and follows light and dark mode.
+- A + in the middle of the tab bar opens a new entry from any tab. It replaces the + in each tab's header.
+
+Changed
+- The tab bar stays full size instead of shrinking to one button when you scroll.
+- The keypad fills in cents first, like a till: 1 5 0 reads $1.50. The decimal point key is now 00.
+
 ## 3.0.2 (2026-09-24)
 Fixed
 - Big rolling figures (net worth, the month's spending, the keypad amount) no longer leave gaps around narrow digits
