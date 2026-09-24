@@ -1,28 +1,49 @@
 // Rolling digits: each digit is a column of 0-9 that slides to its value, so a changing figure reads as the same
 // number moving rather than a swap. Used for hero figures and the keypad. Scrubbing bypasses this (the chart writes
 // the figure on the UI thread), since a figure that rolls while the finger moves lags the finger.
-import { memo, useEffect, useState } from 'react'
+// Figures here are proportional, like any large number set in SF Pro: each column is as wide as the digit it shows
+// and eases to the next digit's width while it rolls. Tabular columns left a gap around every 1 ("$7 1 3").
+import { memo, useEffect, useRef, useState } from 'react'
 import { Text, View, type TextStyle } from 'react-native'
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
 import { formatCents, type Sign } from '@/lib/money'
-import { tabular } from '@/theme'
 
 const EASE = Easing.bezier(0.23, 1, 0.32, 1)
 const DIGITS = '0123456789'.split('')
 let launched = false // hero figures roll up from zero once per launch, not on every revisit
+const measured = new Map<string, number[]>() // the ten digit widths per text style, measured once per launch
 
 const Digit = memo(function Digit({ d, h, style, fromZero, reduce }: { d: number; h: number; style: TextStyle; fromZero: boolean; reduce: boolean }) {
-  const y = useSharedValue(fromZero && !reduce ? 0 : -d * h)
+  const styleKey = `${style.fontSize}/${style.fontWeight}/${style.letterSpacing ?? 0}`
+  const [widths, setWidths] = useState(() => measured.get(styleKey))
+  const pending = useRef<number[]>([])
+  const start = fromZero && !reduce ? 0 : d
+  const y = useSharedValue(-start * h)
+  const w = useSharedValue(widths ? widths[start] : 0)
   useEffect(() => {
     y.set(reduce ? -d * h : withTiming(-d * h, { duration: 520, easing: EASE }))
   }, [d, h, reduce, y])
-  const a = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }] }))
+  useEffect(() => {
+    if (!widths) return
+    w.set(reduce || w.get() === 0 ? widths[d] : withTiming(widths[d], { duration: 520, easing: EASE }))
+  }, [d, widths, reduce, w])
+  const column = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }] }))
+  const size = useAnimatedStyle(() => (w.get() > 0 ? { width: w.get() } : {}))
+  const onLayout = (n: number, width: number) => {
+    pending.current[n] = width
+    if (pending.current.filter((x) => x !== undefined).length < DIGITS.length) return
+    measured.set(styleKey, pending.current)
+    setWidths(pending.current)
+  }
   return (
-    <View style={{ height: h, overflow: 'hidden' }}>
-      <Animated.View style={a}>
-        {DIGITS.map((n) => <Text key={n} style={[style, tabular, { height: h, lineHeight: h }]}>{n}</Text>)}
+    <Animated.View style={[{ height: h, overflow: 'hidden', alignItems: 'center' }, size]}>
+      <Animated.View style={[{ alignItems: 'center' }, widths && { width: Math.max(...widths) }, column]}>
+        {DIGITS.map((n, i) => (
+          <Text key={n} style={[style, { height: h, lineHeight: h }]}
+            onLayout={widths ? undefined : (e) => onLayout(i, e.nativeEvent.layout.width)}>{n}</Text>
+        ))}
       </Animated.View>
-    </View>
+    </Animated.View>
   )
 })
 
