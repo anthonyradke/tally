@@ -5,10 +5,10 @@ import { mkdirSync } from 'node:fs'
 import sharp from 'sharp'
 import { THEMES } from '../src/theme/themes.ts'
 
-const PT = 30 // point size of the icon in the tab bar
+const PT = 26 // point size in the tab bar: the same box as the SF Symbols beside it, so its label lines up with theirs
 const svg = (fill, plus) => `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
   <circle cx="60" cy="60" r="60" fill="${fill}"/>
-  <g stroke="${plus}" stroke-width="11" stroke-linecap="round"><line x1="60" y1="34" x2="60" y2="86"/><line x1="34" y1="60" x2="86" y2="60"/></g>
+  <g stroke="${plus}" stroke-width="9" stroke-linecap="round"><line x1="60" y1="37" x2="60" y2="83"/><line x1="37" y1="60" x2="83" y2="60"/></g>
 </svg>`
 
 mkdirSync('assets/tab', { recursive: true })

@@ -17,7 +17,11 @@ Changes to anything below get written here first.
   on pace to go over, and says by how much.
 - **A keypad for money.** Entering an amount is a full-width keypad with the figure rolling as you type (Cash App),
   never the system number pad. Digits shift in from the right like a till (1 5 0 reads $1.50); 00 replaces the
-  decimal point.
+  decimal point. The keypad rises as its own raised panel with Done; the save button only appears once it's put away.
+  A new entry starts empty (no guessed category or account); a quick action chip fills it, and tapping it again
+  takes it back out.
+- **Swipe rows like Mail.** Right: Duplicate. Left: Category, Edit, Delete. A long swipe runs the edge action
+  (Duplicate, Delete) with a tick. Long press has the same actions in a menu.
 
 ## Structure
 - Native tab bar (Liquid Glass on iOS 26): Home, Activity, +, Accounts, Insights. It stays full size (never

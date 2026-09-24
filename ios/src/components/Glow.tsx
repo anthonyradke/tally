@@ -1,3 +1,4 @@
+import { View } from 'react-native'
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { useTheme } from '@/theme'
 
@@ -12,7 +13,10 @@ export function Glow() {
   const [a, b] = c.glow
   const o = dark ? 0.42 : 0.3
   return (
-    <Svg pointerEvents="none" width="100%" height={H} style={{ position: 'absolute', top: -LIFT, left: 0, right: 0 }}>
+    // The wrapper spans the full width: a percentage width on the Svg itself resolves against the parent's padded
+    // content box, which left a strip on the right uncovered.
+    <View pointerEvents="none" style={{ position: 'absolute', top: -LIFT, left: 0, right: 0, height: H }}>
+    <Svg width="100%" height="100%">
       <Defs>
         <RadialGradient id="glowA" cx="12%" cy="48%" rx="80%" ry="50%">
           <Stop offset="0" stopColor={a} stopOpacity={o} />
@@ -26,5 +30,6 @@ export function Glow() {
       <Rect width="100%" height="100%" fill="url(#glowA)" />
       <Rect width="100%" height="100%" fill="url(#glowB)" />
     </Svg>
+    </View>
   )
 }

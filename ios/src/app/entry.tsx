@@ -1,9 +1,9 @@
 // The composer: a modal with its own Cancel/Save. Amount on a big keypad, then what, category, accounts and date.
+// A new entry starts empty: no category or account is guessed for you.
 // New entries go through the outbox, so saving never fails just because the phone is off Tailscale.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
-import Animated, { FadeInDown, FadeOutDown, ZoomIn } from 'react-native-reanimated'
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
+import Animated, { SlideInDown, SlideOutDown, ZoomIn } from 'react-native-reanimated'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -47,6 +47,7 @@ export default function Entry() {
   const { d, set, reset, setLine } = useDraft()
   const [typing, setTyping] = useState(false)
   const [pad, setPad] = useState(!id)
+  const [quick, setQuick] = useState<number | null>(fav ? Number(fav) : null) // the quick action filling the draft
   const [tagText, setTagText] = useState<string | null>(null) // raw text while editing tags
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
@@ -95,19 +96,6 @@ export default function Entry() {
     return { byKey, counts }
   }, [history.data])
 
-  // A blank entry starts on the most used spending category, paid from where that category usually comes from.
-  const defaulted = useRef(false)
-  useEffect(() => {
-    if (defaulted.current || id || fav || !history.data || !t.b || !loaded.current) return
-    defaulted.current = true
-    if (useDraft.getState().d.category_id) return
-    const best = [...memory.counts.entries()].map(([cid, n]) => ({ c: t.cat.get(cid), n }))
-      .filter((x) => x.c?.type === 'Spending' && x.c.active).sort((a, z) => z.n - a.n)[0]?.c
-    if (!best) return
-    const last = history.data.items.find((x) => x.category_id === best.id)
-    set({ category_id: best.id, from_id: last?.from_id ?? null })
-  }, [history.data, t.b, memory]) // eslint-disable-line react-hooks/exhaustive-deps
-
   const cat = d.category_id ? t.cat.get(d.category_id) : undefined
   const shape = SHAPES[d.kind]
   const cents = toCents(d.amount)
@@ -117,13 +105,11 @@ export default function Entry() {
     return [...memory.byKey.entries()].filter(([key]) => key.startsWith(k) && key !== k).slice(0, 4).map(([, x]) => x)
   }, [d.what, typing, memory])
 
-  // Changing the kind drops a category and accounts that no longer fit it.
+  // Changing the kind drops a category and accounts that no longer fit it. Nothing is picked for you.
   const setKind = (kind: CatType) => {
     const keepCat = cat?.type === kind
     const s = SHAPES[kind]
-    const best = [...memory.counts.entries()].map(([cid, n]) => ({ c: t.cat.get(cid), n }))
-      .filter((x) => x.c?.type === kind && x.c.active).sort((a, z) => z.n - a.n)[0]?.c
-    set({ kind, category_id: keepCat ? d.category_id : best?.id ?? null, refund: kind === 'Spending' ? d.refund : false,
+    set({ kind, category_id: keepCat ? d.category_id : null, refund: kind === 'Spending' ? d.refund : false,
       from_id: s.from === 'blank' ? null : d.from_id, to_id: s.to === 'blank' ? null : d.to_id, split: kind === 'Spending' ? d.split : null })
   }
   const pickSuggestion = (x: Txn) => {
@@ -229,16 +215,25 @@ export default function Entry() {
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={100}>
         <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentInsetAdjustmentBehavior="automatic"
           onScrollBeginDrag={() => setPad(false)}
-          contentContainerStyle={{ padding: space.l, gap: space.l, paddingBottom: space.xxl + FADE }}>
+          contentContainerStyle={{ padding: space.l, gap: space.l, paddingBottom: space.xxl }}>
           <Segmented options={KINDS} value={d.kind} onChange={setKind} />
 
-          {!editing && !id && t.b && t.b.favorites.length > 0 && !d.what && !d.amount && (
+          {/* Quick actions fill the draft; tapping the chosen one again takes it back out. */}
+          {!editing && !id && t.b && t.b.favorites.length > 0 && (quick != null || (!d.what && !d.amount)) && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l }} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
               {t.b.favorites.map((f) => {
                 const fc = t.cat.get(f.category_id)
                 const fv = fc ? categoryVisual({ ...fc, icon: f.icon ?? fc.icon, color: f.color ?? fc.color }) : null
-                return <Chip key={f.id} label={f.label} leading={fv ? <Mark kind="glyph" sf={fv.sf} md={fv.md} tint={tint(fv.tint)} size={28} /> : undefined}
-                  onPress={() => set({ what: f.label, category_id: f.category_id, from_id: f.from_account_id, to_id: f.to_account_id, kind: fc?.type ?? 'Spending', amount: f.amount ? fromCents(f.amount) : d.amount })} />
+                const on = quick === f.id
+                return <Chip key={f.id} label={f.label} selected={on} leading={fv ? <Mark kind="glyph" sf={fv.sf} md={fv.md} tint={tint(fv.tint)} size={28} /> : undefined}
+                  onPress={() => {
+                    const prev = quick != null ? t.b!.favorites.find((x) => x.id === quick) : undefined
+                    // Undo keeps an amount you typed yourself, and drops one the quick action filled in.
+                    const typed = prev?.amount ? '' : d.amount
+                    if (on) { setQuick(null); set({ ...blank(d.date), date: d.date, amount: typed }); return }
+                    setQuick(f.id)
+                    set({ what: f.label, category_id: f.category_id, from_id: f.from_account_id, to_id: f.to_account_id, kind: fc?.type ?? 'Spending', amount: f.amount ? fromCents(f.amount) : typed })
+                  }} />
               })}
             </ScrollView>
           )}
@@ -345,44 +340,36 @@ export default function Entry() {
           )}
         </ScrollView>
 
-        <View style={{ backgroundColor: c.bg, paddingHorizontal: space.l, paddingBottom: typing ? space.s : insets.bottom + space.s, gap: space.s }}>
-          <Fade color={c.bg} />
-          {!typing && pad && (
-            <Animated.View entering={FadeInDown.duration(220)} exiting={FadeOutDown.duration(160)}>
-              <Keypad onKey={onKey} onClear={onClear} />
-            </Animated.View>
-          )}
-          {!typing && pad && !mainActive && (
-            <Txt variant="foot" tone="label2" style={{ textAlign: 'center', marginTop: -space.xs }}>Typing into the split line. Tap the total to edit it.</Txt>
-          )}
-          {done ? (
-            <Animated.View entering={ZoomIn.duration(180)} accessibilityLiveRegion="polite"
-              style={{ height: 52, borderRadius: radius.pill, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
-              <CheckDraw size={24} color={c.onInk} />
-              <Txt variant="headline" tone="onInk">{editing ? 'Saved' : 'Added'}</Txt>
-            </Animated.View>
-          ) : (
-            <Button label={saving ? 'Saving…' : editing ? 'Save changes' : cents ? `Add ${formatCents(cents)}` : 'Add entry'} onPress={save} disabled={saving} style={{ height: 52 }} />
-          )}
-        </View>
+        {/* The keypad is its own raised panel while you type an amount, with Done to put it away; the save button
+            only shows once it's gone, since the amount is the first thing typed and there's more to fill in after. */}
+        {!typing && pad ? (
+          <Animated.View entering={SlideInDown.duration(260)} exiting={SlideOutDown.duration(200)}
+            style={{ backgroundColor: c.panel, borderTopLeftRadius: radius.panel, borderTopRightRadius: radius.panel, borderCurve: 'continuous',
+              paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: insets.bottom + space.s, boxShadow: '0 -6px 24px rgba(0,0,0,0.18)' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 36 }}>
+              <Txt variant="foot" tone="label2" style={{ flex: 1 }}>{mainActive ? '' : 'Typing into the split line. Tap the total to edit it.'}</Txt>
+              <Tap feedback="opacity" onPress={() => setPad(false)} hitSlop={10} accessibilityLabel="Done with the amount"
+                style={{ height: 32, paddingHorizontal: space.l, borderRadius: radius.pill, backgroundColor: c.ink, justifyContent: 'center' }}>
+                <Txt variant="callout" tone="onInk" style={{ fontWeight: '600' }}>Done</Txt>
+              </Tap>
+            </View>
+            <Keypad onKey={onKey} onClear={onClear} />
+          </Animated.View>
+        ) : (
+          <View style={{ backgroundColor: c.bg, paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: typing ? space.s : insets.bottom + space.s }}>
+            {done ? (
+              <Animated.View entering={ZoomIn.duration(180)} accessibilityLiveRegion="polite"
+                style={{ height: 52, borderRadius: radius.pill, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
+                <CheckDraw size={24} color={c.onInk} />
+                <Txt variant="headline" tone="onInk">{editing ? 'Saved' : 'Added'}</Txt>
+              </Animated.View>
+            ) : (
+              <Button label={saving ? 'Saving…' : editing ? 'Save changes' : cents ? `Add ${formatCents(cents)}` : 'Add entry'} onPress={save} disabled={saving} style={{ height: 52 }} />
+            )}
+          </View>
+        )}
       </KeyboardAvoidingView>
     </>
-  )
-}
-
-// The form scrolls under the keypad; this fades it out above the keypad instead of cutting it off at a hard edge.
-const FADE = 28
-function Fade({ color }: { color: string }) {
-  return (
-    <Svg pointerEvents="none" width="100%" height={FADE} style={{ position: 'absolute', left: 0, right: 0, top: -FADE }}>
-      <Defs>
-        <LinearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={color} stopOpacity={0} />
-          <Stop offset="1" stopColor={color} stopOpacity={1} />
-        </LinearGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill="url(#fade)" />
-    </Svg>
   )
 }
 
