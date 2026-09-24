@@ -1,5 +1,5 @@
 // Every Settings list in one route: accounts, categories, quick actions, recurring, saved views, budgets, goals,
-// the Home layout and the server. Item editors open as the `edit` modal.
+// the Home layout, the theme and the server. Item editors open as the `edit` modal.
 import { useEffect, useState } from 'react'
 import { ScrollView, Switch, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
@@ -8,6 +8,7 @@ import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Group, Row } from '@/components/Row'
 import { StateView } from '@/components/StateView'
+import { ThemePicker } from '@/components/ThemePicker'
 import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual, KIND_LABEL, KIND_SYMBOL } from '@/icons/categories'
@@ -25,7 +26,7 @@ import { radius, space, useTheme } from '@/theme'
 
 const TITLES: Record<string, string> = {
   accounts: 'Accounts', categories: 'Categories', quick: 'Quick actions', recurring: 'Recurring', views: 'Saved views',
-  budgets: 'Budgets', general: 'Goals', home: 'Home screen', server: 'Server',
+  budgets: 'Budgets', general: 'Goals', home: 'Home screen', server: 'Server', theme: 'Theme',
 }
 
 export default function SettingsSection() {
@@ -47,7 +48,7 @@ export default function SettingsSection() {
       )}
       <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 100 }}>
-        {section === 'server' ? <Server /> : !admin.data ? <StateView q={admin} shape="list" /> : (
+        {section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : !admin.data ? <StateView q={admin} shape="list" /> : (
           <>
             {section === 'accounts' && <Accounts a={admin.data} reorder={reorder} />}
             {section === 'categories' && <Categories a={admin.data} reorder={reorder} />}
@@ -328,6 +329,15 @@ function HomeLayout({ a }: { a: AdminData }) {
           } />
       ))}
     </Group>
+  )
+}
+
+function Themes() {
+  return (
+    <View style={{ gap: space.m }}>
+      <ThemePicker />
+      <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.xs }}>{"Themes follow your phone's light and dark setting. Classic is the original black and white."}</Txt>
+    </View>
   )
 }
 

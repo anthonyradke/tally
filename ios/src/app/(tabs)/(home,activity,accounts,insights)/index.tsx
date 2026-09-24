@@ -4,6 +4,7 @@ import { router, Stack } from 'expo-router'
 import { useSharedValue } from 'react-native-reanimated'
 import { Bar } from '@/components/Bar'
 import { Chip } from '@/components/Chip'
+import { Glow } from '@/components/Glow'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
@@ -51,11 +52,11 @@ export default function Home() {
     <>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button icon="gearshape" accessibilityLabel="Settings" onPress={() => router.push('/settings')} />
-        <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" variant="prominent" tintColor={c.ink} onPress={() => router.push('/entry')} />
       </Stack.Toolbar>
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
         refreshControl={<RefreshControl {...pull} />}>
+        <Glow />
         {b ? <Widgets b={b} /> : <StateView q={q} />}
       </ScrollView>
     </>

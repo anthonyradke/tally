@@ -9,7 +9,7 @@ import { api } from '@/lib/api'
 import { useOutbox } from '@/lib/outbox'
 import { useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
-import { space, useTheme } from '@/theme'
+import { space, themeById, useTheme } from '@/theme'
 
 const ago = (iso: string) => {
   const h = (Date.now() - new Date(iso).getTime()) / 36e5
@@ -17,7 +17,7 @@ const ago = (iso: string) => {
 }
 
 export default function Settings() {
-  const { c } = useTheme()
+  const { c, theme } = useTheme()
   const { b } = useTally()
   const url = useServer((s) => s.url)
   const queued = useOutbox((s) => s.items)
@@ -41,6 +41,7 @@ export default function Settings() {
           <Row label="Goals" sub="Emergency fund, Roth IRA, interest" sf="target" md="flag" href="/settings/general" />
         </Group>
         <Group header="App">
+          <Row label="Theme" value={themeById(theme).name} sf="paintpalette" md="palette" href="/settings/theme" />
           <Row label="Home screen" sub="Choose and order what Home shows" sf="square.stack" md="dashboard" href="/settings/home" />
           <Row label="Server" value={url ? url.replace(/^https?:\/\//, '').split('.')[0] : process.env.EXPO_OS === 'web' ? 'This site' : 'Not set'} sf="server.rack" md="dns" href="/settings/server" />
           {queued.length > 0 && <Row label="Waiting to send" value={String(queued.length)} sf="icloud.and.arrow.up" md="cloud_upload" href="/settings/server" />}
