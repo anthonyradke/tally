@@ -115,6 +115,7 @@ const input = { date: b.today, what: 'Contract check', category_id: spend.id, fr
 const made: Txn = await hit('txn', 'POST', '/api/transactions', { ...input, client_id: 'contract-check-1' })
 await hit('txn', 'POST', '/api/transactions', { ...input, client_id: 'contract-check-1' })
 await hit('txn', 'PUT', `/api/transactions/${made.id}`, { ...input, amount: 20 })
+await hit('txn', 'GET', `/api/transactions/${made.id}`)
 const split: Txn[] = await hit('txns', 'POST', '/api/transactions/split', { lines: [input, { ...input, amount: 1 }], client_id: 'contract-check-2' })
 await hit('bulk', 'POST', '/api/transactions/bulk', { ids: split.map((x) => x.id), action: 'tag', tags: ['x'] })
 const gone: Txn = await hit('txn', 'DELETE', `/api/transactions/${made.id}`)

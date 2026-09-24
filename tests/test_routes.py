@@ -324,7 +324,6 @@ def test_start_month_is_stored_as_the_first(client, world):
     assert s["start_month"] == "2026-07-01"
 
 
-@pytest.mark.xfail(strict=True, reason="bug: no way to load one entry; the composer searches the newest 2000")
 def test_get_one_transaction(client, world):
     t = ok(client.post("/api/transactions", json=txn(world, note="n", tags=["x"])), 201)
     assert ok(client.get(f"/api/transactions/{t['id']}")) == t

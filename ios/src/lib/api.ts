@@ -75,6 +75,7 @@ export const api = {
   bootstrap: () => call<Bootstrap>('GET', '/bootstrap'),
   admin: () => call<AdminData>('GET', '/admin'),
   transactions: (query: TxnQuery = {}) => call<TxnPage>('GET', `/transactions${qs(query)}`),
+  transaction: (id: number) => call<Txn>('GET', `/transactions/${id}`),
   /** `clientId` makes the create safe to retry: the server returns the row it already wrote for that id. */
   createTxn: (t: TxnInput, clientId?: string) => call<Txn>('POST', '/transactions', { ...dollars(t), client_id: clientId }, 12_000),
   createSplit: (lines: TxnInput[], clientId?: string) => call<Txn[]>('POST', '/transactions/split', { lines: lines.map(dollars), client_id: clientId }, 12_000),

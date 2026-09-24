@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
+import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
@@ -45,6 +46,8 @@ export default function Entry() {
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
   const history = useTransactions({ limit: 600 }, !!t.b)
+  // The entry being edited or duplicated, fetched by id: it may be older than the newest 600 used for suggestions.
+  const one = useQuery({ queryKey: ['transactions', 'one', Number(id)], queryFn: () => api.transaction(Number(id)), enabled: !!id })
   const editing = !!id && mode !== 'duplicate'
   const loaded = useRef(false)
 
@@ -53,17 +56,9 @@ export default function Entry() {
     if (loaded.current || !t.b) return
     const today = t.b.today
     if (id) {
-      const row = history.data?.items.find((x) => x.id === Number(id))
-      if (!row) {
-        if (history.isLoading) return
-        api.transactions({ limit: 2000 }).then((p) => {
-          const r = p.items.find((x) => x.id === Number(id))
-          if (r) { loaded.current = true; reset(seed(r)) }
-        })
-        return
-      }
+      if (!one.data) return
       loaded.current = true
-      reset(seed(row))
+      reset(seed(one.data))
       return
     }
     loaded.current = true
@@ -79,7 +74,7 @@ export default function Entry() {
       const d0 = fromTxn(r, t.catOf(r).type)
       return mode === 'duplicate' ? { ...d0, id: undefined, date: today, receipt: null } : d0
     }
-  }, [t.b, history.data, history.isLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [t.b, one.data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Merchant memory: the last entry for each name, and the most used category.
   const memory = useMemo(() => {
@@ -139,7 +134,7 @@ export default function Entry() {
   const left = cents - splitSum
 
   async function save() {
-    if (!t.b) return
+    if (!t.b || (id && !loaded.current)) return // still loading the entry: saving now would write the last draft over it
     const lines = toInputs(d)
     const base = lines[0]
     const errs: string[] = []
@@ -207,7 +202,7 @@ export default function Entry() {
           <Stack.Toolbar.Menu icon="ellipsis">
             <Stack.Toolbar.MenuAction icon="plus.square.on.square" onPress={() => { close(); setTimeout(() => router.push({ pathname: '/entry', params: { id: String(id), mode: 'duplicate' } }), 350) }}>Duplicate to today</Stack.Toolbar.MenuAction>
             <Stack.Toolbar.MenuAction icon="trash" destructive onPress={() => {
-              const row = history.data?.items.find((x) => x.id === Number(id))
+              const row = one.data
               close()
               if (row) deleteTxns([row])
             }}>Delete</Stack.Toolbar.MenuAction>
