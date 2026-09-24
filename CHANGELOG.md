@@ -8,6 +8,20 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## 3.2.0 (2026-09-24)
+Added
+- Small animations throughout, all skipped with Reduce Motion:
+  - Keypad keys pop when pressed. A digit that won't fit, or saving with no amount, shakes the figure.
+  - Saving draws a check in the button, and the new entry unfolds into the lists with a brief glow. Undo brings
+    deleted entries back the same way, and a deleted entry folds shut instead of vanishing.
+  - A quick action's icon hops when tapped, and after saving, its amount floats up off the chip on Home.
+  - A reconcile that matches to the cent draws a check and bursts confetti. So does the first look at a finished
+    month that came in under budget, which also gets a badge on Insights.
+  - Budget bars running ahead of their pace notch breathe a few times.
+  - When net worth has gone up since you last opened Home, a band of green light sweeps across it.
+  - The dot at today on the month chart breathes gently.
+  - Changing theme fades the old colors off with a ripple of the new accent, and the chosen card bounces.
+
 ## 3.1.0 (2026-09-24)
 Added
 - Themes, in Settings → Theme. Classic is the original black and white; Aurora, Sunset, Ocean, Citrus and Blossom each
