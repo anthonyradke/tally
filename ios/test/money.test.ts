@@ -62,7 +62,7 @@ test('compactCents for axes and chips', () => {
   assert.equal(compactCents(120_000_000), '$1.2M')
 })
 
-test('compactCents rounds up into the next unit instead of showing $1000', { todo: 'bug: $1000k' }, () => {
+test('compactCents rounds up into the next unit instead of showing $1000', () => {
   assert.equal(compactCents(99_960), '$1k')
   assert.equal(compactCents(999_960), '$10k')
   assert.equal(compactCents(99_995_000), '$1M')
