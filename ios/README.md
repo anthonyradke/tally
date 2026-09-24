@@ -25,7 +25,9 @@ npx expo start
 
 **On my iPhone with Expo Go:** open the Expo Go app and enter `exp://<x1's Tailscale IP>:8082` (or scan the QR code `expo start` prints). The phone needs Tailscale on.
 
-**As a real app (free Apple ID):** on the Mac with Xcode, `npx expo run:ios --device --configuration Release`, then pick my Personal Team for signing in Xcode if it asks. Apps signed this way stop opening after 7 days; running the same command again re-signs it. With a paid Apple Developer account this becomes `eas build` and TestFlight instead.
+**As a real app (free Apple ID):** on the Mac with Xcode, `npx expo run:ios --device --configuration Release` with the iPhone plugged in and `.env.local` in place. The first time, I have to run `npx expo prebuild --platform ios`, pick my Personal Team under Signing & Capabilities in `ios/Tally.xcworkspace`, and trust the profile on the phone under Settings › General › VPN & Device Management (once per Apple ID, so already done if Hearth is on the phone). With a paid Apple Developer account this becomes `eas build` and TestFlight instead.
+
+**Re-signing every 7 days:** a free Apple ID only signs apps for 7 days, and after that Tally won't open. To fix it, I plug the phone in, unlock it and run the same command again. It rebuilds, re-signs and installs over the old copy, so cached data and any entries still waiting to send stay on the phone. If signing fails, I check that my Apple ID is still signed in under Xcode › Settings › Apple Accounts.
 
 **Web preview (for checking layouts on x1):** `npx expo start --web --port 8082` plus `node scripts/preview.mjs`, then open `http://127.0.0.1:8090`. Set `API_PORT=8001` to point it at a backend running on a copy of the database, so tests never write to the real one.
 
