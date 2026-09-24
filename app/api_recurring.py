@@ -16,6 +16,14 @@ router = APIRouter(prefix="/api")
 FREQS = ("weekly", "biweekly", "monthly", "yearly")
 
 
+def _horizon(v) -> int:
+    """How many days ahead rows post. 0 posts on the day; a year is the most, since every day ahead is a row."""
+    days = 45 if v in (None, "") else whole(v, "Days ahead")
+    if not 0 <= days <= 366:
+        raise HTTPException(422, {"errors": ["Days ahead must be between 0 and 366."]})
+    return days
+
+
 def _fields(con, b: dict) -> dict:
     if b.get("freq") not in FREQS:
         raise HTTPException(422, {"errors": ["Bad frequency."]})
@@ -27,7 +35,7 @@ def _fields(con, b: dict) -> dict:
     f = {"label": text(b["label"], "Label"), "category_id": whole(b["category_id"], "Category"),
          "from_account_id": _opt_int(b.get("from_account_id"), "From"), "to_account_id": _opt_int(b.get("to_account_id"), "To"),
          "amount": money(b.get("amount") or 0), "what": text(b.get("what"), "Shows as"), "freq": b["freq"],
-         "next_date": nxt.isoformat(), "horizon_days": whole(b.get("horizon_days") or 45, "Days ahead"),
+         "next_date": nxt.isoformat(), "horizon_days": _horizon(b.get("horizon_days")),
          "active": flag(b.get("active", True), "Active"), "anchor_day": nxt.day}
     cat = con.execute("SELECT type FROM categories WHERE id=?", (f["category_id"],)).fetchone()
     if not cat:
