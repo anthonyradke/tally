@@ -1,0 +1,374 @@
+// The composer: a modal with its own Cancel/Save. Amount on a big keypad, then what, category, accounts and date.
+// New entries go through the outbox, so saving never fails just because the phone is off Tailscale.
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
+import { router, Stack, useLocalSearchParams } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Image } from 'expo-image'
+import * as Haptics from 'expo-haptics'
+import * as ImagePicker from 'expo-image-picker'
+import { Chip } from '@/components/Chip'
+import { Icon } from '@/components/Icon'
+import { Keypad } from '@/components/Keypad'
+import { Mark } from '@/components/Mark'
+import { Segmented } from '@/components/native/Segmented'
+import { RollingText } from '@/components/Rolling'
+import { Group, Row } from '@/components/Row'
+import { Button, Tap } from '@/components/Tap'
+import { Txt } from '@/components/Txt'
+import { categoryVisual } from '@/icons/categories'
+import { merchantKey } from '@/icons/merchants'
+import { api, ApiError, unreachable, type CatType, type Txn, type TxnInput } from '@/lib/api'
+import { close } from '@/lib/nav'
+import { deleteTxns } from '@/lib/actions'
+import { useTransactions, invalidateAll } from '@/lib/data'
+import { addDays, dayLabel } from '@/lib/dates'
+import { blank, fromCents, fromTxn, press, toCents, useDraft, type Draft } from '@/lib/draft'
+import { formatCents } from '@/lib/money'
+import { enqueue, newClientId, send } from '@/lib/outbox'
+import { fits, HINT, SHAPES } from '@/lib/shapes'
+import { useTally } from '@/lib/tally'
+import { toast } from '@/lib/toast'
+import { radius, space, useTheme } from '@/theme'
+
+const KINDS: [CatType, string][] = [['Spending', 'Spent'], ['Money in', 'Income'], ['Transfer', 'Transfer'], ['Saving', 'Saving'], ['Loan', 'Loan']]
+
+export default function Entry() {
+  const { c, tint } = useTheme()
+  const insets = useSafeAreaInsets()
+  const t = useTally()
+  const { id, mode, fav } = useLocalSearchParams<{ id?: string; mode?: string; fav?: string }>()
+  const { d, set, reset, setLine } = useDraft()
+  const [typing, setTyping] = useState(false)
+  const [pad, setPad] = useState(!id)
+  const [tagText, setTagText] = useState<string | null>(null) // raw text while editing tags
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<string[]>([])
+  const history = useTransactions({ limit: 600 }, !!t.b)
+  const editing = !!id && mode !== 'duplicate'
+  const loaded = useRef(false)
+
+  // Seed the draft once: edit, duplicate, a quick action, or a blank entry with sensible defaults.
+  useEffect(() => {
+    if (loaded.current || !t.b) return
+    const today = t.b.today
+    if (id) {
+      const row = history.data?.items.find((x) => x.id === Number(id))
+      if (!row) {
+        if (history.isLoading) return
+        api.transactions({ limit: 2000 }).then((p) => {
+          const r = p.items.find((x) => x.id === Number(id))
+          if (r) { loaded.current = true; reset(seed(r)) }
+        })
+        return
+      }
+      loaded.current = true
+      reset(seed(row))
+      return
+    }
+    loaded.current = true
+    const f = fav ? t.b.favorites.find((x) => x.id === Number(fav)) : undefined
+    if (f) {
+      const cat = t.cat.get(f.category_id)
+      reset({ ...blank(today), what: f.label, category_id: f.category_id, from_id: f.from_account_id, to_id: f.to_account_id,
+        amount: f.amount ? fromCents(f.amount) : '', kind: cat?.type ?? 'Spending' })
+      return
+    }
+    reset(blank(today))
+    function seed(r: Txn): Draft {
+      const d0 = fromTxn(r, t.catOf(r).type)
+      return mode === 'duplicate' ? { ...d0, id: undefined, date: today, receipt: null } : d0
+    }
+  }, [t.b, history.data, history.isLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Merchant memory: the last entry for each name, and the most used category.
+  const memory = useMemo(() => {
+    const byKey = new Map<string, Txn>()
+    const counts = new Map<number, number>()
+    for (const x of history.data?.items ?? []) {
+      const k = merchantKey(x.what)
+      if (k && !byKey.has(k)) byKey.set(k, x)
+      counts.set(x.category_id, (counts.get(x.category_id) ?? 0) + 1)
+    }
+    return { byKey, counts }
+  }, [history.data])
+
+  // A blank entry starts on the most used spending category, paid from where that category usually comes from.
+  const defaulted = useRef(false)
+  useEffect(() => {
+    if (defaulted.current || id || fav || !history.data || !t.b || !loaded.current) return
+    defaulted.current = true
+    if (useDraft.getState().d.category_id) return
+    const best = [...memory.counts.entries()].map(([cid, n]) => ({ c: t.cat.get(cid), n }))
+      .filter((x) => x.c?.type === 'Spending' && x.c.active).sort((a, z) => z.n - a.n)[0]?.c
+    if (!best) return
+    const last = history.data.items.find((x) => x.category_id === best.id)
+    set({ category_id: best.id, from_id: last?.from_id ?? null })
+  }, [history.data, t.b, memory]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const cat = d.category_id ? t.cat.get(d.category_id) : undefined
+  const shape = SHAPES[d.kind]
+  const cents = toCents(d.amount)
+  const suggestions = useMemo(() => {
+    const k = merchantKey(d.what)
+    if (!typing || k.length < 1) return []
+    return [...memory.byKey.entries()].filter(([key]) => key.startsWith(k) && key !== k).slice(0, 4).map(([, x]) => x)
+  }, [d.what, typing, memory])
+
+  // Changing the kind drops a category and accounts that no longer fit it.
+  const setKind = (kind: CatType) => {
+    const keepCat = cat?.type === kind
+    const s = SHAPES[kind]
+    const best = [...memory.counts.entries()].map(([cid, n]) => ({ c: t.cat.get(cid), n }))
+      .filter((x) => x.c?.type === kind && x.c.active).sort((a, z) => z.n - a.n)[0]?.c
+    set({ kind, category_id: keepCat ? d.category_id : best?.id ?? null, refund: kind === 'Spending' ? d.refund : false,
+      from_id: s.from === 'blank' ? null : d.from_id, to_id: s.to === 'blank' ? null : d.to_id, split: kind === 'Spending' ? d.split : null })
+  }
+  const pickSuggestion = (x: Txn) => {
+    const ty = t.catOf(x).type
+    set({ what: x.what, category_id: x.category_id, from_id: x.from_id, to_id: x.to_id, kind: ty })
+    setTyping(false)
+  }
+  const onKey = (k: string) => {
+    if (d.target === 'main') set({ amount: press(d.amount, k) })
+    else { const l = d.split?.find((x) => x.key === d.target); if (l) setLine(l.key, { amount: press(l.amount, k) }) }
+  }
+  const onClear = () => (d.target === 'main' ? set({ amount: '' }) : setLine(d.target, { amount: '' }))
+
+  const splitSum = d.split?.reduce((n, l) => n + toCents(l.amount), 0) ?? 0
+  const left = cents - splitSum
+
+  async function save() {
+    if (!t.b) return
+    const sign = d.refund ? -1 : 1
+    const base = { date: d.date, what: d.what.trim(), from_id: shape.from === 'blank' ? null : d.from_id, to_id: shape.to === 'blank' ? null : d.to_id, note: d.note.trim(), tags: d.tags }
+    const lines: TxnInput[] = d.split
+      ? d.split.map((l) => ({ ...base, category_id: l.category_id ?? 0, amount: toCents(l.amount) * sign }))
+      : [{ ...base, category_id: d.category_id ?? 0, amount: cents * sign }]
+    const errs: string[] = []
+    if (!cents) errs.push('Enter an amount.')
+    if (!d.split && !d.category_id) errs.push('Pick a category.')
+    if (d.split && d.split.some((l) => !l.category_id || !toCents(l.amount))) errs.push('Give every split line a category and an amount.')
+    if (d.split && left !== 0) errs.push(`The split is ${formatCents(Math.abs(left))} ${left > 0 ? 'short' : 'over'}.`)
+    if (!fits(base, d.kind)) errs.push(HINT[d.kind])
+    setErrors(errs)
+    if (errs.length) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}); return }
+    setSaving(true)
+    try {
+      let saved: Txn[] = []
+      if (editing) {
+        saved = [await api.updateTxn(Number(id), lines[0])]
+        if (d.removeReceipt && d.receipt) await api.deleteReceipt(Number(id))
+      } else {
+        const cid = newClientId()
+        try {
+          const r = await send(lines, cid)
+          saved = Array.isArray(r) ? r : [r]
+        } catch (e) {
+          if (!unreachable(e)) throw e
+          enqueue({ cid, lines, label: d.what || (cat?.name ?? 'Entry') })
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {})
+          toast({ text: 'Saved on your phone. It will reach Tally when you are back on Tailscale.' })
+          close()
+          return
+        }
+      }
+      if (d.photo && saved[0]) await api.uploadReceipt(saved[0].id, d.photo).catch(() => toast({ text: 'Saved, but the receipt photo did not upload.', tone: 'error' }))
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      await invalidateAll()
+      close()
+      toast({ text: editing ? 'Saved' : `Added ${formatCents(cents)}${cat && !d.split ? ` to ${cat.name}` : ''}` })
+    } catch (e) {
+      setErrors(e instanceof ApiError ? e.errors : ['Tally is unreachable. Check Tailscale and try again.'])
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function addPhoto(camera: boolean) {
+    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.6 }
+    const r = camera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts)
+    if (r.canceled || !r.assets[0]) return
+    const a = r.assets[0]
+    set({ photo: { uri: a.uri, name: a.fileName ?? 'receipt.jpg', type: a.mimeType ?? 'image/jpeg' }, removeReceipt: false })
+  }
+
+  const v = cat ? categoryVisual(cat) : null
+  const acctName = (a: number | null) => (a ? t.acct.get(a)?.name ?? 'Unknown' : 'None')
+  const display = `${d.refund ? '−' : ''}$${d.amount || '0'}`
+  const mainActive = d.target === 'main'
+
+  return (
+    <>
+      <Stack.Screen options={{ headerShown: true, title: editing ? 'Edit entry' : 'New entry', headerTransparent: false, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false }} />
+      <Stack.Toolbar placement="left">
+        <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => close()} />
+      </Stack.Toolbar>
+      {editing && (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Menu icon="ellipsis">
+            <Stack.Toolbar.MenuAction icon="plus.square.on.square" onPress={() => { close(); setTimeout(() => router.push({ pathname: '/entry', params: { id: String(id), mode: 'duplicate' } }), 350) }}>Duplicate to today</Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.MenuAction icon="trash" destructive onPress={() => {
+              const row = history.data?.items.find((x) => x.id === Number(id))
+              close()
+              if (row) deleteTxns([row])
+            }}>Delete</Stack.Toolbar.MenuAction>
+          </Stack.Toolbar.Menu>
+        </Stack.Toolbar>
+      )}
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={100}>
+        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentInsetAdjustmentBehavior="automatic"
+          onScrollBeginDrag={() => setPad(false)}
+          contentContainerStyle={{ padding: space.l, gap: space.l, paddingBottom: space.xxl }}>
+          <Segmented options={KINDS} value={d.kind} onChange={setKind} />
+
+          {!editing && !id && t.b && t.b.favorites.length > 0 && !d.what && !d.amount && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l }} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
+              {t.b.favorites.map((f) => {
+                const fc = t.cat.get(f.category_id)
+                const fv = fc ? categoryVisual({ ...fc, icon: f.icon ?? fc.icon, color: f.color ?? fc.color }) : null
+                return <Chip key={f.id} label={f.label} leading={fv ? <Mark kind="glyph" sf={fv.sf} md={fv.md} tint={tint(fv.tint)} size={28} /> : undefined}
+                  onPress={() => set({ what: f.label, category_id: f.category_id, from_id: f.from_account_id, to_id: f.to_account_id, kind: fc?.type ?? 'Spending', amount: f.amount ? fromCents(f.amount) : d.amount })} />
+              })}
+            </ScrollView>
+          )}
+
+          <Tap feedback="opacity" onPress={() => { set({ target: 'main' }); setPad(true) }} accessibilityLabel={`Amount ${display}`}
+            style={{ alignItems: 'center', paddingVertical: space.s }}>
+            <RollingText text={display} style={{ fontSize: 60, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
+            {d.split && (
+              <Txt variant="sub" tone={left === 0 ? 'pos' : 'label2'} num>
+                {left === 0 ? 'Split adds up' : `${formatCents(Math.abs(left))} ${left > 0 ? 'left to split' : 'over the total'}`}
+              </Txt>
+            )}
+          </Tap>
+
+          <View style={{ gap: space.s }}>
+            <TextInput value={d.what} onChangeText={(what) => set({ what })} placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'}
+              placeholderTextColor={c.label3} onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} returnKeyType="done"
+              autoCapitalize="words" autoCorrect={false} maxFontSizeMultiplier={1.4}
+              style={{ fontSize: 22, fontWeight: '600', textAlign: 'center', color: c.label, paddingVertical: space.s }} />
+            {suggestions.length > 0 && (
+              <ScrollView horizontal keyboardShouldPersistTaps="always" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.xs }}>
+                {suggestions.map((x) => <Chip key={x.id} label={x.what} onPress={() => pickSuggestion(x)} />)}
+              </ScrollView>
+            )}
+          </View>
+
+          <Group>
+            {!d.split && (
+              <Row label="Category" value={cat?.name ?? 'Choose'} onPress={() => router.push({ pathname: '/pick', params: { kind: 'category' } })}
+                leading={v ? <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={30} /> : <EmptyMark />} />
+            )}
+            {shape.from !== 'blank' && (
+              <Row label="From" value={acctName(d.from_id)} sf="arrow.up.right" md="north_east" onPress={() => router.push({ pathname: '/pick', params: { kind: 'from' } })} />
+            )}
+            {shape.to !== 'blank' && (
+              <Row label={shape.to === 'optional' ? 'To (optional)' : 'To'} value={acctName(d.to_id)} sf="arrow.down.left" md="south_west" onPress={() => router.push({ pathname: '/pick', params: { kind: 'to' } })} />
+            )}
+            <Row label="Date" value={dayLabel(d.date, t.b?.today)} sf="calendar" md="calendar_today" onPress={() => router.push({ pathname: '/pick', params: { kind: 'date' } })} />
+          </Group>
+
+          {t.b && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l, marginTop: -space.s }} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
+              <Chip label="Today" selected={d.date === t.b.today} onPress={() => set({ date: t.b!.today })} />
+              <Chip label="Yesterday" selected={d.date === addDays(t.b.today, -1)} onPress={() => set({ date: addDays(t.b!.today, -1) })} />
+              <Chip label={dayLabel(addDays(t.b.today, -2), t.b.today)} selected={d.date === addDays(t.b.today, -2)} onPress={() => set({ date: addDays(t.b!.today, -2) })} />
+            </ScrollView>
+          )}
+
+          {d.kind === 'Spending' && (
+            <Group footer={d.split ? 'Each line is saved as its own entry, linked together, so budgets see the right categories.' : undefined}>
+              <Row label="Refund" sub={d.refund ? 'Counts as money back in this category' : undefined} sf="arrow.uturn.backward" md="undo"
+                trailing={<Switch value={d.refund} onValueChange={(refund) => set({ refund })} />} chevron={false} />
+              {!editing && (
+                <Row label="Split across categories" sf="square.split.2x1" md="call_split" chevron={false}
+                  trailing={<Switch value={!!d.split} onValueChange={(on) => set(on
+                    ? { split: [{ key: 'a', category_id: d.category_id, amount: d.amount }, { key: 'b', category_id: null, amount: '' }], target: 'b' }
+                    : { split: null, target: 'main' })} />} />
+              )}
+              {d.split?.map((l, i) => {
+                const lc = l.category_id ? t.cat.get(l.category_id) : undefined
+                const lv = lc ? categoryVisual(lc) : null
+                const active = d.target === l.key
+                return (
+                  <Row key={l.key} label={lc?.name ?? `Line ${i + 1}`}
+                    leading={lv ? <Mark kind="glyph" sf={lv.sf} md={lv.md} tint={tint(lv.tint)} size={30} /> : <EmptyMark />}
+                    onPress={() => router.push({ pathname: '/pick', params: { kind: 'category', line: l.key } })}
+                    trailing={
+                      <Tap feedback="opacity" onPress={() => { set({ target: l.key }); setPad(true) }} hitSlop={8}
+                        style={{ minWidth: 88, height: 34, borderRadius: radius.pill, paddingHorizontal: space.m, alignItems: 'flex-end', justifyContent: 'center', backgroundColor: active ? c.ink : c.fill }}>
+                        <Txt variant="callout" num tone={active ? 'onInk' : 'label'} style={{ fontWeight: '600' }}>${l.amount || '0'}</Txt>
+                      </Tap>
+                    } chevron={false} />
+                )
+              })}
+              {d.split && (
+                <Row label="Add a line" sf="plus" md="add" chevron={false}
+                  onPress={() => { const key = Math.random().toString(36).slice(2, 7); set({ split: [...d.split!, { key, category_id: null, amount: left > 0 ? fromCents(left) : '' }], target: key }) }} />
+              )}
+            </Group>
+          )}
+
+          <Group>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
+              <Icon sf="text.alignleft" md="notes" size={18} color={c.label2} />
+              <TextInput value={d.note} onChangeText={(note) => set({ note })} placeholder="Note" placeholderTextColor={c.label3} multiline
+                onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
+              <Icon sf="number" md="tag" size={18} color={c.label2} />
+              <TextInput value={tagText ?? d.tags.join(' ')} placeholder="Tags, separated by spaces" placeholderTextColor={c.label3}
+                autoCapitalize="none" autoCorrect={false} onFocus={() => setTyping(true)} onBlur={() => { setTyping(false); setTagText(null) }}
+                onChangeText={(v) => { setTagText(v); set({ tags: v.split(/\s+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean) }) }}
+                style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
+            </View>
+            <Receipt d={d} onAdd={addPhoto} onRemove={() => set({ photo: null, removeReceipt: true })} />
+          </Group>
+
+          {errors.length > 0 && (
+            <View style={{ padding: space.m, borderRadius: radius.input, backgroundColor: c.panel, gap: 4 }} accessibilityLiveRegion="assertive">
+              {errors.map((e) => <Txt key={e} variant="callout" tone="neg">{e}</Txt>)}
+            </View>
+          )}
+        </ScrollView>
+
+        <View style={{ backgroundColor: c.bg, paddingHorizontal: space.l, paddingBottom: typing ? space.s : insets.bottom + space.s, gap: space.s }}>
+          {!typing && pad && <Keypad onKey={onKey} onClear={onClear} />}
+          {!typing && pad && !mainActive && (
+            <Txt variant="foot" tone="label2" style={{ textAlign: 'center', marginTop: -space.xs }}>Typing into the split line. Tap the total to edit it.</Txt>
+          )}
+          <Button label={saving ? 'Saving…' : editing ? 'Save changes' : cents ? `Add ${formatCents(cents)}` : 'Add entry'} onPress={save} disabled={saving} style={{ height: 52 }} />
+        </View>
+      </KeyboardAvoidingView>
+    </>
+  )
+}
+
+function EmptyMark() {
+  const { c } = useTheme()
+  return <View style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: c.label3, borderStyle: 'dashed' }} />
+}
+
+function Receipt({ d, onAdd, onRemove }: { d: Draft; onAdd: (camera: boolean) => void; onRemove: () => void }) {
+  const { c } = useTheme()
+  const uri = d.photo?.uri ?? (d.receipt && !d.removeReceipt ? api.receiptUrl(d.receipt) : null)
+  if (uri) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.m, paddingLeft: space.l }}>
+        <Image source={{ uri }} style={{ width: 48, height: 64, borderRadius: 8 }} contentFit="cover" />
+        <Txt variant="body" style={{ flex: 1 }}>Receipt</Txt>
+        <Tap feedback="opacity" onPress={onRemove} hitSlop={10}><Txt variant="callout" tone="neg">Remove</Txt></Tap>
+      </View>
+    )
+  }
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
+      <Icon sf="doc.text.viewfinder" md="document_scanner" size={18} color={c.label2} />
+      <Txt variant="body" tone="label3" style={{ flex: 1 }}>Receipt</Txt>
+      {process.env.EXPO_OS === 'ios' && <Tap feedback="opacity" onPress={() => onAdd(true)} hitSlop={8}><Icon sf="camera" md="photo_camera" size={20} color={c.label} /></Tap>}
+      <Tap feedback="opacity" onPress={() => onAdd(false)} hitSlop={8}><Icon sf="photo" md="image" size={20} color={c.label} /></Tap>
+    </View>
+  )
+}
