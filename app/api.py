@@ -142,6 +142,12 @@ def _parse(b: dict, txn_id: Optional[int] = None) -> tuple[Txn, dict]:
     return t, meta
 
 
+def _sent(b: dict, meta: dict) -> dict:
+    """An edit only changes the extras it sends. The app's edit leaves out split_group, and clearing it unlinked
+    the entry from its split."""
+    return {k: v for k, v in meta.items() if k in b or k == "client_id"}
+
+
 def _client_id(b: dict) -> Optional[str]:
     """The outbox's id for a queued save. A retry whose first attempt did land returns that row instead of adding
     a second one (the phone can lose the response after the server wrote the row)."""
@@ -165,8 +171,9 @@ def _save(st, t: Txn, meta: dict) -> dict:
     if errs:
         raise HTTPException(422, {"errors": errs})
     tid = t.id or st.con.execute("SELECT last_insert_rowid()").fetchone()[0]
-    st.con.execute("UPDATE transactions SET note=?, tags=?, split_group=?, client_id=COALESCE(?, client_id) "
-                   "WHERE id=?", (meta["note"], meta["tags"], meta["split_group"], meta.get("client_id"), tid))
+    cols = [k for k in ("note", "tags", "split_group") if k in meta]
+    st.con.execute(f"UPDATE transactions SET {''.join(k + '=?, ' for k in cols)}client_id=COALESCE(?, client_id) "
+                   "WHERE id=?", (*[meta[k] for k in cols], meta.get("client_id"), tid))
     st.con.commit()
     row = st.con.execute(f"SELECT id,{','.join(META_COLS)} FROM transactions WHERE id=?", (tid,)).fetchone()
     return _txn(Txn(tid, t.date, t.what, t.category_id, t.from_id, t.to_id, t.amount), dict(row))
@@ -210,8 +217,9 @@ async def update_txn(txn_id: int, request: Request, con: Con):
     st = service.load(con)
     if not any(t.id == txn_id for t in st.txns):
         raise HTTPException(404)
-    t, meta = _parse(await request.json(), txn_id)
-    return _save(st, t, meta)
+    b = await request.json()
+    t, meta = _parse(b, txn_id)
+    return _save(st, t, _sent(b, meta))
 
 
 def _full(con, ids: list[int]) -> list[dict]:

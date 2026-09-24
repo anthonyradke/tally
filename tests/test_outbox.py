@@ -106,7 +106,6 @@ def test_a_create_is_one_write(client, world, monkeypatch, fail_at):
 
 # ---------- edits keep what the app doesn't send ----------
 
-@pytest.mark.xfail(strict=True, reason="bug: an edit clears split_group")
 def test_editing_a_split_line_keeps_it_in_the_split(client, world):
     rows = client.post("/api/transactions/split",
                        json={"lines": [txn(world, amount=30), txn(world, category_id=world["gas"], amount=20)]}).json()
@@ -204,3 +203,9 @@ def test_delete_and_edit_racing(server):
             return d.result().status_code, e.result().status_code
     results = [race(i) for i in ids]
     assert all(d in (200, 404) and e in (200, 404) for d, e in results), [r for r in results if 500 in r]
+
+
+def test_an_edit_can_still_clear_a_note_it_sends(client, world):
+    t = client.post("/api/transactions", json=txn(world, note="old", tags=["a"])).json()
+    r = client.put(f"/api/transactions/{t['id']}", json=txn(world, note="", tags=[])).json()
+    assert r["note"] == "" and r["tags"] == []
