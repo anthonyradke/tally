@@ -190,7 +190,7 @@ export default function Entry() {
 
   const v = cat ? categoryVisual(cat) : null
   const acctName = (a: number | null) => (a ? t.acct.get(a)?.name ?? 'Unknown' : 'None')
-  const display = `${d.refund ? '−' : ''}$${d.amount || '0'}`
+  const display = `${d.refund ? '−' : ''}${formatCents(cents)}`
   const mainActive = d.target === 'main'
 
   return (
@@ -230,7 +230,7 @@ export default function Entry() {
 
           <Tap feedback="opacity" onPress={() => { set({ target: 'main' }); setPad(true) }} accessibilityLabel={`Amount ${display}`}
             style={{ alignItems: 'center', paddingVertical: space.s }}>
-            <RollingText text={display} style={{ fontSize: 60, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
+            <RollingText text={display} style={{ fontSize: display.length > 11 ? 46 : display.length > 9 ? 52 : 60, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
             {d.split && (
               <Txt variant="sub" tone={left === 0 ? 'pos' : 'label2'} num>
                 {left === 0 ? 'Split adds up' : `${formatCents(Math.abs(left))} ${left > 0 ? 'left to split' : 'over the total'}`}
@@ -293,7 +293,7 @@ export default function Entry() {
                     trailing={
                       <Tap feedback="opacity" onPress={() => { set({ target: l.key }); setPad(true) }} hitSlop={8}
                         style={{ minWidth: 88, height: 34, borderRadius: radius.pill, paddingHorizontal: space.m, alignItems: 'flex-end', justifyContent: 'center', backgroundColor: active ? c.ink : c.fill }}>
-                        <Txt variant="callout" num tone={active ? 'onInk' : 'label'} style={{ fontWeight: '600' }}>${l.amount || '0'}</Txt>
+                        <Txt variant="callout" num tone={active ? 'onInk' : 'label'} style={{ fontWeight: '600' }}>{formatCents(toCents(l.amount))}</Txt>
                       </Tap>
                     } chevron={false} />
                 )

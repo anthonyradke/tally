@@ -6,19 +6,24 @@ import { amountsById, budgetAmount, initial } from '@/lib/forms'
 import { rand } from './util.ts'
 import { row } from './fixtures.ts'
 
-const type = (keys: string) => [...keys].reduce((s, k) => press(s, k === '<' ? 'del' : k), '')
+const type = (keys: string) => [...keys].reduce((s, k) => press(s, k === '<' ? 'del' : k === 'D' ? '00' : k), '')
 
-test('keypad: two decimals, no leading zeros, capped at $9,999,999', () => {
-  assert.equal(type('0012.345'), '12.34')
-  assert.equal(type('.5'), '0.5')
-  assert.equal(type('1..2'), '1.2')
+test('keypad: digits shift in from the right, no leading zeros, capped at $9,999,999.99', () => {
+  assert.equal(type('150'), '1.50')
+  assert.equal(type('1'), '0.01')
+  assert.equal(type('0012345'), '123.45')
+  assert.equal(type('15D'), '15.00')
+  assert.equal(type('150<'), '0.15')
   assert.equal(type('12<<'), '')
   assert.equal(type('<'), '')
-  assert.equal(type('99999999'), '9999999')
-  assert.equal(type('9999998.99'), '9999998.99')
-  assert.equal(type('9999999.9'), '9999999.') // the cap is whole dollars
-  assert.equal(type('0'), '0')
-  assert.equal(type('00'), '0')
+  assert.equal(type('0'), '')
+  assert.equal(type('D'), '')
+  assert.equal(type('999999999'), '9999999.99')
+  assert.equal(type('9999999999'), '9999999.99')
+  assert.equal(type('9999999D'), '9999999.00')
+  assert.equal(type('99999999D'), '999999.99') // 00 that would pass the cap is ignored whole
+  assert.equal(press('15', '0'), '150.00') // an amount loaded from an entry keeps its value and keeps shifting
+  assert.equal(press('12.5', 'del'), '1.25')
 })
 
 test('toCents and fromCents', () => {
