@@ -52,7 +52,7 @@ test('late at night the date is still today', () => {
   assert.equal(toISO(new Date(2026, 10, 1, 1, 30)), '2026-11-01') // the repeated hour when DST ends
 })
 
-test('monthBefore works east of UTC too', { todo: 'bug: toISOString shifts the date east of UTC' }, () => {
+test('monthBefore works east of UTC too', () => {
   for (const tz of ['Europe/Berlin', 'Asia/Tokyo', 'Pacific/Auckland']) {
     inZone(tz, () => {
       assert.equal(monthBefore('2026-09-24'), '2026-08-01', tz)

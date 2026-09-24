@@ -20,7 +20,7 @@ import { categoryVisual } from '@/icons/categories'
 import type { Bootstrap, MonthRow } from '@/lib/api'
 import { budgetFor, elapsed, paceOver } from '@/lib/budgets'
 import { useTransactions } from '@/lib/data'
-import { fromISO, monthLabel } from '@/lib/dates'
+import { addDays, fromISO, monthLabel } from '@/lib/dates'
 import { compactCents, formatCents, pct } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
 import { usePace } from '@/lib/pace'
@@ -315,8 +315,7 @@ function Goal({ b, kind, wide }: { b: Bootstrap; kind: 'ef' | 'roth'; wide?: boo
 
 function Upcoming({ b }: { b: Bootstrap }) {
   const t = useTally()
-  const end = new Date(fromISO(b.today)); end.setDate(end.getDate() + 30)
-  const q = useTransactions({ start: b.today, end: end.toISOString().slice(0, 10), sort: 'date', dir: 'asc', limit: 6 })
+  const q = useTransactions({ start: b.today, end: addDays(b.today, 30), sort: 'date', dir: 'asc', limit: 6 })
   const rows = (q.data?.items ?? []).filter((x) => x.date > b.today)
   if (!rows.length) return null
   return (
