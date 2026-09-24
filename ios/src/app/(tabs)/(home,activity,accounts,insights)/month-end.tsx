@@ -132,7 +132,7 @@ export default function MonthEnd() {
 function Field({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const { c } = useTheme()
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: c.fill, borderRadius: radius.input, paddingHorizontal: space.m, height: 36, minWidth: 120 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: c.fill, borderRadius: radius.input, paddingHorizontal: space.m, height: 36, width: 128 }}>
       <Txt variant="body" tone="label2">$</Txt>
       <TextInput value={value} onChangeText={(v) => onChange(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.label3}
         style={{ flex: 1, minWidth: 48, fontSize: 17, color: c.label, textAlign: 'right', fontVariant: ['tabular-nums'] }} />
