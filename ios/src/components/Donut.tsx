@@ -16,16 +16,15 @@ export function Donut({ slices, size = 200, stroke = 22, selected }: { slices: {
   const len = 2 * Math.PI * r
   const total = slices.reduce((n, s) => n + s.value, 0) || 1
   const gap = slices.length > 1 ? 3 : 0
-  let acc = 0
+  // Where each arc starts: the running total of the slices before it.
+  const starts = slices.map((_, i) => slices.slice(0, i).reduce((n, x) => n + (x.value / total) * len, 0))
   return (
     <Svg width={size} height={size}>
       <G rotation={-90} origin={`${size / 2}, ${size / 2}`}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={c.fill} strokeWidth={stroke} fill="none" />
-        {slices.map((s) => {
+        {slices.map((s, i) => {
           const seg = (s.value / total) * len
-          const start = acc
-          acc += seg
-          return <Arc key={s.key} r={r} size={size} stroke={stroke} len={len} seg={Math.max(0, seg - gap)} start={start}
+          return <Arc key={s.key} r={r} size={size} stroke={stroke} len={len} seg={Math.max(0, seg - gap)} start={starts[i]}
             color={s.color} dim={!!selected && selected !== s.key} p={p} />
         })}
       </G>

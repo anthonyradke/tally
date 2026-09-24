@@ -96,7 +96,7 @@ export default function Activity() {
       {queued.length > 0 && (
         <View style={{ marginHorizontal: space.l, padding: space.m, borderRadius: radius.input, backgroundColor: c.panel, flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
           <Icon sf="icloud.and.arrow.up" md="cloud_upload" size={16} color={c.warn} />
-          <Txt variant="sub" style={{ flex: 1 }}>{queued.length === 1 ? '1 entry is' : `${queued.length} entries are`} waiting to reach Tally. They'll send when you're back on Tailscale.</Txt>
+          <Txt variant="sub" style={{ flex: 1 }}>{queued.length === 1 ? '1 entry is' : `${queued.length} entries are`} {"waiting to reach Tally. They'll send when you're back on Tailscale."}</Txt>
         </View>
       )}
       {filtered && first && (
