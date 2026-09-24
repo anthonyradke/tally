@@ -10,7 +10,7 @@ const files = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
 })
 const src = new URL('../src/', import.meta.url).pathname
 
-test('toolbar items are direct children of Stack.Toolbar', { todo: 'bug: Activity buttons are in a fragment' }, () => {
+test('toolbar items are direct children of Stack.Toolbar', () => {
   // expo-router keeps only Button/Menu/Spacer/View children (processHeaderItemsForPlatform.ios); a fragment is
   // dropped without a word in Release builds, taking every button inside it along.
   const bad: string[] = []

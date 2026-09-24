@@ -122,17 +122,16 @@ export default function Activity() {
         <Stack.SearchBar placeholder="Entries, notes, tags, amounts" onChangeText={(e) => set({ q: e.nativeEvent.text })}
           onCancelButtonPress={() => set({ q: '' })} hideWhenScrolling={false} />
       )}
+      {/* Buttons are direct children (arrays, not a fragment): the native toolbar silently drops a fragment. */}
       <Stack.Toolbar placement="right">
-        {selecting ? (
-          <Stack.Toolbar.Button variant="done" onPress={endSelect}>Done</Stack.Toolbar.Button>
-        ) : (
-          <>
-            <Stack.Toolbar.Button icon={extra ? 'line.3.horizontal.decrease.circle.fill' : 'line.3.horizontal.decrease.circle'}
-              accessibilityLabel={extra ? `Filters, ${extra} on` : 'Filters'} onPress={() => router.push('/filters')} />
-            <Stack.Toolbar.Button icon="checkmark.circle" accessibilityLabel="Select entries" onPress={() => setSelecting(true)} />
-            <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" variant="prominent" tintColor={c.ink} onPress={() => router.push('/entry')} />
-          </>
-        )}
+        {selecting ? [
+          <Stack.Toolbar.Button key="done" variant="done" onPress={endSelect}>Done</Stack.Toolbar.Button>,
+        ] : [
+          <Stack.Toolbar.Button key="filters" icon={extra ? 'line.3.horizontal.decrease.circle.fill' : 'line.3.horizontal.decrease.circle'}
+            accessibilityLabel={extra ? `Filters, ${extra} on` : 'Filters'} onPress={() => router.push('/filters')} />,
+          <Stack.Toolbar.Button key="select" icon="checkmark.circle" accessibilityLabel="Select entries" onPress={() => setSelecting(true)} />,
+          <Stack.Toolbar.Button key="add" icon="plus" accessibilityLabel="Add an entry" variant="prominent" tintColor={c.ink} onPress={() => router.push('/entry')} />,
+        ]}
       </Stack.Toolbar>
       <View style={{ flex: 1, backgroundColor: c.bg }} collapsable={false}>
         <FlashList
