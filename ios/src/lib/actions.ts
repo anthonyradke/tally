@@ -37,5 +37,12 @@ async function undo(gone: Txn[]) {
   }
 }
 
-export const openEntry = (id?: number, mode?: 'duplicate') =>
+/** Opens the composer. A second call while the first modal is still presenting is dropped: a tap on a row could
+ *  reach both the Link and the row's own press and stack two copies of the same entry. */
+let opened = 0
+export function openEntry(id?: number, mode?: 'duplicate') {
+  const now = Date.now()
+  if (now - opened < 700) return
+  opened = now
   router.push({ pathname: '/entry', params: id ? { id: String(id), ...(mode ? { mode } : {}) } : {} })
+}
