@@ -65,7 +65,7 @@ test('filters: badge count and the query sent to the server', () => {
     start: undefined, end: undefined, tag: undefined, group: undefined, sort: 'date', dir: 'desc' })
 })
 
-test('a saved view brings back the filters it saved', { todo: 'bug: group is dropped' }, () => {
+test('a saved view brings back the filters it saved', () => {
   const f: Filters = { q: 'café & co', type: 'Spending', category: 3, account: 1, start: '2026-09-01', end: '2026-09-30',
     tag: 'trip', group: 'abc123def456', sort: 'amount', dir: 'asc' }
   assert.deepEqual(fromViewQuery(viewQuery(f)), f)
