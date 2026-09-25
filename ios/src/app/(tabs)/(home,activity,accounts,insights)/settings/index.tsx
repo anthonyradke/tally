@@ -6,6 +6,7 @@ import { Icon } from '@/components/Icon'
 import { Group, Row } from '@/components/Row'
 import { Txt } from '@/components/Txt'
 import { api } from '@/lib/api'
+import { iconLabel, useAppIcon } from '@/lib/appIcon'
 import { useOutbox } from '@/lib/outbox'
 import { useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
@@ -21,6 +22,7 @@ export default function Settings() {
   const { b } = useTally()
   const url = useServer((s) => s.url)
   const queued = useOutbox((s) => s.items)
+  const icon = useAppIcon((s) => s.name)
   const backups = useQuery({ queryKey: ['backups'], queryFn: api.backups })
   const last = backups.data?.latest
   const stale = last ? Date.now() - new Date(last.at).getTime() > 36 * 36e5 : false
@@ -42,6 +44,7 @@ export default function Settings() {
         </Group>
         <Group header="App">
           <Row label="Theme" value={themeById(theme).name} sf="paintpalette" md="palette" href="/settings/theme" />
+          <Row label="App icon" value={iconLabel(icon)} sf="app.badge" md="apps" href="/settings/icon" />
           <Row label="Home screen" sub="Choose and order what Home shows" sf="square.stack" md="dashboard" href="/settings/home" />
           <Row label="Server" value={url ? url.replace(/^https?:\/\//, '').split('.')[0] : process.env.EXPO_OS === 'web' ? 'This site' : 'Not set'} sf="server.rack" md="dns" href="/settings/server" />
           {queued.length > 0 && <Row label="Waiting to send" value={String(queued.length)} sf="icloud.and.arrow.up" md="cloud_upload" href="/settings/server" />}

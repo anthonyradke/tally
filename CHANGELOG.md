@@ -18,6 +18,9 @@ Added
 - The + on an account's page starts the new entry from that account.
 - Swipe the Undo toast down to put it away.
 - The emergency fund and Roth cards on Home open something when tapped.
+- Settings → App icon: pick a new home screen icon, a glowing lowercase t in Classic or any theme's colors, on
+  black or on white. The original icon stays the default.
+- Tally Dev has its own icon: an orange glowing t with a DEV tag.
 
 Changed
 - A new entry starts empty: no category or account is picked for you, and switching between Spent, Income and the
