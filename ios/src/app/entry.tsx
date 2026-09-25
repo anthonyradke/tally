@@ -2,19 +2,17 @@
 // A new entry starts empty: no category or account is guessed for you.
 // New entries go through the outbox, so saving never fails just because the phone is off Tailscale.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { TextInput as TextInputT, View as ViewT } from 'react-native'
 import { ScrollView, Switch, TextInput, View } from 'react-native'
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, ZoomIn } from 'react-native-reanimated'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Image } from 'expo-image'
 import * as Haptics from 'expo-haptics'
-import * as ImagePicker from 'expo-image-picker'
 import { CheckDraw } from '@/components/CheckDraw'
 import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
 import { Keypad } from '@/components/Keypad'
+import { Receipt } from '@/components/Receipt'
 import { Mark } from '@/components/Mark'
 import { Segmented } from '@/components/native/Segmented'
 import { RollingText } from '@/components/Rolling'
@@ -24,7 +22,7 @@ import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import { merchantKey } from '@/icons/merchants'
-import { api, ApiError, unreachable, type CatType, type Txn } from '@/lib/api'
+import { api, ApiError, type CatType, type Txn } from '@/lib/api'
 import { close } from '@/lib/nav'
 import { deleteTxns } from '@/lib/actions'
 import { useTransactions, invalidateAll } from '@/lib/data'
@@ -32,7 +30,7 @@ import { addDays, dayLabel } from '@/lib/dates'
 import { blank, fromCents, fromTxn, press, toCents, toInputs, useDraft, type Draft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { markFresh, useQuickFloat } from '@/lib/motion'
-import { enqueue, newClientId, send } from '@/lib/outbox'
+import { QUEUED, sendOrQueue } from '@/lib/outbox'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
@@ -44,7 +42,8 @@ export default function Entry() {
   const { c, tint } = useTheme()
   const insets = useSafeAreaInsets()
   const t = useTally()
-  const { id, mode, fav, from } = useLocalSearchParams<{ id?: string; mode?: string; fav?: string; from?: string }>()
+  // keep: the new-entry steps handed over their draft (to split it), so it isn't seeded again.
+  const { id, mode, fav, from, keep } = useLocalSearchParams<{ id?: string; mode?: string; fav?: string; from?: string; keep?: string }>()
   const { d, set, reset, setLine } = useDraft()
   const [typing, setTyping] = useState(false)
   const [pad, setPad] = useState(!id)
@@ -63,6 +62,7 @@ export default function Entry() {
   // Seed the draft once: edit, duplicate, a quick action, or a blank entry with sensible defaults.
   useEffect(() => {
     if (loaded.current || !t.b) return
+    if (keep) { loaded.current = true; return }
     const today = t.b.today
     if (id) {
       if (!one.data) return
@@ -153,18 +153,14 @@ export default function Entry() {
         saved = [await api.updateTxn(Number(id), lines[0])]
         if (d.removeReceipt && d.receipt) await api.deleteReceipt(Number(id))
       } else {
-        const cid = newClientId()
-        try {
-          const r = await send(lines, cid)
-          saved = Array.isArray(r) ? r : [r]
-        } catch (e) {
-          if (!unreachable(e)) throw e
-          enqueue({ cid, lines, label: d.what || (cat?.name ?? 'Entry') })
+        const r = await sendOrQueue(lines, d.what || (cat?.name ?? 'Entry'))
+        if (!r) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {})
-          toast({ text: 'Saved on your phone. It will reach Tally when you are back on Tailscale.' })
+          toast({ text: QUEUED })
           close()
           return
         }
+        saved = r
       }
       if (d.photo && saved[0]) await api.uploadReceipt(saved[0].id, d.photo).catch(() => toast({ text: 'Saved, but the receipt photo did not upload.', tone: 'error' }))
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
@@ -183,22 +179,14 @@ export default function Entry() {
     }
   }
 
-  async function addPhoto(camera: boolean) {
-    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.6 }
-    const r = camera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts)
-    if (r.canceled || !r.assets[0]) return
-    const a = r.assets[0]
-    set({ photo: { uri: a.uri, name: a.fileName ?? 'receipt.jpg', type: a.mimeType ?? 'image/jpeg' }, removeReceipt: false })
-  }
 
   const v = cat ? categoryVisual(cat) : null
   const acctName = (a: number | null) => (a ? t.acct.get(a)?.name ?? 'Unknown' : 'None')
   const display = `${d.refund ? '−' : ''}${formatCents(cents)}`
   const mainActive = d.target === 'main'
 
-  // The keypad is a raised panel that springs up from the bottom over the save button. Typing the total, it reaches up
-  // to just under the amount, so the keys get the whole lower screen instead of crowding the form; for a split line it
-  // keeps its natural height. Next sends it down and moves on to "What was it?"; Save saves. It stays mounted (a layout animation here could be cut short and leave it stuck halfway off the screen).
+  // The keypad is a raised panel that springs up from the bottom over the save button, and Done sends it back down.
+  // It stays mounted (a layout animation here could be cut short and leave it stuck halfway off the screen).
   const reduce = useReducedMotion()
   const showPad = pad && !typing
   const padT = useSharedValue(showPad ? 1 : 0)
@@ -207,23 +195,12 @@ export default function Entry() {
     padT.set(reduce ? (showPad ? 1 : 0) : withSpring(showPad ? 1 : 0, { damping: 30, stiffness: 320, mass: 0.9 }))
   }, [showPad]) // eslint-disable-line react-hooks/exhaustive-deps
   const padStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - padT.get()) * (padH + 30) }] }))
-  const screenRef = useRef<ViewT>(null)
-  const amountRef = useRef<ViewT>(null)
-  const whatRef = useRef<TextInputT>(null)
-  const [padTop, setPadTop] = useState<number | null>(null)
-  const measurePad = () => {
-    amountRef.current?.measureInWindow((_x, y, _w, h) => {
-      screenRef.current?.measureInWindow((_cx, cy) => { if (h) setPadTop(Math.max(y + h - cy + space.s, 0)) })
-    })
-  }
   const openPad = (target: string) => {
     if (!pad) Haptics.selectionAsync().catch(() => {})
-    if (target === 'main') measurePad()
     set({ target })
     setPad(true)
   }
-  const next = () => { Haptics.selectionAsync().catch(() => {}); setPad(false); if (mainActive) whatRef.current?.focus() }
-  const tall = mainActive && padTop != null
+  const closePad = () => { Haptics.selectionAsync().catch(() => {}); setPad(false) }
 
   return (
     <>
@@ -243,7 +220,7 @@ export default function Entry() {
           </Stack.Toolbar.Menu>
         </Stack.Toolbar>
       )}
-      <View ref={screenRef} style={{ flex: 1, backgroundColor: c.bg }}>
+      <View style={{ flex: 1, backgroundColor: c.bg }}>
         <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentInsetAdjustmentBehavior="automatic"
           automaticallyAdjustKeyboardInsets onScrollBeginDrag={() => { if (pad) setPad(false) }}
           contentContainerStyle={{ padding: space.l, gap: space.l, paddingBottom: space.xxl }}>
@@ -270,7 +247,6 @@ export default function Entry() {
             </ScrollView>
           )}
 
-          <View ref={amountRef} collapsable={false} onLayout={() => { if (showPad && mainActive) measurePad() }}>
           <Tap feedback="opacity" onPress={() => openPad('main')} accessibilityLabel={`Amount ${display}`}
             style={{ alignItems: 'center', paddingVertical: space.s }}>
             <Animated.View style={shakeStyle}>
@@ -282,10 +258,9 @@ export default function Entry() {
               </Txt>
             )}
           </Tap>
-          </View>
 
           <View style={{ gap: space.s }}>
-            <TextInput ref={whatRef} value={d.what} onChangeText={(what) => set({ what })} placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'}
+            <TextInput value={d.what} onChangeText={(what) => set({ what })} placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'}
               placeholderTextColor={c.label3} onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} returnKeyType="done"
               autoCapitalize="words" autoCorrect={false} maxFontSizeMultiplier={1.4}
               style={{ fontSize: 22, fontWeight: '600', textAlign: 'center', color: c.label, paddingVertical: space.s }} />
@@ -364,7 +339,7 @@ export default function Entry() {
                 onChangeText={(v) => { setTagText(v); set({ tags: v.split(/\s+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean) }) }}
                 style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
             </View>
-            <Receipt d={d} onAdd={addPhoto} onRemove={() => set({ photo: null, removeReceipt: true })} />
+            <Receipt />
           </Group>
 
           {errors.length > 0 && (
@@ -389,22 +364,16 @@ export default function Entry() {
 
         <Animated.View pointerEvents={showPad ? 'auto' : 'none'} onLayout={(e) => setPadH(e.nativeEvent.layout.height)}
           accessibilityElementsHidden={!showPad} importantForAccessibility={showPad ? 'auto' : 'no-hide-descendants'}
-          style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, top: tall ? padTop : undefined, backgroundColor: c.panel, borderTopLeftRadius: radius.panel, borderTopRightRadius: radius.panel,
+          style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: c.panel, borderTopLeftRadius: radius.panel, borderTopRightRadius: radius.panel,
             borderCurve: 'continuous', paddingHorizontal: space.l, paddingTop: space.m, paddingBottom: insets.bottom + space.xs, boxShadow: '0 -8px 30px rgba(0,0,0,0.22)' }, padStyle]}>
-          {!mainActive && <Txt variant="foot" tone="label2" style={{ paddingHorizontal: space.xs, paddingBottom: space.s }}>Typing into the split line. Tap the total to edit it.</Txt>}
-          <View style={tall ? { flex: 1 } : { height: 4 * 58 + 3 * 8 }}>
-            <Keypad onKey={onKey} onClear={onClear} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, minHeight: 36, paddingHorizontal: space.xs }}>
+            <Txt variant="foot" tone="label2" style={{ flex: 1 }} numberOfLines={2}>{mainActive ? '' : 'Typing into the split line. Tap the total to edit it.'}</Txt>
+            <Tap onPress={closePad} hitSlop={12} accessibilityLabel="Done with the amount"
+              style={{ height: 34, paddingHorizontal: space.l + 2, borderRadius: radius.pill, backgroundColor: c.ink, justifyContent: 'center' }}>
+              <Txt variant="callout" tone="onInk" style={{ fontWeight: '600' }}>Done</Txt>
+            </Tap>
           </View>
-          <View style={{ flexDirection: 'row', gap: space.s, marginTop: space.m }}>
-            <Button label="Next" secondary onPress={next} style={{ flex: 1, height: 52 }} />
-            {done ? (
-              <Animated.View entering={ZoomIn.duration(180)} style={{ flex: 1, height: 52, borderRadius: radius.pill, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}>
-                <CheckDraw size={24} color={c.onInk} />
-              </Animated.View>
-            ) : (
-              <Button label={saving ? 'Saving…' : editing ? 'Save' : cents ? `Add ${formatCents(cents)}` : 'Add'} onPress={save} disabled={saving} style={{ flex: 1, height: 52 }} />
-            )}
-          </View>
+          <Keypad onKey={onKey} onClear={onClear} />
         </Animated.View>
       </View>
     </>
@@ -414,26 +383,4 @@ export default function Entry() {
 function EmptyMark() {
   const { c } = useTheme()
   return <View style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: c.label3, borderStyle: 'dashed' }} />
-}
-
-function Receipt({ d, onAdd, onRemove }: { d: Draft; onAdd: (camera: boolean) => void; onRemove: () => void }) {
-  const { c } = useTheme()
-  const uri = d.photo?.uri ?? (d.receipt && !d.removeReceipt ? api.receiptUrl(d.receipt) : null)
-  if (uri) {
-    return (
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.m, paddingLeft: space.l }}>
-        <Image source={{ uri }} style={{ width: 48, height: 64, borderRadius: 8 }} contentFit="cover" />
-        <Txt variant="body" style={{ flex: 1 }}>Receipt</Txt>
-        <Tap feedback="opacity" onPress={onRemove} hitSlop={10}><Txt variant="callout" tone="neg">Remove</Txt></Tap>
-      </View>
-    )
-  }
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
-      <Icon sf="doc.text.viewfinder" md="document_scanner" size={18} color={c.label2} />
-      <Txt variant="body" tone="label3" style={{ flex: 1 }}>Receipt</Txt>
-      {process.env.EXPO_OS === 'ios' && <Tap feedback="opacity" onPress={() => onAdd(true)} hitSlop={8} accessibilityLabel="Take a photo of the receipt"><Icon sf="camera" md="photo_camera" size={20} color={c.label} /></Tap>}
-      <Tap feedback="opacity" onPress={() => onAdd(false)} hitSlop={8} accessibilityLabel="Choose a receipt photo"><Icon sf="photo" md="image" size={20} color={c.label} /></Tap>
-    </View>
-  )
 }

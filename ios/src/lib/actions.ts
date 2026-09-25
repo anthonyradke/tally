@@ -37,12 +37,13 @@ async function undo(gone: Txn[]) {
   }
 }
 
-/** Opens the composer. A second call while the first modal is still presenting (a quick double tap) is dropped, so
+/** Opens the composer: the new-entry steps, or the form for an existing entry. A second call while the first modal is still presenting (a quick double tap) is dropped, so
  *  it never stacks two copies of the same entry. */
 let opened = 0
 export function openEntry(id?: number, mode?: 'duplicate') {
   const now = Date.now()
   if (now - opened < 700) return
   opened = now
-  router.push({ pathname: '/entry', params: id ? { id: String(id), ...(mode ? { mode } : {}) } : {} })
+  if (!id) router.push('/add')
+  else router.push({ pathname: '/entry', params: { id: String(id), ...(mode ? { mode } : {}) } })
 }

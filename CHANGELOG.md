@@ -10,6 +10,12 @@ release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
 ## Unreleased (next: 3.3.0)
 Added
+- Adding an entry is now a few quick steps instead of one long form: the amount and type on a full-screen keypad,
+  then what it was, the category and the account, and a review with Add. Tapping a choice moves on by itself, and
+  Back and Next are always there. Picking a past entry under "What was it?" fills in its category and account and
+  skips ahead, and so does a quick action.
+- The date in a new entry is this past week as a row of days, with the calendar a tap away, and "Add another" in the
+  toast starts the next entry on the same day, for catching up on a week at once.
 - Swipe actions on every entry, like Mail on iOS 26. Swipe left for Category, Edit and Delete, right for Duplicate.
   The actions appear as circles that grow as you swipe; keep going and the last one stretches into a pill with a
   haptic tick, and letting go runs it. A half swipe rests open, and tapping the row, swiping another one or
@@ -25,8 +31,8 @@ Added
 Changed
 - A new entry starts empty: no category or account is picked for you, and switching between Spent, Income and the
   rest no longer picks one either.
-- The amount keypad is its own raised panel with a Done button, and it springs up and slides back down over the
-  save button.
+- Editing an entry, the amount keypad is its own raised panel with a Done button, and it springs up and slides back
+  down over the save button.
 - Quick actions in a new entry can be undone: tap the highlighted one again to clear what it filled in. They stay
   put while you type, so the form no longer jumps.
 - Select mode in Activity slides a check circle into every row at once, and its action bar slides up.
