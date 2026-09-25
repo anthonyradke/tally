@@ -64,7 +64,7 @@ export default function AccountDetail() {
     <>
       <Stack.Screen options={{ title: a.name, headerLargeTitle: false }} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" onPress={() => router.push({ pathname: '/add', params: { from: String(a.id) } })} />
+        <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" onPress={() => router.push({ pathname: '/new', params: { from: String(a.id) } })} />
       </Stack.Toolbar>
       <ScrollView onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
         <View style={{ gap: space.m, marginBottom: space.section - 4 }}>
