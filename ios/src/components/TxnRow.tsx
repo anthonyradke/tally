@@ -34,9 +34,11 @@ function accountLine(t: Txn, c: Category, acct: Map<number, Account>): string {
 /** An entry. Tap opens it, long press has a menu, swipes have actions (see SwipeRow). In a list that can select,
  *  `sel` (0 → 1, shared by every row so the whole list animates at once without re-rendering) slides a check circle
  *  in, and taps toggle `selected` instead. */
-export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, sel, selected, onSelect }: {
+export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, sel, selected, onSelect, padTop = 0, padBottom = 0 }: {
   t: Txn; c: Category; acct: Map<number, Account>; mark: MarkSpec | null; today: string; showDate?: string
   sel?: SharedValue<number>; selected?: boolean; onSelect?: (id: number) => void
+  /** Extra padding for the first/last row of a group, inside the row so the highlight fills the group's corners. */
+  padTop?: number; padBottom?: number
 }) {
   const theme = useTheme()
   const v = categoryVisual(c)
@@ -62,7 +64,8 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
   })
   const row = (
     <LinkRow feedback="highlight" onPress={web ? press : undefined}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m, backgroundColor: theme.c.panel }}>
+      style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingTop: space.m + padTop, paddingBottom: space.m + padBottom, backgroundColor: theme.c.panel }}>
+      {selecting && selected && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.c.fill }]} />}
       {sel && (
         <Animated.View style={[{ alignItems: 'flex-start', overflow: 'hidden' }, check]}>
           <Icon sf={selected ? 'checkmark.circle.fill' : 'circle'} md={selected ? 'check_circle' : 'radio_button_unchecked'} size={24}
