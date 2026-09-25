@@ -3,8 +3,8 @@
 // quick action fills in what it knows, and Next skips those steps. Editing an entry uses the form (entry.tsx).
 // A new entry starts empty: no category or account is guessed for you.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ScrollView, Switch, TextInput, View } from 'react-native'
-import Animated, { FadeInLeft, FadeInRight, useAnimatedKeyboard, useAnimatedStyle, ZoomIn } from 'react-native-reanimated'
+import { Keyboard, ScrollView, Switch, TextInput, View } from 'react-native'
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming, ZoomIn } from 'react-native-reanimated'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
@@ -42,7 +42,7 @@ import { radius, space, useTheme } from '@/theme'
 const KINDS: [CatType, string][] = [['Spending', 'Spent'], ['Money in', 'Income'], ['Transfer', 'Transfer'], ['Saving', 'Saving'], ['Loan', 'Loan']]
 const KIND_ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
 
-export default function Add() {
+export default function New() {
   const { c, tint } = useTheme()
   const insets = useSafeAreaInsets()
   const t = useTally()
@@ -140,7 +140,7 @@ export default function Add() {
     setErrors(errs)
     if (errs.length) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}); return }
     setSaving(true)
-    const again = { label: 'Add another', run: () => { router.push({ pathname: '/add', params: { date: d.date } }) } }
+    const again = { label: 'Add another', run: () => { router.push({ pathname: '/new', params: { date: d.date } }) } }
     try {
       const saved = await sendOrQueue(lines, d.what || (cat?.name ?? 'Entry'))
       if (!saved) {
@@ -167,9 +167,22 @@ export default function Add() {
     }
   }
 
+  // Each step slides in a little from the side it comes from. Only a slide, never a fade: a layout animation (or a
+  // fade) starting while the modal is still presenting can stay stuck and leave the screen blank.
+  const reduce = useReducedMotion()
+  const slide = useSharedValue(0)
+  useEffect(() => {
+    if (!reduce) slide.set(withSequence(withTiming(dir * 28, { duration: 0 }), withTiming(0, { duration: 220 })))
+  }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
+  const stepStyle = useAnimatedStyle(() => ({ transform: [{ translateX: slide.get() }] }))
+
   // The Back / Next bar rides on top of the keyboard while "What was it?" is being typed.
-  const kb = useAnimatedKeyboard()
-  const barStyle = useAnimatedStyle(() => ({ paddingBottom: Math.max(kb.height.get(), insets.bottom) + space.s }))
+  const [kbH, setKbH] = useState(0)
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardWillShow', (e) => setKbH(e.endCoordinates.height))
+    const hide = Keyboard.addListener('keyboardWillHide', () => setKbH(0))
+    return () => { show.remove(); hide.remove() }
+  }, [])
 
   const title = { amount: 'New entry', what: d.kind === 'Money in' ? 'Where from?' : 'What was it?', category: 'Category',
     from: d.kind === 'Spending' ? 'Paid from' : 'From', to: d.kind === 'Money in' ? 'Landed in' : 'To', review: 'Review' }[step]
@@ -189,7 +202,7 @@ export default function Add() {
           ))}
         </View>
 
-        <Animated.View key={step} entering={(dir > 0 ? FadeInRight : FadeInLeft).duration(200)} style={{ flex: 1 }}>
+        <Animated.View style={[{ flex: 1 }, stepStyle]}>
           {step === 'amount' && (
             <View style={{ flex: 1, paddingHorizontal: space.l, gap: space.l }}>
               <Segmented options={KINDS} value={d.kind} onChange={setKind} />
@@ -258,7 +271,7 @@ export default function Add() {
           )}
         </Animated.View>
 
-        <Animated.View style={[{ flexDirection: 'row', gap: space.s, paddingHorizontal: space.l, paddingTop: space.s }, barStyle]}>
+        <View style={{ flexDirection: 'row', gap: space.s, paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: Math.max(kbH, insets.bottom) + space.s }}>
           {at > 0 && <Button label="Back" secondary onPress={back} style={{ flex: 1, height: 52 }} />}
           {step !== 'review' ? (
             <Button label="Next" onPress={next} style={{ flex: 2, height: 52 }} />
@@ -271,7 +284,7 @@ export default function Add() {
           ) : (
             <Button label={saving ? 'Adding…' : `Add ${formatCents(cents)}`} onPress={save} disabled={saving} style={{ flex: 2, height: 52 }} />
           )}
-        </Animated.View>
+        </View>
       </View>
     </>
   )
@@ -388,9 +401,9 @@ function DateStrip() {
         })}
       </View>
       {cal && (
-        <Animated.View entering={FadeInRight.duration(160)} style={{ backgroundColor: c.panel, borderRadius: radius.panel, borderCurve: 'continuous', padding: space.s }}>
+        <View style={{ backgroundColor: c.panel, borderRadius: radius.panel, borderCurve: 'continuous', padding: space.s }}>
           <DatePick value={d.date} onChange={(date) => set({ date })} />
-        </Animated.View>
+        </View>
       )}
     </View>
   )

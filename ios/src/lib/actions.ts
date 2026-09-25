@@ -44,6 +44,6 @@ export function openEntry(id?: number, mode?: 'duplicate') {
   const now = Date.now()
   if (now - opened < 700) return
   opened = now
-  if (!id) router.push('/add')
+  if (!id) router.push('/new')
   else router.push({ pathname: '/entry', params: { id: String(id), ...(mode ? { mode } : {}) } })
 }

@@ -37,7 +37,7 @@ function RootStack() {
       {/* The composer and editor show a header; it's on from the start, since switching it on from inside a modal
           remounts the screen (and threw away the keypad's animation state). */}
       <Stack.Screen name="entry" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
-      <Stack.Screen name="add" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
+      <Stack.Screen name="new" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
       <Stack.Screen name="pick" options={{
         presentation: 'formSheet', sheetAllowedDetents: [0.6, 1], sheetGrabberVisible: true, headerShown: false,
         contentStyle: { backgroundColor: c.bg },
