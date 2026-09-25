@@ -8,13 +8,17 @@ import { Txt } from './Txt'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', 'del']
 
-/** The amount keypad (Cash App grammar: big keys, no chrome). Digits shift in from the right, so there's no decimal
+/** The amount keypad (Cash App grammar, Venmo's solid keys). Digits shift in from the right, so there's no decimal
  *  point key; 00 sits in its place. A tick on every press, like the system keyboard, and the key's label pops;
- *  holding delete clears. */
+ *  holding delete clears. The keys stretch to fill whatever height the keypad is given. */
 export const Keypad = memo(function Keypad({ onKey, onClear }: { onKey: (k: string) => void; onClear: () => void }) {
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-      {KEYS.map((k) => <Key key={k} k={k} onKey={onKey} onClear={onClear} />)}
+    <View style={{ flex: 1, gap: 8 }}>
+      {[0, 3, 6, 9].map((i) => (
+        <View key={i} style={{ flex: 1, flexDirection: 'row', gap: 8 }}>
+          {KEYS.slice(i, i + 3).map((k) => <Key key={k} k={k} onKey={onKey} onClear={onClear} />)}
+        </View>
+      ))}
     </View>
   )
 })
@@ -32,15 +36,13 @@ function Key({ k, onKey, onClear }: { k: string; onKey: (k: string) => void; onC
       onPressOut={() => { hl.set(withTiming(0, { duration: 260 })); if (!reduce) s.set(withSequence(withTiming(1.14, { duration: 90 }), withSpring(1, { damping: 12, stiffness: 320 }))) }}
       onPress={() => { Haptics.selectionAsync().catch(() => {}); onKey(k) }}
       onLongPress={k === 'del' ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClear() } : undefined}
-      style={{ width: '33.333%', height: 58, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ width: 72, height: 50, alignItems: 'center', justifyContent: 'center' }}>
-        <Animated.View style={[{ position: 'absolute', width: 72, height: 50, borderRadius: 25, backgroundColor: c.fill }, well]} />
-        <Animated.View style={pop}>
-          {k === 'del'
-            ? <Icon sf="delete.left" md="backspace" size={24} color={c.label} weight="medium" />
-            : <Txt style={{ fontSize: 28, fontWeight: '500', color: c.label }}>{k}</Txt>}
-        </Animated.View>
-      </View>
+      style={{ flex: 1, minHeight: 48, maxHeight: 84, borderRadius: 999, borderCurve: 'continuous', overflow: 'hidden', backgroundColor: c.fill, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: c.fill }, well]} />
+      <Animated.View style={pop}>
+        {k === 'del'
+          ? <Icon sf="delete.left" md="backspace" size={24} color={c.label} weight="medium" />
+          : <Txt style={{ fontSize: 28, fontWeight: '500', color: c.label }}>{k}</Txt>}
+      </Animated.View>
     </Pressable>
   )
 }

@@ -184,12 +184,12 @@ export default function Activity() {
                 marginHorizontal: space.l, backgroundColor: c.panel, overflow: 'hidden', borderCurve: 'continuous',
                 borderTopLeftRadius: item.first ? radius.panel : 0, borderTopRightRadius: item.first ? radius.panel : 0,
                 borderBottomLeftRadius: item.last ? radius.panel : 0, borderBottomRightRadius: item.last ? radius.panel : 0,
-                paddingTop: item.first ? space.xs : 0, paddingBottom: item.last ? space.xs : 0,
               }}>
                 {!item.first && <Divider sel={sel} />}
                 <TxnRow t={r} c={t.catOf(r)} acct={t.acct} mark={t.markFor(r.what)} today={t.b!.today}
                   showDate={f.sort === 'amount' ? dayLabel(r.date, t.b!.today) : undefined}
-                  sel={sel} selected={picked.has(r.id)} onSelect={selecting ? toggle : undefined} />
+                  sel={sel} selected={picked.has(r.id)} onSelect={selecting ? toggle : undefined}
+                  padTop={item.first ? space.xs : 0} padBottom={item.last ? space.xs : 0} />
               </View>
             )
           }}
