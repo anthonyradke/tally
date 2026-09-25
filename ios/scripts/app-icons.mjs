@@ -1,8 +1,10 @@
-// Renders the glowing lowercase-t app icons: one per theme on black and on white, plus a DEV pair for Tally Dev.
+// Renders the glowing lowercase-t app icons: Classic and one per theme, each on black and on white, plus a DEV pair for Tally Dev.
 // Saved to assets/app-icons/ for the icon picker. Run after changing the mark: node scripts/app-icons.mjs
 import { mkdirSync } from 'node:fs'
 import sharp from 'sharp'
 
+// Classic: a white letter on black and a black letter on white, each with a soft glow in its own color.
+const CLASSIC = { black: ['#FFFFFF', '#D9DAE3'], white: ['#2A2B33', '#000000'] }
 // Glow gradients per theme (top-left to bottom-right), matching the dark theme glows in src/theme/themes.ts.
 const THEMES = {
   aurora: ['#8B6CFF', '#2F8BFF'],
@@ -13,6 +15,7 @@ const THEMES = {
 }
 const DEV = ['#FFB340', '#FF6A00']
 const BGS = { black: { fill: '#05060B', glow: 0.75 }, white: { fill: '#FFFFFF', glow: 0.5 } }
+const CLASSIC_GLOW = { black: 0.55, white: 0.3 }
 
 const SIZE = 1024
 const SCALE = 0.74 // letter height is about 55% of the icon
@@ -49,6 +52,7 @@ const badge = (bg) => `<rect x="${SIZE / 2 - pillW / 2}" y="${pillY}" width="${p
 mkdirSync('assets/app-icons', { recursive: true })
 const write = async (name, svg) => { await sharp(Buffer.from(svg)).flatten().png().toFile(`assets/app-icons/${name}.png`); console.log(name) }
 for (const [bgName, bg] of Object.entries(BGS)) {
+  await write(`classic-${bgName}`, icon(CLASSIC[bgName], { ...bg, glow: CLASSIC_GLOW[bgName] }))
   for (const [theme, colors] of Object.entries(THEMES)) await write(`${theme}-${bgName}`, icon(colors, bg))
   await write(`dev-${bgName}`, icon(DEV, bg, { dy, badge: badge(bg) }))
 }
