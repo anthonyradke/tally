@@ -25,7 +25,7 @@ export default function TabLayout() {
         <NativeTabs.Trigger.Icon sf={{ default: 'list.bullet.rectangle', selected: 'list.bullet.rectangle.fill' }} md="receipt_long" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="add" disabled accessibilityLabel="Add an entry"
-        listeners={{ tabPress: () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); router.push('/entry') } }}>
+        listeners={{ tabPress: () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); router.push('/add') } }}>
         <NativeTabs.Trigger.Label>Add</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon src={dark ? add.dark : add.light} renderingMode="original" />
       </NativeTabs.Trigger>

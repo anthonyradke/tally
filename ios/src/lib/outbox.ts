@@ -3,7 +3,7 @@
 // adding a second one (app/api.py `_landed`). Edits, deletes and receipts still need a connection.
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { create } from 'zustand'
-import { api, ApiError, unreachable, type TxnInput } from './api'
+import { api, ApiError, unreachable, type Txn, type TxnInput } from './api'
 import { invalidateAll } from './data'
 
 export interface Queued { cid: string; lines: TxnInput[]; label: string; at: string; error?: string }
@@ -36,6 +36,22 @@ export const discard = (cid: string) => write(items().filter((x) => x.cid !== ci
 
 export const send = (lines: TxnInput[], cid: string) =>
   lines.length > 1 ? api.createSplit(lines, cid) : api.createTxn(lines[0], cid)
+
+export const QUEUED = 'Saved on your phone. It will reach Tally when you are back on Tailscale.'
+
+/** Adds new entries now, or keeps them on the phone when Tally can't be reached (then it returns null). A refusal
+ *  from Tally still throws. */
+export async function sendOrQueue(lines: TxnInput[], label: string): Promise<Txn[] | null> {
+  const cid = newClientId()
+  try {
+    const r = await send(lines, cid)
+    return Array.isArray(r) ? r : [r]
+  } catch (e) {
+    if (!unreachable(e)) throw e
+    enqueue({ cid, lines, label })
+    return null
+  }
+}
 
 let running: Promise<number> | null = null
 

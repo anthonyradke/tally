@@ -17,9 +17,15 @@ Changes to anything below get written here first.
   on pace to go over, and says by how much.
 - **A keypad for money.** Entering an amount is a full-width keypad with the figure rolling as you type (Cash App),
   never the system number pad. Digits shift in from the right like a till (1 5 0 reads $1.50); 00 replaces the
-  decimal point. The keypad springs up as its own raised panel with Done and slides back down over the save button.
-  A new entry starts empty (no guessed category or account); a quick action chip fills it, and tapping it again
-  takes it back out.
+  decimal point. In a new entry the keypad is the whole first screen; editing an entry, it springs up as its own
+  raised panel with Done and slides back down over the save button.
+- **A new entry is a few questions, one at a time.** Amount and type, what it was, category, the accounts the type
+  uses, then a review with the date and Add. Tapping an answer moves on; Back and Next are always there, and dots at
+  the top show where you are. Picking a past entry under "What was it?" or a quick action chip fills in what it
+  knows, and Next skips those steps. The date is the past week as a row of days (entries often get caught up at the
+  end of the week) plus the calendar, and "Add another" in the toast starts the next entry on the same day. A new
+  entry starts empty (no guessed category or account); tapping a quick action again takes it back out. Splitting
+  hands the draft to the full form.
 - **Swipe rows like Mail (iOS 26).** Right: Duplicate. Left: Category, Edit, Delete. The actions come up as circles
   that grow with the swipe; keep going and the edge one (Duplicate, Delete) stretches into a capsule with a tick, and
   letting go runs it (Delete slides the row away, then it folds shut). A half swipe rests open; tapping the row,
@@ -30,7 +36,7 @@ Changes to anything below get written here first.
   minimizes on scroll). The + in the middle opens the composer from anywhere; it's the only way in, so tab headers carry
   no + of their own. Tabs are peers; re-tapping one pops to its root. Settings is a gear on Home.
 - Each tab is a native stack with a large title. Detail screens (account, category, month end, settings) push.
-- Adding or editing an entry is a modal with its own close and save. Short choices (category, account, date, bulk
+- Adding an entry is a modal of short steps; editing one is a modal form with its own close and save. Short choices (category, account, date, bulk
   actions, filters, reconcile) are form sheets with a grabber. Nothing uses a confirm dialog: deletes happen and
   offer Undo.
 

@@ -222,7 +222,7 @@ function QuickAdd({ b }: { b: Bootstrap }) {
             <View key={f.id}>
               <Chip label={f.label}
                 leading={v ? <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={28} /> : undefined}
-                onPress={() => router.push({ pathname: '/entry', params: { fav: String(f.id) } })} />
+                onPress={() => router.push({ pathname: '/add', params: { fav: String(f.id) } })} />
               {float?.fav === f.id && <FloatUp key={float.key} text={formatCents(float.cents)} color={v ? tint(v.tint) : undefined} />}
             </View>
           )
