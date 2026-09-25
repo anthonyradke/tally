@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshControl, ScrollView, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import * as Haptics from 'expo-haptics'
+import Animated, { Easing, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
 import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
 import { Money } from '@/components/Money'
 import { Glow } from '@/components/Glow'
-import { Hairline } from '@/components/Panel'
 import { StateView } from '@/components/StateView'
+import { closeSwipes } from '@/components/SwipeRow'
 import { Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
@@ -77,11 +78,24 @@ export default function Activity() {
 
   const filtered = !!(f.q || f.type || extraCount(f))
   const extra = extraCount(f)
-  const toggle = (id: number) => {
+  const toggle = useCallback((id: number) => {
     Haptics.selectionAsync().catch(() => {})
     setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }, [])
+  // Select mode: one shared value slides every row's check circle in together on the UI thread, so entering and
+  // leaving it doesn't rebuild the list.
+  const sel = useSharedValue(0)
+  const startSelect = () => {
+    closeSwipes()
+    Haptics.selectionAsync().catch(() => {})
+    setSelecting(true)
+    sel.set(withTiming(1, { duration: 280, easing: Easing.bezier(0.23, 1, 0.32, 1) }))
   }
-  const endSelect = () => { setSelecting(false); setPicked(new Set()) }
+  const endSelect = () => {
+    setSelecting(false)
+    setPicked(new Set())
+    sel.set(withTiming(0, { duration: 240, easing: Easing.bezier(0.23, 1, 0.32, 1) }))
+  }
   const chosen = rows.filter((r) => picked.has(r.id))
 
   const header = (
@@ -133,7 +147,7 @@ export default function Activity() {
         ] : [
           <Stack.Toolbar.Button key="filters" icon={extra ? 'line.3.horizontal.decrease.circle.fill' : 'line.3.horizontal.decrease.circle'}
             accessibilityLabel={extra ? `Filters, ${extra} on` : 'Filters'} onPress={() => router.push('/filters')} />,
-          <Stack.Toolbar.Button key="select" icon="checkmark.circle" accessibilityLabel="Select entries" onPress={() => setSelecting(true)} />,
+          <Stack.Toolbar.Button key="select" icon="checkmark.circle" accessibilityLabel="Select entries" onPress={startSelect} />,
         ]}
       </Stack.Toolbar>
       <View style={{ flex: 1, backgroundColor: c.bg }} collapsable={false}>
@@ -143,7 +157,9 @@ export default function Activity() {
           getItemType={(it) => it.kind}
           contentInsetAdjustmentBehavior="automatic"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingBottom: selecting ? 180 : 120 }}
+          contentContainerStyle={{ paddingBottom: selecting ? 200 : 120 }}
+          extraData={picked}
+          onScrollBeginDrag={closeSwipes}
           ListHeaderComponent={header}
           refreshControl={<RefreshControl {...pull} />}
           onEndReached={() => { if (q.hasNextPage && !q.isFetchingNextPage) q.fetchNextPage() }}
@@ -163,7 +179,6 @@ export default function Activity() {
               )
             }
             const r = item.t
-            const on = picked.has(r.id)
             return (
               <View style={{
                 marginHorizontal: space.l, backgroundColor: c.panel, overflow: 'hidden', borderCurve: 'continuous',
@@ -171,19 +186,10 @@ export default function Activity() {
                 borderBottomLeftRadius: item.last ? radius.panel : 0, borderBottomRightRadius: item.last ? radius.panel : 0,
                 paddingTop: item.first ? space.xs : 0, paddingBottom: item.last ? space.xs : 0,
               }}>
-                {!item.first && <Hairline inset={space.l + 40 + space.m + (selecting ? 34 : 0)} />}
-                {selecting ? (
-                  <Tap feedback="highlight" onPress={() => toggle(r.id)} accessibilityState={{ selected: on }}
-                    style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: space.l }}>
-                    <Icon sf={on ? 'checkmark.circle.fill' : 'circle'} md={on ? 'check_circle' : 'radio_button_unchecked'} size={22} color={on ? c.ink : c.label3} />
-                    <View style={{ flex: 1 }} pointerEvents="none">
-                      <TxnRow t={r} c={t.catOf(r)} acct={t.acct} mark={t.markFor(r.what)} today={t.b!.today} />
-                    </View>
-                  </Tap>
-                ) : (
-                  <TxnRow t={r} c={t.catOf(r)} acct={t.acct} mark={t.markFor(r.what)} today={t.b!.today}
-                    showDate={f.sort === 'amount' ? dayLabel(r.date, t.b!.today) : undefined} />
-                )}
+                {!item.first && <Divider sel={sel} />}
+                <TxnRow t={r} c={t.catOf(r)} acct={t.acct} mark={t.markFor(r.what)} today={t.b!.today}
+                  showDate={f.sort === 'amount' ? dayLabel(r.date, t.b!.today) : undefined}
+                  sel={sel} selected={picked.has(r.id)} onSelect={selecting ? toggle : undefined} />
               </View>
             )
           }}
@@ -192,6 +198,13 @@ export default function Activity() {
       </View>
     </>
   )
+}
+
+/** The hairline between rows, inset to the text; it follows the text over when select mode slides the checks in. */
+function Divider({ sel }: { sel: SharedValue<number> }) {
+  const { c } = useTheme()
+  const style = useAnimatedStyle(() => ({ marginLeft: space.l + 40 + space.m + sel.get() * 34 }))
+  return <Animated.View style={[{ height: 0.5, backgroundColor: c.sep }, style]} />
 }
 
 function Sum({ label, cents, pos }: { label: string; cents: number; pos?: boolean }) {
@@ -222,7 +235,8 @@ function SelectionBar({ chosen, onDone }: { chosen: Txn[]; onDone: () => void })
   const n = chosen.length
   const act = (fn: () => void) => () => { if (n) fn() }
   return (
-    <View style={{ position: 'absolute', left: space.l, right: space.l, bottom: 100, borderRadius: radius.panel, backgroundColor: c.panelRaised, padding: space.m, gap: space.s, boxShadow: '0 8px 30px rgba(0,0,0,0.18)' }}>
+    <Animated.View entering={SlideInDown.duration(320).easing(Easing.bezier(0.23, 1, 0.32, 1))} exiting={SlideOutDown.duration(220)}
+      style={{ position: 'absolute', left: space.l, right: space.l, bottom: 100, borderRadius: radius.panel, borderCurve: 'continuous', backgroundColor: c.panelRaised, padding: space.m, gap: space.s, boxShadow: '0 8px 30px rgba(0,0,0,0.18)' }}>
       <Txt variant="sub" tone="label2" style={{ textAlign: 'center' }}>{n ? `${n} selected` : 'Tap entries to select them'}</Txt>
       <View style={{ flexDirection: 'row', gap: space.s }}>
         <BarBtn label="Category" sf="square.grid.2x2" md="category" disabled={!n}
@@ -231,7 +245,7 @@ function SelectionBar({ chosen, onDone }: { chosen: Txn[]; onDone: () => void })
           onPress={act(() => router.push({ pathname: '/pick', params: { kind: 'bulk-tag', ids: chosen.map((x) => x.id).join(',') } }))} />
         <BarBtn label="Delete" sf="trash" md="delete" destructive disabled={!n} onPress={act(() => { deleteTxns(chosen); onDone() })} />
       </View>
-    </View>
+    </Animated.View>
   )
 }
 

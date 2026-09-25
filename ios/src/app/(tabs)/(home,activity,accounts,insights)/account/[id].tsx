@@ -3,6 +3,7 @@ import { ScrollView, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { useSharedValue } from 'react-native-reanimated'
+import { closeSwipes } from '@/components/SwipeRow'
 import { Icon } from '@/components/Icon'
 import { Money } from '@/components/Money'
 import { Hairline, Panel, Section } from '@/components/Panel'
@@ -63,9 +64,9 @@ export default function AccountDetail() {
     <>
       <Stack.Screen options={{ title: a.name, headerLargeTitle: false }} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" onPress={() => router.push('/entry')} />
+        <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" onPress={() => router.push({ pathname: '/entry', params: { from: String(a.id) } })} />
       </Stack.Toolbar>
-      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
+      <ScrollView onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
         <View style={{ gap: space.m, marginBottom: space.section - 4 }}>
           <View style={{ paddingHorizontal: space.xs, gap: 2 }}>
             <Txt variant="sub" tone="label2" style={{ fontSize: 15 }}>{owed ? 'Balance owed' : a.kind === 'investment' ? 'Value' : 'Balance'}</Txt>

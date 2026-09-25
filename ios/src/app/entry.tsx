@@ -2,8 +2,8 @@
 // A new entry starts empty: no category or account is guessed for you.
 // New entries go through the outbox, so saving never fails just because the phone is off Tailscale.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
-import Animated, { SlideInDown, SlideOutDown, ZoomIn } from 'react-native-reanimated'
+import { ScrollView, Switch, TextInput, View } from 'react-native'
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, ZoomIn } from 'react-native-reanimated'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -43,7 +43,7 @@ export default function Entry() {
   const { c, tint } = useTheme()
   const insets = useSafeAreaInsets()
   const t = useTally()
-  const { id, mode, fav } = useLocalSearchParams<{ id?: string; mode?: string; fav?: string }>()
+  const { id, mode, fav, from } = useLocalSearchParams<{ id?: string; mode?: string; fav?: string; from?: string }>()
   const { d, set, reset, setLine } = useDraft()
   const [typing, setTyping] = useState(false)
   const [pad, setPad] = useState(!id)
@@ -77,7 +77,8 @@ export default function Entry() {
         amount: f.amount ? fromCents(f.amount) : '', kind: cat?.type ?? 'Spending' })
       return
     }
-    reset(blank(today))
+    // Opened from an account's page: the entry starts from that account.
+    reset({ ...blank(today), from_id: from && t.acct.has(Number(from)) ? Number(from) : null })
     function seed(r: Txn): Draft {
       const d0 = fromTxn(r, t.catOf(r).type)
       return mode === 'duplicate' ? { ...d0, id: undefined, date: today, receipt: null } : d0
@@ -194,9 +195,26 @@ export default function Entry() {
   const display = `${d.refund ? '−' : ''}${formatCents(cents)}`
   const mainActive = d.target === 'main'
 
+  // The keypad is a raised panel that springs up from the bottom over the save button, and Done sends it back down.
+  // It stays mounted (a layout animation here could be cut short and leave it stuck halfway off the screen).
+  const reduce = useReducedMotion()
+  const showPad = pad && !typing
+  const padT = useSharedValue(showPad ? 1 : 0)
+  const [padH, setPadH] = useState(420)
+  useEffect(() => {
+    padT.set(reduce ? (showPad ? 1 : 0) : withSpring(showPad ? 1 : 0, { damping: 30, stiffness: 320, mass: 0.9 }))
+  }, [showPad]) // eslint-disable-line react-hooks/exhaustive-deps
+  const padStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - padT.get()) * (padH + 30) }] }))
+  const openPad = (target: string) => {
+    if (!pad) Haptics.selectionAsync().catch(() => {})
+    set({ target })
+    setPad(true)
+  }
+  const closePad = () => { Haptics.selectionAsync().catch(() => {}); setPad(false) }
+
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: editing ? 'Edit entry' : 'New entry', headerTransparent: false, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false }} />
+      <Stack.Screen options={{ title: editing ? 'Edit entry' : 'New entry' }} />
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => close()} />
       </Stack.Toolbar>
@@ -212,14 +230,15 @@ export default function Entry() {
           </Stack.Toolbar.Menu>
         </Stack.Toolbar>
       )}
-      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={100}>
+      <View style={{ flex: 1, backgroundColor: c.bg }}>
         <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentInsetAdjustmentBehavior="automatic"
-          onScrollBeginDrag={() => setPad(false)}
+          automaticallyAdjustKeyboardInsets onScrollBeginDrag={() => { if (pad) setPad(false) }}
           contentContainerStyle={{ padding: space.l, gap: space.l, paddingBottom: space.xxl }}>
           <Segmented options={KINDS} value={d.kind} onChange={setKind} />
 
-          {/* Quick actions fill the draft; tapping the chosen one again takes it back out. */}
-          {!editing && !id && t.b && t.b.favorites.length > 0 && (quick != null || (!d.what && !d.amount)) && (
+          {/* Quick actions fill the draft; tapping the chosen one again takes it back out. They stay put while you
+              type, so the form never jumps under your finger. */}
+          {!editing && !id && t.b && t.b.favorites.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l }} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
               {t.b.favorites.map((f) => {
                 const fc = t.cat.get(f.category_id)
@@ -238,7 +257,7 @@ export default function Entry() {
             </ScrollView>
           )}
 
-          <Tap feedback="opacity" onPress={() => { set({ target: 'main' }); setPad(true) }} accessibilityLabel={`Amount ${display}`}
+          <Tap feedback="opacity" onPress={() => openPad('main')} accessibilityLabel={`Amount ${display}`}
             style={{ alignItems: 'center', paddingVertical: space.s }}>
             <Animated.View style={shakeStyle}>
               <RollingText text={display} style={{ fontSize: display.length > 11 ? 46 : display.length > 9 ? 52 : 60, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
@@ -256,7 +275,7 @@ export default function Entry() {
               autoCapitalize="words" autoCorrect={false} maxFontSizeMultiplier={1.4}
               style={{ fontSize: 22, fontWeight: '600', textAlign: 'center', color: c.label, paddingVertical: space.s }} />
             {suggestions.length > 0 && (
-              <ScrollView horizontal keyboardShouldPersistTaps="always" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.xs }}>
+              <ScrollView horizontal keyboardShouldPersistTaps="always" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.xs, flexGrow: 1, justifyContent: 'center' }}>
                 {suggestions.map((x) => <Chip key={x.id} label={x.what} onPress={() => pickSuggestion(x)} />)}
               </ScrollView>
             )}
@@ -303,7 +322,7 @@ export default function Entry() {
                     leading={lv ? <Mark kind="glyph" sf={lv.sf} md={lv.md} tint={tint(lv.tint)} size={30} /> : <EmptyMark />}
                     onPress={() => router.push({ pathname: '/pick', params: { kind: 'category', line: l.key } })}
                     trailing={
-                      <Tap feedback="opacity" onPress={() => { set({ target: l.key }); setPad(true) }} hitSlop={8}
+                      <Tap feedback="opacity" onPress={() => openPad(l.key)} hitSlop={8}
                         style={{ minWidth: 88, height: 34, borderRadius: radius.pill, paddingHorizontal: space.m, alignItems: 'flex-end', justifyContent: 'center', backgroundColor: active ? c.ink : c.fill }}>
                         <Txt variant="callout" num tone={active ? 'onInk' : 'label'} style={{ fontWeight: '600' }}>{formatCents(toCents(l.amount))}</Txt>
                       </Tap>
@@ -340,35 +359,33 @@ export default function Entry() {
           )}
         </ScrollView>
 
-        {/* The keypad is its own raised panel while you type an amount, with Done to put it away; the save button
-            only shows once it's gone, since the amount is the first thing typed and there's more to fill in after. */}
-        {!typing && pad ? (
-          <Animated.View entering={SlideInDown.duration(260)} exiting={SlideOutDown.duration(200)}
-            style={{ backgroundColor: c.panel, borderTopLeftRadius: radius.panel, borderTopRightRadius: radius.panel, borderCurve: 'continuous',
-              paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: insets.bottom + space.s, boxShadow: '0 -6px 24px rgba(0,0,0,0.18)' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 36 }}>
-              <Txt variant="foot" tone="label2" style={{ flex: 1 }}>{mainActive ? '' : 'Typing into the split line. Tap the total to edit it.'}</Txt>
-              <Tap feedback="opacity" onPress={() => setPad(false)} hitSlop={10} accessibilityLabel="Done with the amount"
-                style={{ height: 32, paddingHorizontal: space.l, borderRadius: radius.pill, backgroundColor: c.ink, justifyContent: 'center' }}>
-                <Txt variant="callout" tone="onInk" style={{ fontWeight: '600' }}>Done</Txt>
-              </Tap>
-            </View>
-            <Keypad onKey={onKey} onClear={onClear} />
-          </Animated.View>
-        ) : (
-          <View style={{ backgroundColor: c.bg, paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: typing ? space.s : insets.bottom + space.s }}>
-            {done ? (
-              <Animated.View entering={ZoomIn.duration(180)} accessibilityLiveRegion="polite"
-                style={{ height: 52, borderRadius: radius.pill, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
-                <CheckDraw size={24} color={c.onInk} />
-                <Txt variant="headline" tone="onInk">{editing ? 'Saved' : 'Added'}</Txt>
-              </Animated.View>
-            ) : (
-              <Button label={saving ? 'Saving…' : editing ? 'Save changes' : cents ? `Add ${formatCents(cents)}` : 'Add entry'} onPress={save} disabled={saving} style={{ height: 52 }} />
-            )}
+        <View accessibilityElementsHidden={showPad} importantForAccessibility={showPad ? 'no-hide-descendants' : 'auto'}
+          style={{ backgroundColor: c.bg, paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: typing ? space.s : insets.bottom + space.s }}>
+          {done ? (
+            <Animated.View entering={ZoomIn.duration(180)} accessibilityLiveRegion="polite"
+              style={{ height: 52, borderRadius: radius.pill, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
+              <CheckDraw size={24} color={c.onInk} />
+              <Txt variant="headline" tone="onInk">{editing ? 'Saved' : 'Added'}</Txt>
+            </Animated.View>
+          ) : (
+            <Button label={saving ? 'Saving…' : editing ? 'Save changes' : cents ? `Add ${formatCents(cents)}` : 'Add entry'} onPress={save} disabled={saving} style={{ height: 52 }} />
+          )}
+        </View>
+
+        <Animated.View pointerEvents={showPad ? 'auto' : 'none'} onLayout={(e) => setPadH(e.nativeEvent.layout.height)}
+          accessibilityElementsHidden={!showPad} importantForAccessibility={showPad ? 'auto' : 'no-hide-descendants'}
+          style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: c.panel, borderTopLeftRadius: radius.panel, borderTopRightRadius: radius.panel,
+            borderCurve: 'continuous', paddingHorizontal: space.l, paddingTop: space.m, paddingBottom: insets.bottom + space.xs, boxShadow: '0 -8px 30px rgba(0,0,0,0.22)' }, padStyle]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, minHeight: 36, paddingHorizontal: space.xs }}>
+            <Txt variant="foot" tone="label2" style={{ flex: 1 }} numberOfLines={2}>{mainActive ? '' : 'Typing into the split line. Tap the total to edit it.'}</Txt>
+            <Tap onPress={closePad} hitSlop={12} accessibilityLabel="Done with the amount"
+              style={{ height: 34, paddingHorizontal: space.l + 2, borderRadius: radius.pill, backgroundColor: c.ink, justifyContent: 'center' }}>
+              <Txt variant="callout" tone="onInk" style={{ fontWeight: '600' }}>Done</Txt>
+            </Tap>
           </View>
-        )}
-      </KeyboardAvoidingView>
+          <Keypad onKey={onKey} onClear={onClear} />
+        </Animated.View>
+      </View>
     </>
   )
 }
@@ -394,8 +411,8 @@ function Receipt({ d, onAdd, onRemove }: { d: Draft; onAdd: (camera: boolean) =>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
       <Icon sf="doc.text.viewfinder" md="document_scanner" size={18} color={c.label2} />
       <Txt variant="body" tone="label3" style={{ flex: 1 }}>Receipt</Txt>
-      {process.env.EXPO_OS === 'ios' && <Tap feedback="opacity" onPress={() => onAdd(true)} hitSlop={8}><Icon sf="camera" md="photo_camera" size={20} color={c.label} /></Tap>}
-      <Tap feedback="opacity" onPress={() => onAdd(false)} hitSlop={8}><Icon sf="photo" md="image" size={20} color={c.label} /></Tap>
+      {process.env.EXPO_OS === 'ios' && <Tap feedback="opacity" onPress={() => onAdd(true)} hitSlop={8} accessibilityLabel="Take a photo of the receipt"><Icon sf="camera" md="photo_camera" size={20} color={c.label} /></Tap>}
+      <Tap feedback="opacity" onPress={() => onAdd(false)} hitSlop={8} accessibilityLabel="Choose a receipt photo"><Icon sf="photo" md="image" size={20} color={c.label} /></Tap>
     </View>
   )
 }

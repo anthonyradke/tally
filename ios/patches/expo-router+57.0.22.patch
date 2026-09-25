@@ -1,0 +1,14 @@
+diff --git a/node_modules/expo-router/ios/LinkPreview/LinkPreviewNativeView.swift b/node_modules/expo-router/ios/LinkPreview/LinkPreviewNativeView.swift
+index 562d1b9..4df610f 100644
+--- a/node_modules/expo-router/ios/LinkPreview/LinkPreviewNativeView.swift
++++ b/node_modules/expo-router/ios/LinkPreview/LinkPreviewNativeView.swift
+@@ -141,6 +141,9 @@ class NativeLinkPreviewView: RouterViewWithLogger, UIContextMenuInteractionDeleg
+ 
+       let parameters = UIPreviewParameters()
+       parameters.backgroundColor = triggerView.backgroundColor ?? .clear
++      // Tally: lift the trigger as a rounded rectangle instead of a hard-edged one.
++      let radius = triggerView.layer.cornerRadius > 0 ? triggerView.layer.cornerRadius : 18
++      parameters.visiblePath = UIBezierPath(roundedRect: triggerView.bounds, cornerRadius: radius)
+ 
+       return UITargetedPreview(view: triggerView, parameters: parameters, target: target)
+     }

@@ -26,13 +26,13 @@ const TYPE_ORDER: CatType[] = ['Spending', 'Money in', 'Transfer', 'Saving', 'Lo
 const KIND_ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
 
 export default function Pick() {
-  const { kind, line, ids } = useLocalSearchParams<{ kind: string; line?: string; ids?: string }>()
+  const { kind, line, ids, current } = useLocalSearchParams<{ kind: string; line?: string; ids?: string; current?: string }>()
   const { c } = useTheme()
-  const title = { category: 'Category', from: 'From', to: 'To', date: 'Date', 'bulk-category': 'Move to category', 'bulk-tag': 'Add a tag' }[kind] ?? ''
+  const title = { category: 'Category', from: 'From', to: 'To', date: 'Date', 'bulk-category': ids?.includes(',') ? 'Move to category' : 'Category', 'bulk-tag': 'Add a tag' }[kind] ?? ''
   return (
     <ScrollView contentContainerStyle={{ padding: space.l, paddingTop: space.xl, gap: space.l, paddingBottom: 48 }} style={{ backgroundColor: c.bg }}>
       <Txt variant="title2" accessibilityRole="header" style={{ paddingHorizontal: space.xs }}>{title}</Txt>
-      {(kind === 'category' || kind === 'bulk-category') && <Categories line={line} ids={ids} />}
+      {(kind === 'category' || kind === 'bulk-category') && <Categories line={line} ids={ids} checked={current ? Number(current) : undefined} />}
       {(kind === 'from' || kind === 'to') && <Accounts side={kind} />}
       {kind === 'date' && <DateSheet />}
       {kind === 'bulk-tag' && <BulkTag ids={ids ?? ''} />}
@@ -45,7 +45,7 @@ function done() {
   close()
 }
 
-function Categories({ line, ids }: { line?: string; ids?: string }) {
+function Categories({ line, ids, checked }: { line?: string; ids?: string; checked?: number }) {
   const t = useTally()
   const { tint, c } = useTheme()
   const { d, set, setLine } = useDraft()
@@ -54,7 +54,8 @@ function Categories({ line, ids }: { line?: string; ids?: string }) {
   // In the composer, the kind chosen up top goes first; a split line only takes spending.
   const order = bulk ? TYPE_ORDER : [d.kind, ...TYPE_ORDER.filter((x) => x !== d.kind)]
   const types = line ? ['Spending' as CatType] : order
-  const current = line ? d.split?.find((l) => l.key === line)?.category_id : d.category_id
+  // Bulk moves check the entry's own category when there's just one; the draft has nothing to do with them.
+  const current = bulk ? checked : line ? d.split?.find((l) => l.key === line)?.category_id : d.category_id
   const choose = async (id: number, type: CatType) => {
     if (bulk) {
       try {
