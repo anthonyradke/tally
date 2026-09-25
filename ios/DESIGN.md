@@ -17,11 +17,13 @@ Changes to anything below get written here first.
   on pace to go over, and says by how much.
 - **A keypad for money.** Entering an amount is a full-width keypad with the figure rolling as you type (Cash App),
   never the system number pad. Digits shift in from the right like a till (1 5 0 reads $1.50); 00 replaces the
-  decimal point. The keypad rises as its own raised panel with Done; the save button only appears once it's put away.
+  decimal point. The keypad springs up as its own raised panel with Done and slides back down over the save button.
   A new entry starts empty (no guessed category or account); a quick action chip fills it, and tapping it again
   takes it back out.
-- **Swipe rows like Mail.** Right: Duplicate. Left: Category, Edit, Delete. A long swipe runs the edge action
-  (Duplicate, Delete) with a tick. Long press has the same actions in a menu.
+- **Swipe rows like Mail (iOS 26).** Right: Duplicate. Left: Category, Edit, Delete. The actions come up as circles
+  that grow with the swipe; keep going and the edge one (Duplicate, Delete) stretches into a capsule with a tick, and
+  letting go runs it (Delete slides the row away, then it folds shut). A half swipe rests open; tapping the row,
+  swiping another or scrolling closes it. Long press has the same actions in a menu, lifted as a rounded rectangle.
 
 ## Structure
 - Native tab bar (Liquid Glass on iOS 26): Home, Activity, +, Accounts, Insights. It stays full size (never
@@ -55,10 +57,11 @@ Changes to anything below get written here first.
 ## Motion
 - Navigation, sheets and the tab bar are the system's own.
 - Rolling digits for figures that change (hero numbers, the keypad, month switches). Bars, rings and the donut draw
-  once when they appear. Toasts slide up from the tab bar.
+  once when they appear. Toasts slide up from the tab bar; swipe one down to put it away.
 - Scrubbing runs on the UI thread (Reanimated worklets); a selection tick marks each day passed.
-- Press feedback: buttons and cards scale to 0.97, list rows highlight. Reduce Motion turns rolls and draws into
-  instant changes, and skips the moments below.
+- Press feedback runs on the UI thread: buttons and cards spring to 0.97, list rows highlight after a beat (so a
+  scroll doesn't flash them) and the highlight fades on release. Select mode slides a check circle into every row at
+  once. Reduce Motion turns rolls and draws into instant changes, and skips the moments below.
 - Small moments, each once and short (the pieces live in `components/`: CheckDraw, Confetti, Sheen, Shake,
   ThemeWash; the state that triggers them in `lib/motion.ts`):
   - Keypad labels pop on each press; a digit that won't fit, or saving $0, shakes the amount.

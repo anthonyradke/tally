@@ -82,7 +82,7 @@ export default function Edit() {
   const [newTitle, editTitle] = TITLE[kind] ?? ['Edit', 'Edit']
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: id ? editTitle : newTitle, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false }} />
+      <Stack.Screen options={{ title: id ? editTitle : newTitle }} />
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => close()} />
       </Stack.Toolbar>

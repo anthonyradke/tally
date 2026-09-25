@@ -24,22 +24,23 @@ function Key({ k, onKey, onClear }: { k: string; onKey: (k: string) => void; onC
   const reduce = useReducedMotion()
   const s = useSharedValue(1)
   const pop = useAnimatedStyle(() => ({ transform: [{ scale: s.get() }] }))
+  const hl = useSharedValue(0)
+  const well = useAnimatedStyle(() => ({ opacity: hl.get() }))
   return (
     <Pressable accessibilityRole="keyboardkey" accessibilityLabel={k === 'del' ? 'Delete' : k === '00' ? 'Double zero' : k}
-      onPressIn={() => { if (!reduce) s.set(withTiming(0.86, { duration: 70 })) }}
-      onPressOut={() => { if (!reduce) s.set(withSequence(withTiming(1.14, { duration: 90 }), withSpring(1, { damping: 12, stiffness: 320 }))) }}
+      onPressIn={() => { hl.set(withTiming(1, { duration: 40 })); if (!reduce) s.set(withTiming(0.86, { duration: 70 })) }}
+      onPressOut={() => { hl.set(withTiming(0, { duration: 260 })); if (!reduce) s.set(withSequence(withTiming(1.14, { duration: 90 }), withSpring(1, { damping: 12, stiffness: 320 }))) }}
       onPress={() => { Haptics.selectionAsync().catch(() => {}); onKey(k) }}
       onLongPress={k === 'del' ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClear() } : undefined}
       style={{ width: '33.333%', height: 58, alignItems: 'center', justifyContent: 'center' }}>
-      {({ pressed }) => (
-        <View style={{ width: 72, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? c.fill : 'transparent' }}>
-          <Animated.View style={pop}>
-            {k === 'del'
-              ? <Icon sf="delete.left" md="backspace" size={24} color={c.label} weight="medium" />
-              : <Txt style={{ fontSize: 28, fontWeight: '500', color: c.label }}>{k}</Txt>}
-          </Animated.View>
-        </View>
-      )}
+      <View style={{ width: 72, height: 50, alignItems: 'center', justifyContent: 'center' }}>
+        <Animated.View style={[{ position: 'absolute', width: 72, height: 50, borderRadius: 25, backgroundColor: c.fill }, well]} />
+        <Animated.View style={pop}>
+          {k === 'del'
+            ? <Icon sf="delete.left" md="backspace" size={24} color={c.label} weight="medium" />
+            : <Txt style={{ fontSize: 28, fontWeight: '500', color: c.label }}>{k}</Txt>}
+        </Animated.View>
+      </View>
     </Pressable>
   )
 }

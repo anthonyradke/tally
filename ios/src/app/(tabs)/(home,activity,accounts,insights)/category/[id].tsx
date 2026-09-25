@@ -1,6 +1,7 @@
 import { ScrollView, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useSharedValue } from 'react-native-reanimated'
+import { closeSwipes } from '@/components/SwipeRow'
 import { Bar } from '@/components/Bar'
 import { Mark } from '@/components/Mark'
 import { Hairline, Panel, Section } from '@/components/Panel'
@@ -47,7 +48,7 @@ export default function CategoryDetail() {
           <Stack.Toolbar.Button icon="gauge.with.needle" accessibilityLabel="Set budget" onPress={() => router.push({ pathname: '/edit', params: { kind: 'budget', id: String(x.id) } })} />
         </Stack.Toolbar>
       )}
-      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
+      <ScrollView onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
         <View style={{ gap: space.m, marginBottom: space.section - 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.xs }}>
             <Mark kind="glyph" sf={v.sf} md={v.md} tint={color} size={44} />

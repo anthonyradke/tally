@@ -3,6 +3,7 @@ import { RefreshControl, ScrollView, View } from 'react-native'
 import { router, Stack } from 'expo-router'
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { closeSwipes } from '@/components/SwipeRow'
 import { Bar } from '@/components/Bar'
 import { Chip } from '@/components/Chip'
 import { EASE } from '@/components/ease'
@@ -57,7 +58,7 @@ export default function Home() {
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button icon="gearshape" accessibilityLabel="Settings" onPress={() => router.push('/settings')} />
       </Stack.Toolbar>
-      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}
+      <ScrollView onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
         refreshControl={<RefreshControl {...pull} />}>
         <Glow />
@@ -348,16 +349,20 @@ function Goal({ b, kind, wide }: { b: Bootstrap; kind: 'ef' | 'roth'; wide?: boo
   const goal = ef ? b.ef.goal : b.roth.limit
   if (!goal) return null
   const color = ef ? tint('teal') : tint('violet')
+  // The emergency fund opens Accounts; the Roth opens its contributions category.
+  const href = ef ? '/accounts' as const : b.roth.category_id ? { pathname: '/category/[id]' as const, params: { id: String(b.roth.category_id) } } : undefined
   return (
-    <Panel style={{ flex: 1, flexDirection: wide ? 'row' : 'column', alignItems: wide ? 'center' : 'flex-start', gap: space.m, marginBottom: wide ? space.section - 4 : 0 }}>
+    <Tap href={href} disabled={!href} style={{ flex: 1, marginBottom: wide ? space.section - 4 : 0 }}>
+    <Panel style={{ flex: 1, flexDirection: wide ? 'row' : 'column', alignItems: wide ? 'center' : 'flex-start', gap: space.m }}>
       <Ring value={pct(have, goal)} color={color} />
       <View style={{ gap: 2, flex: wide ? 1 : undefined }}>
         <Txt variant="sub" tone="label2">{ef ? 'Emergency fund' : `Roth IRA ${fromISO(b.today).getFullYear()}`}</Txt>
         <Money cents={have} whole variant="headline" />
         <Txt variant="foot" tone="label2" num>of {formatCents(goal, { cents: false })}{ef ? `, ${b.settings.ef_months ?? 6} months of spending` : ' limit'}</Txt>
       </View>
-      {wide && <Icon sf="chevron.right" md="chevron_right" size={13} color={c.label3} />}
+      {wide && href && <Icon sf="chevron.right" md="chevron_right" size={13} color={c.label3} />}
     </Panel>
+    </Tap>
   )
 }
 

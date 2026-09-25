@@ -6,6 +6,7 @@ import { useLocalSearchParams } from 'expo-router'
 import Animated from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
 import { useQueryClient } from '@tanstack/react-query'
+import { closeSwipes } from '@/components/SwipeRow'
 import { CheckDraw } from '@/components/CheckDraw'
 import { Confetti } from '@/components/Confetti'
 import { Icon } from '@/components/Icon'
@@ -59,7 +60,7 @@ export default function Reconcile() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView contentContainerStyle={{ padding: space.l, paddingTop: space.xl, gap: space.l }}>
+      <ScrollView onScrollBeginDrag={closeSwipes} contentContainerStyle={{ padding: space.l, paddingTop: space.xl, gap: space.l }}>
         <View style={{ gap: 4 }}>
           <Txt variant="title2" accessibilityRole="header">Reconcile {a.name}</Txt>
           <Txt variant="callout" tone="label2">{owed ? 'What does the card show as the current balance?' : 'What does the bank show right now?'}</Txt>
