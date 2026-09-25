@@ -8,6 +8,44 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## Unreleased (next: 3.3.0)
+Added
+- Swipe actions on every entry, like Mail on iOS 26. Swipe left for Category, Edit and Delete, right for Duplicate.
+  The actions appear as circles that grow as you swipe; keep going and the last one stretches into a pill with a
+  haptic tick, and letting go runs it. A half swipe rests open, and tapping the row, swiping another one or
+  scrolling closes it. Deleting slides the row away, and Undo brings it back.
+- Long press on an entry also has "Change category", and the lifted row now keeps its rounded corners.
+- The + on an account's page starts the new entry from that account.
+- Swipe the Undo toast down to put it away.
+- The emergency fund and Roth cards on Home open something when tapped.
+
+Changed
+- A new entry starts empty: no category or account is picked for you, and switching between Spent, Income and the
+  rest no longer picks one either.
+- The amount keypad is its own raised panel with a Done button, and it springs up and slides back down over the
+  save button.
+- Quick actions in a new entry can be undone: tap the highlighted one again to clear what it filled in. They stay
+  put while you type, so the form no longer jumps.
+- Select mode in Activity slides a check circle into every row at once, and its action bar slides up.
+- Every button, chip, keypad key and row responds to touch more smoothly. Rows wait a beat before highlighting, so
+  starting a scroll no longer flashes the row under your thumb.
+- Editing a single entry's category checks that entry's own category.
+- VoiceOver reads entries as one item ("Chipotle, Dining Out, 13.89 dollars, Chase CC") with Edit, Duplicate,
+  Change category and Delete as actions, and no longer reads icon names aloud.
+
+Fixed
+- Tapping an entry opened two editors on top of each other, so it took two taps on X to close.
+- The keypad could get stuck partway down the screen when opening a new entry.
+- Undo did nothing: the tap went through the toast to the row underneath.
+- A row that reappeared where a deleted one had been could stay squashed flat.
+- The theme glow at the top of each tab stopped short of the right edge.
+- The faded edge above the keypad was cut off on the right (the fade is gone with the new keypad panel).
+- The text under the + in the tab bar sat too high, and the + is drawn smaller to match the other icons.
+
+Developer
+- `patches/expo-router+57.0.22.patch` (applied by `npm install`) rounds the long-press preview. It is native, so a
+  rebuild is needed once to pick it up.
+
 ## 3.2.0 (2026-09-24)
 Added
 - Small animations throughout, all skipped with Reduce Motion:
