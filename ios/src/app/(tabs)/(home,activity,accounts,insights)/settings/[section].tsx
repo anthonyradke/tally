@@ -1,6 +1,6 @@
 // Every Settings list in one route: accounts, categories, quick actions, recurring, saved views, budgets, goals,
 // the Home layout, the theme, the app icon and the server. Item editors open as the `edit` modal.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ScrollView, Switch, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
@@ -210,10 +210,16 @@ function Budgets({ a }: { a: AdminData }) {
   const { c, tint } = useTheme()
   const { b } = useTally()
   const [vals, setVals] = useState<Record<number, string>>({})
-  useEffect(() => { setVals(Object.fromEntries(a.categories.map((x) => [x.id, x.budget ? fromCents(x.budget) : '']))) }, [a])
+  // Fields being typed in keep their text when fresh data arrives: saving one field (on blur) refetches everything,
+  // and that used to wipe what you'd started typing in the next.
+  const typing = useRef(new Set<number>())
+  useEffect(() => {
+    setVals((v) => Object.fromEntries(a.categories.map((x) => [x.id, typing.current.has(x.id) ? v[x.id] ?? '' : x.budget ? fromCents(x.budget) : ''])))
+  }, [a])
   const suggestions = b ? suggestBudgets(b) : []
   const spending = a.categories.filter((x) => x.type === 'Spending' && x.active)
   const save = (id: number, v: string) => {
+    typing.current.delete(id)
     const was = a.categories.find((x) => x.id === id)?.budget ?? null
     const now = v.trim() === '' ? null : toCents(v)
     if (now === was) return
@@ -248,7 +254,7 @@ function Budgets({ a }: { a: AdminData }) {
               value={
                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: c.fill, borderRadius: radius.input, paddingHorizontal: space.m, height: 36, width: 110 }}>
                   <Txt variant="body" tone="label2">$</Txt>
-                  <TextInput value={vals[x.id] ?? ''} onChangeText={(t) => setVals((s) => ({ ...s, [x.id]: t.replace(/[^0-9.]/g, '') }))} onBlur={() => save(x.id, vals[x.id] ?? '')} onSubmitEditing={() => save(x.id, vals[x.id] ?? '')}
+                  <TextInput value={vals[x.id] ?? ''} onChangeText={(t) => { typing.current.add(x.id); setVals((s) => ({ ...s, [x.id]: t.replace(/[^0-9.]/g, '') })) }} onBlur={() => save(x.id, vals[x.id] ?? '')} onSubmitEditing={() => save(x.id, vals[x.id] ?? '')}
                     keyboardType="decimal-pad" placeholder="None" placeholderTextColor={c.label3} accessibilityLabel={`${x.name} budget`}
                     style={{ flex: 1, minWidth: 48, fontSize: 17, color: c.label, textAlign: 'right', fontVariant: ['tabular-nums'] }} />
                 </View>
@@ -266,10 +272,17 @@ function General({ a }: { a: AdminData }) {
   const [ef, setEf] = useState(Number(s.ef_months ?? 6))
   const [roth, setRoth] = useState(s.roth_limit ? fromCents(Number(s.roth_limit)) : '')
   const cats = a.categories.filter((x) => x.active)
+  // The tick moves on tap; the save catches up behind it (and the tick goes back if it fails).
+  const [chosen, setChosen] = useState<Record<string, number>>({})
   const pick = (key: 'roth_category' | 'interest_category', types: CatType[]) => {
-    const cur = Number(s[key] ?? 0)
+    const cur = chosen[key] ?? Number(s[key] ?? 0)
+    const choose = (id: number) => {
+      Haptics.selectionAsync().catch(() => {})
+      setChosen((m) => ({ ...m, [key]: id }))
+      write(() => api.putSettings({ [key]: id })).then((ok) => { if (!ok) setChosen(({ [key]: _, ...rest }) => rest) })
+    }
     return cats.filter((x) => types.includes(x.type)).map((x) => (
-      <Row key={x.id} label={x.name} chevron={false} onPress={() => write(() => api.putSettings({ [key]: x.id }))}
+      <Row key={x.id} label={x.name} chevron={false} onPress={() => choose(x.id)}
         trailing={x.id === cur ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : undefined} />
     ))
   }
@@ -308,12 +321,17 @@ const WIDGET_NAMES: Record<string, string> = {
 const ORDER = Object.keys(WIDGET_NAMES)
 
 function HomeLayout({ a }: { a: AdminData }) {
+  // Switches and moves show at once; the save follows (a switch used to flip back until the server answered).
+  const [local, setLocal] = useState<{ order: string[]; hidden: Set<string> } | null>(null)
   let saved: { order?: string[]; hidden?: string[] } = {}
   try { saved = JSON.parse(a.settings.home_layout ?? '{}') } catch { /* default */ }
-  const order = (saved.order ?? []).filter((id) => ORDER.includes(id))
-  ORDER.forEach((id, i) => { if (!order.includes(id)) order.splice(Math.min(i, order.length), 0, id) })
-  const hidden = new Set(saved.hidden ?? [])
-  const save = (o: string[], h: Set<string>) => write(() => api.putSettings({ home_layout: { order: o, hidden: [...h] } }))
+  const order = local?.order ?? (saved.order ?? []).filter((id) => ORDER.includes(id))
+  if (!local) ORDER.forEach((id, i) => { if (!order.includes(id)) order.splice(Math.min(i, order.length), 0, id) })
+  const hidden = local?.hidden ?? new Set(saved.hidden ?? [])
+  const save = (o: string[], h: Set<string>) => {
+    setLocal({ order: o, hidden: h })
+    write(() => api.putSettings({ home_layout: { order: o, hidden: [...h] } })).then((ok) => { if (!ok) setLocal(null) })
+  }
   const { c } = useTheme()
   return (
     <Group footer="Month in review shows during the first week of a month. Net worth over time appears once there are three months.">

@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Linking, RefreshControl, ScrollView, View } from 'react-native'
 import { Stack } from 'expo-router'
-import { useQuery } from '@tanstack/react-query'
-import Animated, { useSharedValue, ZoomIn } from 'react-native-reanimated'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, ZoomIn } from 'react-native-reanimated'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
 import { Bar } from '@/components/Bar'
 import { Confetti } from '@/components/Confetti'
 import { Donut } from '@/components/Donut'
+import { EASE } from '@/components/ease'
 import { Glow } from '@/components/Glow'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
@@ -17,7 +18,7 @@ import { RollingMoney } from '@/components/Rolling'
 import { Group, Row } from '@/components/Row'
 import { ScrubChart } from '@/components/ScrubChart'
 import { ScrubFigure } from '@/components/ScrubFigure'
-import { StateView } from '@/components/StateView'
+import { Arrive, StateView } from '@/components/StateView'
 import { Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
@@ -37,6 +38,7 @@ export default function Insights() {
   const { q, b } = useTally()
   const pull = usePullRefresh(q.refetch)
   const { c } = useTheme()
+  const [waited] = useState(!b) // the skeleton showed first
   return (
     <>
       <Stack.Toolbar placement="right">
@@ -48,7 +50,7 @@ export default function Insights() {
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
         refreshControl={<RefreshControl {...pull} />}>
         <Glow />
-        {b ? <Body b={b} /> : <StateView q={q} />}
+        {b ? <Arrive on={waited}><Body b={b} /></Arrive> : <StateView q={q} />}
       </ScrollView>
     </>
   )
@@ -104,6 +106,7 @@ function Body({ b }: { b: Bootstrap }) {
   const m = months[i]
   const prev = months[i - 1]
   const isNow = m?.month === monthOf(b.today)
+  const settle = useMonthShift(m?.month)
   const cats = useMemo(() => !m ? [] : b.categories.filter((x) => x.type === 'Spending')
     .map((x) => ({ x, spent: m.by_category[String(x.id)] ?? 0, budget: budgetFor(b, x, m.month) }))
     .filter((r) => r.spent > 0 || (r.budget ?? 0) > 0).sort((a, z) => z.spent - a.spent), [b, m])
@@ -122,7 +125,9 @@ function Body({ b }: { b: Bootstrap }) {
         <Tap feedback="opacity" onPress={() => go(-1)} disabled={i === 0} hitSlop={10} accessibilityLabel="Previous month" style={{ opacity: i === 0 ? 0.25 : 1, padding: space.s }}>
           <Icon sf="chevron.left" md="chevron_left" size={18} color={c.label} weight="bold" />
         </Tap>
-        <Txt variant="headline" accessibilityRole="header">{monthLabel(m.month, 'long')}{isNow ? ', so far' : ''}</Txt>
+        <Animated.View style={settle}>
+          <Txt variant="headline" accessibilityRole="header">{monthLabel(m.month, 'long')}{isNow ? ', so far' : ''}</Txt>
+        </Animated.View>
         <Tap feedback="opacity" onPress={() => go(1)} disabled={i === months.length - 1} hitSlop={10} accessibilityLabel="Next month" style={{ opacity: i === months.length - 1 ? 0.25 : 1, padding: space.s }}>
           <Icon sf="chevron.right" md="chevron_right" size={18} color={c.label} weight="bold" />
         </Tap>
@@ -138,6 +143,8 @@ function Body({ b }: { b: Bootstrap }) {
         </Tap>
       )}
 
+      {/* Everything about the month eases in from the side it came from when you switch. */}
+      <Animated.View style={settle}>
       {/* Spending share */}
       <Panel style={{ alignItems: 'center', gap: space.l, marginBottom: space.section - 4, paddingVertical: space.xxl }}>
         <View style={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -195,6 +202,7 @@ function Body({ b }: { b: Bootstrap }) {
           })}
         </Panel>
       </Section>
+      </Animated.View>
 
       <CashFlow b={b} months={months} at={i} onPick={(k) => { setSel(null); setI(k) }} />
       <NetWorth b={b} />
@@ -225,11 +233,30 @@ function Body({ b }: { b: Bootstrap }) {
   )
 }
 
+/** Switching months: the month's content comes in a little from the side it came from, and brightens as it lands.
+ *  Nothing on this screen shows the first time. */
+function useMonthShift(month: string | undefined) {
+  const reduce = useReducedMotion()
+  const k = useSharedValue(1)
+  const side = useSharedValue(0)
+  const last = useRef(month)
+  useLayoutEffect(() => {
+    const was = last.current
+    last.current = month
+    if (!was || !month || was === month || reduce) return
+    side.set(month > was ? 1 : -1)
+    k.set(0)
+    k.set(withTiming(1, { duration: 360, easing: EASE }))
+  }, [month]) // eslint-disable-line react-hooks/exhaustive-deps
+  return useAnimatedStyle(() => ({ opacity: 0.35 + 0.65 * k.get(), transform: [{ translateX: side.get() * 22 * (1 - k.get()) }] }))
+}
+
 function Stat({ label, cents, tone }: { label: string; cents: number; tone?: 'pos' | 'neg' }) {
+  const { c } = useTheme()
   return (
     <View style={{ flex: 1, gap: 2, alignItems: 'center' }}>
       <Txt variant="sub" tone="label2">{label}</Txt>
-      <Money cents={cents} whole tone={tone ?? 'neutral'} variant="headline" />
+      <RollingMoney cents={cents} whole style={{ ...ramp.headline, color: tone ? c[tone] : c.label }} />
     </View>
   )
 }
@@ -249,10 +276,7 @@ function CashFlow({ months, at, onPick }: { b: Bootstrap; months: Bootstrap['mon
             return (
               <Tap key={m.month} feedback="opacity" onPress={() => onPick(k)} accessibilityLabel={`${monthLabel(m.month, 'long')}: in ${formatCents(m.money_in)}, spent ${formatCents(m.spent)}`}
                 style={{ alignItems: 'center', gap: 6, flex: 1, maxWidth: 64 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: H, opacity: on ? 1 : 0.45 }}>
-                  <View style={{ width: 14, height: Math.max(2, (m.money_in / max) * H), borderRadius: 4, backgroundColor: c.pos }} />
-                  <View style={{ width: 14, height: Math.max(2, (m.spent / max) * H), borderRadius: 4, backgroundColor: c.ink }} />
-                </View>
+                <Bars on={on} inH={Math.max(2, (m.money_in / max) * H)} outH={Math.max(2, (m.spent / max) * H)} h={H} />
                 <Txt variant="foot" tone={on ? 'label' : 'label2'} style={{ fontWeight: on ? '700' : '500' }}>{shortName(m.month)}</Txt>
               </Tap>
             )
@@ -263,6 +287,21 @@ function CashFlow({ months, at, onPick }: { b: Bootstrap; months: Bootstrap['mon
         </View>
       </Panel>
     </Section>
+  )
+}
+
+/** One month's pair of bars; the picked month brightens and the one before fades back. */
+function Bars({ on, inH, outH, h }: { on: boolean; inH: number; outH: number; h: number }) {
+  const { c } = useTheme()
+  const reduce = useReducedMotion()
+  const o = useSharedValue(on ? 1 : 0.45)
+  useEffect(() => { o.set(reduce ? (on ? 1 : 0.45) : withTiming(on ? 1 : 0.45, { duration: 240 })) }, [on, reduce, o])
+  const style = useAnimatedStyle(() => ({ opacity: o.get() }))
+  return (
+    <Animated.View style={[{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: h }, style]}>
+      <View style={{ width: 14, height: inH, borderRadius: 4, backgroundColor: c.pos }} />
+      <View style={{ width: 14, height: outH, borderRadius: 4, backgroundColor: c.ink }} />
+    </Animated.View>
   )
 }
 
@@ -290,7 +329,7 @@ function NetWorth({ b }: { b: Bootstrap }) {
 function MonthEndRow({ month }: { month: string }) {
   const { c } = useTheme()
   const ym = month.slice(0, 7)
-  const q = useQuery({ queryKey: ['month-end', ym], queryFn: () => api.monthEnd(ym) })
+  const q = useQuery({ queryKey: ['month-end', ym], queryFn: () => api.monthEnd(ym), placeholderData: keepPreviousData })
   const d = q.data
   const done = d ? [d.typed_done, d.interest_done, d.recon_done].filter(Boolean).length : 0
   return (

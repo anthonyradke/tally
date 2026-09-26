@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Haptics from 'expo-haptics'
 import { Icon } from '@/components/Icon'
 import { Group, Row } from '@/components/Row'
-import { StateView } from '@/components/StateView'
+import { Arrive, StateView } from '@/components/StateView'
 import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { api, ApiError, type Account } from '@/lib/api'
@@ -40,6 +40,7 @@ export default function MonthEnd() {
   }, [q.data])
   const b = t.b
   const d = q.data
+  const [waited] = useState(!b || !d) // the skeleton showed first
   if (!b || !d) return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}><StateView q={b ? q : t.q} /></ScrollView>
 
   const refresh = async () => { await qc.invalidateQueries({ queryKey: ['month-end'] }); await invalidateAll() }
@@ -74,7 +75,8 @@ export default function MonthEnd() {
   return (
     <>
       <Stack.Screen options={{ title: `${monthLabel(`${ym}-01`, 'long')} close`, headerLargeTitle: false }} />
-      <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120, gap: space.xxl }}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
+        <Arrive on={waited} style={{ gap: space.xxl }}>
         {Object.keys(d.typed).length > 0 && (
           <View style={{ gap: space.m }}>
             <Step n={1} title="Investment balances" done={d.typed_done} sub="What each one was worth at the end of the month." />
@@ -112,6 +114,7 @@ export default function MonthEnd() {
             ))}
           </Group>
         </View>
+        </Arrive>
       </ScrollView>
     </>
   )

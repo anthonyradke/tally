@@ -1,7 +1,7 @@
 // The composer: a modal with its own Cancel/Save. Amount on a big keypad, then what, category, accounts and date.
 // A new entry starts empty: no category or account is guessed for you.
 // New entries go through the outbox, so saving never fails just because the phone is off Tailscale.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ScrollView, Switch, TextInput, View } from 'react-native'
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, ZoomIn } from 'react-native-reanimated'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
@@ -25,7 +25,7 @@ import { merchantKey } from '@/icons/merchants'
 import { api, ApiError, type CatType, type Txn } from '@/lib/api'
 import { close } from '@/lib/nav'
 import { deleteTxns } from '@/lib/actions'
-import { useTransactions, invalidateAll } from '@/lib/data'
+import { cachedTxn, invalidateAll, useTransactions } from '@/lib/data'
 import { addDays, dayLabel } from '@/lib/dates'
 import { blank, fromCents, fromTxn, press, toCents, toInputs, useDraft, type Draft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
@@ -38,12 +38,18 @@ import { radius, space, useTheme } from '@/theme'
 
 const KINDS: [CatType, string][] = [['Spending', 'Spent'], ['Money in', 'Income'], ['Transfer', 'Transfer'], ['Saving', 'Saving'], ['Loan', 'Loan']]
 
-export default function Entry() {
+export default function EntryRoute() {
+  return <Entry />
+}
+
+/** The form. `embedded`: shown inside the new-entry steps (to split the draft they hand over), which keep their own
+ *  header, so it neither seeds the draft again nor sets the title and buttons. */
+export function Entry({ embedded }: { embedded?: boolean }) {
   const { c, tint } = useTheme()
   const insets = useSafeAreaInsets()
   const t = useTally()
-  // keep: the new-entry steps handed over their draft (to split it), so it isn't seeded again.
-  const { id, mode, fav, from, keep } = useLocalSearchParams<{ id?: string; mode?: string; fav?: string; from?: string; keep?: string }>()
+  const params = useLocalSearchParams<{ id?: string; mode?: string; fav?: string; from?: string }>()
+  const { id, mode, fav, from } = embedded ? {} : params
   const { d, set, reset, setLine } = useDraft()
   const [typing, setTyping] = useState(false)
   const [pad, setPad] = useState(!id)
@@ -55,17 +61,24 @@ export default function Entry() {
   const [errors, setErrors] = useState<string[]>([])
   const history = useTransactions({ limit: 600 }, !!t.b)
   // The entry being edited or duplicated, fetched by id: it may be older than the newest 600 used for suggestions.
-  const one = useQuery({ queryKey: ['transactions', 'one', Number(id)], queryFn: () => api.transaction(Number(id)), enabled: !!id })
-  const editing = !!id && mode !== 'duplicate'
+  // The row tapped is nearly always in a list already: start from that copy (refetched right away) so the form is
+  // filled on its first frame.
+  const one = useQuery({ queryKey: ['transactions', 'one', Number(id)], queryFn: () => api.transaction(Number(id)), enabled: !!id,
+    initialData: () => (id ? cachedTxn(Number(id)) : undefined), initialDataUpdatedAt: 0 })
+  // "Duplicate to today" from the menu turns this editor into a new entry in place, rather than closing the sheet and
+  // opening another one.
+  const [dup, setDup] = useState(mode === 'duplicate')
+  const editing = !!id && !dup
   const loaded = useRef(false)
 
-  // Seed the draft once: edit, duplicate, a quick action, or a blank entry with sensible defaults.
-  useEffect(() => {
+  // Seed the draft once: edit, duplicate, a quick action, or a blank entry with sensible defaults. Before the first
+  // paint, so the last entry's draft never flashes up in this one.
+  useLayoutEffect(() => {
     if (loaded.current || !t.b) return
-    if (keep) { loaded.current = true; return }
+    if (embedded) { loaded.current = true; return }
     const today = t.b.today
     if (id) {
-      if (!one.data) return
+      if (!one.data) { if (useDraft.getState().d.id !== Number(id)) reset(blank(today)); return }
       loaded.current = true
       reset(seed(one.data))
       return
@@ -204,14 +217,20 @@ export default function Entry() {
 
   return (
     <>
-      <Stack.Screen options={{ title: editing ? 'Edit entry' : 'New entry' }} />
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => close()} />
-      </Stack.Toolbar>
+      {!embedded && <Stack.Screen options={{ title: editing ? 'Edit entry' : 'New entry' }} />}
+      {!embedded && (
+        <Stack.Toolbar placement="left">
+          <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => close()} />
+        </Stack.Toolbar>
+      )}
       {editing && (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Menu icon="ellipsis">
-            <Stack.Toolbar.MenuAction icon="plus.square.on.square" onPress={() => { close(); setTimeout(() => router.push({ pathname: '/entry', params: { id: String(id), mode: 'duplicate' } }), 350) }}>Duplicate to today</Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.MenuAction icon="plus.square.on.square" onPress={() => {
+              Haptics.selectionAsync().catch(() => {})
+              setDup(true)
+              set({ id: undefined, date: t.b?.today ?? d.date, receipt: null, removeReceipt: false })
+            }}>Duplicate to today</Stack.Toolbar.MenuAction>
             <Stack.Toolbar.MenuAction icon="trash" destructive onPress={() => {
               const row = one.data
               close()

@@ -6,7 +6,7 @@ import { View } from 'react-native'
 import Svg, { ClipPath, Defs, G, Line, Path, Rect } from 'react-native-svg'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
-  Easing, useAnimatedProps, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue,
+  Easing, interpolate, useAnimatedProps, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue,
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 import * as Haptics from 'expo-haptics'
@@ -83,6 +83,15 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
     breath.set(withRepeat(withTiming(1, { duration: 2200, easing: Easing.out(Easing.quad) }), -1, false))
   }, [live, reduce, breath])
 
+  // The line draws in from the left once, the first time it has something to show (so a chart whose data lands late
+  // arrives instead of popping in); the end dot comes up as it finishes.
+  const drawn = useSharedValue(reduce ? 1 : 0)
+  const ready = w > 0 && (series[0]?.values.length ?? 0) > 0
+  useEffect(() => {
+    if (ready && drawn.get() === 0) drawn.set(withTiming(1, { duration: 700, easing: Easing.bezier(0.23, 1, 0.32, 1) }))
+  }, [ready, drawn])
+  const reveal = useAnimatedStyle(() => ({ width: w * drawn.get() }), [w])
+
   const toIndex = (x: number) => {
     'worklet'
     const n = xs.length
@@ -121,13 +130,13 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
   const dot = useAnimatedStyle(() => {
     const i = scrub.get()
     const k = i >= 0 && i < xs.length ? i : xs.length - 1
-    return { transform: [{ translateX: (xs[k] ?? 0) - 5 }, { translateY: (ys[k] ?? 0) - 5 }] }
+    return { opacity: interpolate(drawn.get(), [0.75, 1], [0, 1], 'clamp'), transform: [{ translateX: (xs[k] ?? 0) - 5 }, { translateY: (ys[k] ?? 0) - 5 }] }
   }, [xs, ys])
   const halo = useAnimatedStyle(() => {
     const k = breath.get()
     const n = xs.length - 1
     return {
-      opacity: (1 - k) * 0.45 * (1 - shown.get()),
+      opacity: (1 - k) * 0.45 * (1 - shown.get()) * (drawn.get() === 1 ? 1 : 0),
       transform: [{ translateX: (xs[n] ?? 0) - 5 }, { translateY: (ys[n] ?? 0) - 5 }, { scale: 1 + k * 1.9 }],
     }
   }, [xs, ys])
@@ -143,6 +152,7 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
       <View style={{ height }} onLayout={(e) => setW(e.nativeEvent.layout.width)} collapsable={false}
         accessibilityRole="adjustable" accessibilityLabel="Chart. Drag to read values.">
         {w > 0 && (
+          <Animated.View style={[{ height, overflow: 'hidden' }, reveal]}>
           <Svg width={w} height={height}>
             <Defs>
               <ClipPath id={clipId}><ARect x={0} y={0} height={height} animatedProps={clip} /></ClipPath>
@@ -163,6 +173,7 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
               </>
             )}
           </Svg>
+          </Animated.View>
         )}
         {w > 0 && primary && primary.values.length > 0 && (
           <>

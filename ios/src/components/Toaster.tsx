@@ -1,11 +1,11 @@
 // The undo toast: a glass capsule floating above the tab bar. Glass is for floating chrome only; this is chrome.
 // Swipe it down to put it away early. It lives in its own overlay window above the native screens and modals; as a
 // plain sibling view it drew on top but its taps fell through to whatever row was underneath.
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { FullWindowOverlay } from 'react-native-screens'
-import Animated, { Easing, FadeOut, SlideInDown, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
+import Animated, { Easing, FadeOut, SlideInDown, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
@@ -24,9 +24,23 @@ function Overlay({ children }: { children: ReactNode }) {
 export function Toaster() {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
-  const { toast: t, hide } = useToast()
+  const { toast: current, hide } = useToast()
+  const reduce = useReducedMotion()
+  // The toast on screen. It outlives the store's by the length of its exit: a timed-out or answered toast sinks and
+  // fades instead of vanishing (unmounting the overlay window cut its exit animation off).
+  const [t, setT] = useState(current)
+  if (current && current !== t) setT(current)
+  if (!current && t && reduce) setT(null)
   const y = useSharedValue(0)
-  const drag = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }], opacity: 1 - Math.min(Math.max(y.get(), 0) / 120, 0.6) }))
+  const gone = useSharedValue(0)
+  useEffect(() => {
+    if (current) { gone.set(0); return }
+    if (!reduce) gone.set(withTiming(1, { duration: 220, easing: Easing.bezier(0.4, 0, 1, 1) }, (ok) => { if (ok) scheduleOnRN(setT, null) }))
+  }, [current]) // eslint-disable-line react-hooks/exhaustive-deps
+  const drag = useAnimatedStyle(() => ({
+    transform: [{ translateY: y.get() + gone.get() * 24 }, { scale: 1 - gone.get() * 0.04 }],
+    opacity: (1 - Math.min(Math.max(y.get(), 0) / 120, 0.6)) * (1 - gone.get()),
+  }))
   const pan = Gesture.Pan().activeOffsetY([-8, 8])
     .onUpdate((e) => { y.set(e.translationY > 0 ? e.translationY : e.translationY / 6) })
     .onEnd((e) => {
@@ -52,7 +66,7 @@ export function Toaster() {
     <GestureHandlerRootView style={StyleSheet.absoluteFill} pointerEvents="box-none">
     <GestureDetector gesture={pan}>
     <Animated.View key={t.id} entering={SlideInDown.duration(260).easing(Easing.bezier(0.23, 1, 0.32, 1))} exiting={FadeOut.duration(160)}
-      onLayout={() => y.set(0)} pointerEvents="box-none" accessibilityLiveRegion="polite"
+      onLayout={() => y.set(0)} pointerEvents={current ? 'box-none' : 'none'} accessibilityLiveRegion="polite"
       style={{ position: 'absolute', left: space.l, right: space.l, bottom: insets.bottom + 62 }}>
     <Animated.View style={drag}>
       {glass ? (

@@ -25,7 +25,10 @@ Changes to anything below get written here first.
   knows, and Next skips those steps. The date is the past week as a row of days (entries often get caught up at the
   end of the week) plus the calendar, and "Add another" in the toast starts the next entry on the same day. A new
   entry starts empty (no guessed category or account); tapping a quick action again takes it back out. Splitting
-  hands the draft to the full form.
+  hands the draft to the full form. The steps move like pages in a stack: the next one slides in from the right over
+  the last, Back slides it away again, each question sits at the top of its page, and the header stays "New entry".
+  The dots stretch and fill as you go, Back grows in beside Next, and the full form for a split slides in as one
+  more page.
 - **Swipe rows like Mail (iOS 26).** Right: Duplicate. Left: Category, Edit, Delete. The actions come up as circles
   that grow with the swipe; keep going and the edge one (Duplicate, Delete) stretches into a capsule with a tick, and
   letting go runs it (Delete slides the row away, then it folds shut). A half swipe rests open; tapping the row,
@@ -62,6 +65,11 @@ Changes to anything below get written here first.
 
 ## Motion
 - Navigation, sheets and the tab bar are the system's own.
+- Nothing inside a screen snaps. Content that replaces a loading skeleton fades up; a new filter or search keeps the
+  current list until its results land; switching months in Insights eases the month in from the side it came from
+  while its figures roll; trend charts draw in from the left once when they appear; toasts sink and fade when they
+  go; a switch or tick in Settings moves on tap and the save follows. The Back / Next bar in a new entry rides the
+  keyboard on the keyboard's own timing.
 - Rolling digits for figures that change (hero numbers, the keypad, month switches). Bars, rings and the donut draw
   once when they appear. Toasts slide up from the tab bar; swipe one down to put it away.
 - Scrubbing runs on the UI thread (Reanimated worklets); a selection tick marks each day passed.

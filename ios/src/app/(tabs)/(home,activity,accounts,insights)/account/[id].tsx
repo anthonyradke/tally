@@ -33,20 +33,25 @@ export default function AccountDetail() {
   const a = t.acct.get(Number(id))
   const b = t.b
 
+  const daily = !!a && (a.kind === 'cash' || a.kind === 'card')
   const series = useMemo(() => {
     if (!a || !b) return null
-    if ((a.kind === 'cash' || a.kind === 'card') && all.data) {
+    if (daily) {
+      // Day by day once every row is in. Until then there's no chart at all, rather than the month-end one for a
+      // moment and then a different line.
+      if (!all.data) return null
       const s = dailyBalances(a, all.data.items, b.start, b.today)
       return { values: s.values, labels: s.dates.map((d) => (d === b.today ? 'Today' : short(d))) }
     }
     const months = b.months.filter((m) => m.month <= b.today)
     return { values: months.map((m) => m.balances[String(a.id)] ?? a.start_balance), labels: months.map((m) => `End of ${monthLabel(m.month, 'long')}`) }
-  }, [a, b, all.data])
+  }, [a, b, all.data, daily])
 
   if (!a || !b) return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}><StateView q={t.q} /></ScrollView>
 
   const owed = a.kind === 'card' || a.kind === 'loan'
-  const now = series?.values.at(-1) ?? a.start_balance
+  // Before the rows load, the balance from the last month end the server worked out (what Accounts shows too).
+  const now = series?.values.at(-1) ?? b.months.filter((m) => m.month <= b.today).at(-1)?.balances[String(a.id)] ?? a.start_balance
   const monthStartIdx = series && (a.kind === 'cash' || a.kind === 'card') ? series.values.length - fromISO(b.today).getDate() : -1
   const startOfMonth = monthStartIdx > 0 && series ? series.values[monthStartIdx - 1] : null
   const change = startOfMonth != null ? now - startOfMonth : null
@@ -76,9 +81,9 @@ export default function AccountDetail() {
                 <Txt variant="callout" tone="label2"><Txt variant="callout" tone={good ? 'pos' : 'neg'} num style={{ fontWeight: '600' }}>{change > 0 ? '+' : '−'}{formatCents(Math.abs(change))}</Txt> this month</Txt>
               ) : <Txt variant="callout" tone="label2">{a.kind === 'investment' || a.kind === 'loan' ? 'As of the last month end' : 'As of today'}</Txt>} />
           </View>
-          {series && series.values.length > 1 && (
+          {series && series.values.length > 1 ? (
             <ScrubChart scrub={scrub} slots={series.values.length} series={[{ values: series.values, color: c.ink }]} height={160} />
-          )}
+          ) : daily && !all.data ? <View style={{ height: 160 }} /> : null}
           <View style={{ flexDirection: 'row', gap: space.s }}>
             {(a.kind === 'cash' || a.kind === 'card') && (
               <Action sf="checkmark.seal" md="verified" label="Reconcile" onPress={() => router.push({ pathname: '/reconcile/[id]', params: { id: String(a.id) } })} />

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
-import Animated from 'react-native-reanimated'
+import Animated, { FadeIn, FadeOut, LayoutAnimationConfig } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
 import { useQueryClient } from '@tanstack/react-query'
 import { closeSwipes } from '@/components/SwipeRow'
@@ -68,25 +68,37 @@ export default function Reconcile() {
         <View style={{ alignItems: 'center', paddingVertical: space.s }}>
           <Animated.View style={shakeStyle}><RollingText text={formatCents(toCents(amount))} style={{ fontSize: 52, fontWeight: '700', letterSpacing: -1.2, color: amount ? c.label : c.label3 }} /></Animated.View>
         </View>
-        {dx && <Result dx={dx} />}
+        {dx && <Animated.View entering={FadeIn.duration(260)}><Result dx={dx} /></Animated.View>}
       </ScrollView>
+      {/* The keypad fades away once there's an answer and comes back for "Change amount"; the buttons fade across.
+          Nothing animates in with the sheet itself (skipEntering). */}
+      <LayoutAnimationConfig skipEntering>
       <View style={{ paddingHorizontal: space.l, paddingBottom: 34, gap: space.s }}>
-        {!dx && <Keypad onKey={(k) => {
-          const next = press(amount, k)
-          if (next === amount && amount && k !== 'del') { shake(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
-          setAmount(next)
-        }} onClear={() => setAmount('')} />}
+        {!dx && (
+          <Animated.View entering={FadeIn.duration(260)} exiting={FadeOut.duration(160)}>
+            <Keypad onKey={(k) => {
+              const next = press(amount, k)
+              if (next === amount && amount && k !== 'del') { shake(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
+              setAmount(next)
+            }} onClear={() => setAmount('')} />
+          </Animated.View>
+        )}
         {!dx ? (
-          <Button label={busy ? 'Checking…' : 'Check'} onPress={() => check(false)} disabled={busy || !amount} style={{ height: 52 }} />
+          <Animated.View key="check" entering={FadeIn.duration(220)}>
+            <Button label={busy ? 'Checking…' : 'Check'} onPress={() => check(false)} disabled={busy || !amount} style={{ height: 52 }} />
+          </Animated.View>
         ) : dx.gap === 0 ? (
-          <Button label="Mark as reconciled" onPress={() => check(true)} disabled={busy} style={{ height: 52 }} />
+          <Animated.View key="mark" entering={FadeIn.duration(220)}>
+            <Button label="Mark as reconciled" onPress={() => check(true)} disabled={busy} style={{ height: 52 }} />
+          </Animated.View>
         ) : (
-          <View style={{ flexDirection: 'row', gap: space.s }}>
+          <Animated.View key="gap" entering={FadeIn.duration(220)} style={{ flexDirection: 'row', gap: space.s }}>
             <Button label="Change amount" secondary onPress={() => { setDx(null); setAmount(fromCents(toCents(amount))) }} style={{ flex: 1, height: 52 }} />
             <Button label="Save anyway" onPress={() => check(true)} disabled={busy} style={{ flex: 1, height: 52 }} />
-          </View>
+          </Animated.View>
         )}
       </View>
+      </LayoutAnimationConfig>
       <Confetti fire={party} origin={{ x: 0.5, y: 0.32 }} />
     </View>
   )

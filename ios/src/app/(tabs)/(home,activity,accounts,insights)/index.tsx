@@ -17,7 +17,7 @@ import { RollingMoney } from '@/components/Rolling'
 import { ScrubChart } from '@/components/ScrubChart'
 import { ScrubFigure } from '@/components/ScrubFigure'
 import { Sheen } from '@/components/Sheen'
-import { StateView } from '@/components/StateView'
+import { Arrive, StateView } from '@/components/StateView'
 import { Button, Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
@@ -53,6 +53,7 @@ export default function Home() {
   const { q, b } = useTally()
   const pull = usePullRefresh(q.refetch)
   const { c } = useTheme()
+  const [waited] = useState(!b) // the skeleton showed first
   return (
     <>
       <Stack.Toolbar placement="right">
@@ -62,7 +63,7 @@ export default function Home() {
         contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
         refreshControl={<RefreshControl {...pull} />}>
         <Glow />
-        {b ? <Widgets b={b} /> : <StateView q={q} />}
+        {b ? <Arrive on={waited}><Widgets b={b} /></Arrive> : <StateView q={q} />}
       </ScrollView>
     </>
   )
