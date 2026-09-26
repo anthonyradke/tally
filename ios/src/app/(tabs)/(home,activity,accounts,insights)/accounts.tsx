@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
 import { Glow } from '@/components/Glow'
 import { Icon } from '@/components/Icon'
@@ -5,7 +6,7 @@ import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
 import { Hairline, Panel } from '@/components/Panel'
 import { RollingMoney } from '@/components/Rolling'
-import { StateView } from '@/components/StateView'
+import { Arrive, StateView } from '@/components/StateView'
 import { Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { KIND_LABEL, KIND_SYMBOL } from '@/icons/categories'
@@ -26,13 +27,14 @@ export default function Accounts() {
   const pull = usePullRefresh(q.refetch)
   const { c } = useTheme()
   const bal = useBalancesToday(b)
+  const [waited] = useState(!b) // the skeleton showed first
   return (
     <>
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, paddingBottom: 120, gap: space.xxl }}
         refreshControl={<RefreshControl {...pull} />}>
         <Glow />
-        {b ? <Body b={b} bal={bal} /> : <StateView q={q} />}
+        {b ? <Arrive on={waited} style={{ gap: space.xxl }}><Body b={b} bal={bal} /></Arrive> : <StateView q={q} />}
       </ScrollView>
     </>
   )

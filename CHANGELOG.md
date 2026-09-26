@@ -29,6 +29,14 @@ Added
 - Tally Dev has its own icon: an orange glowing t with a DEV tag.
 
 Changed
+- No more abrupt jumps between screens. The steps of a new entry slide like pages (Back slides them the other way),
+  the progress dots and the Back button ease in, and splitting slides the full form in instead of swapping sheets.
+- Filtering or searching Activity keeps the list up until the new results arrive, instead of flashing the loading
+  placeholder. Switching months in Insights eases the new month in and rolls its totals.
+- Charts draw in from the left when they appear, screens that had to load fade their content in, the reconcile
+  keypad fades out when the answer comes in, and toasts slide away instead of vanishing.
+- "Duplicate to today" in an entry's menu turns the open editor into the copy, instead of closing it and opening
+  another one.
 - A new entry starts empty: no category or account is picked for you, and switching between Spent, Income and the
   rest no longer picks one either.
 - Editing an entry, the amount keypad is its own raised panel with a Done button, and it springs up and slides back
@@ -43,6 +51,10 @@ Changed
   Change category and Delete as actions, and no longer reads icon names aloud.
 
 Fixed
+- Opening a new entry or an entry to edit could flash the last entry's amount and details for a moment.
+- Typing a budget right after leaving another budget field could wipe what you'd typed when the first one saved.
+- The switches on Settings → Home screen flipped back until the save finished, then flipped again.
+- The account page showed a month-end chart and balance for a moment before switching to the daily ones.
 - Tapping an entry opened two editors on top of each other, so it took two taps on X to close.
 - The keypad could get stuck partway down the screen when opening a new entry.
 - Undo did nothing: the tap went through the toast to the row underneath.

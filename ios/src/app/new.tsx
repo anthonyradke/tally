@@ -2,9 +2,9 @@
 // date and Add. Tapping an answer moves on by itself, and Back and Next are always there. Picking a past entry or a
 // quick action fills in what it knows, and Next skips those steps. Editing an entry uses the form (entry.tsx).
 // A new entry starts empty: no category or account is guessed for you.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, ScrollView, Switch, TextInput, View } from 'react-native'
-import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming, ZoomIn } from 'react-native-reanimated'
+import Animated, { Easing, interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, ZoomIn } from 'react-native-reanimated'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
@@ -15,6 +15,8 @@ import { Keypad } from '@/components/Keypad'
 import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
 import { DatePick } from '@/components/native/DatePick'
+import { EASE } from '@/components/ease'
+import { PAGE_MS, Pages } from '@/components/Pages'
 import { Segmented } from '@/components/native/Segmented'
 import { Receipt } from '@/components/Receipt'
 import { RollingText } from '@/components/Rolling'
@@ -38,9 +40,11 @@ import { nextStep, stepsFor, type Step } from '@/lib/steps'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
+import { Entry } from './entry'
 
 const KINDS: [CatType, string][] = [['Spending', 'Spent'], ['Money in', 'Income'], ['Transfer', 'Transfer'], ['Saving', 'Saving'], ['Loan', 'Loan']]
 const KIND_ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
+const KEYBOARD = Easing.bezier(0.38, 0.7, 0.125, 1) // close to the iOS keyboard's own curve
 
 export default function New() {
   const { c, tint } = useTheme()
@@ -59,7 +63,7 @@ export default function New() {
     return f ? { ...base, ...fill(f.id) } : base
   })
   const [step, setStep] = useState<Step>(() => (seed?.amount ? nextStep('amount', seed, new Set()) : 'amount'))
-  const [dir, setDir] = useState(1)
+  const [dir, setDir] = useState<1 | -1>(1)
   const [seen, setSeen] = useState<Set<Step>>(new Set(['amount']))
   const [quick, setQuick] = useState<number | null>(fav ? Number(fav) : null) // the quick action filling the draft
   const [saving, setSaving] = useState(false)
@@ -68,7 +72,8 @@ export default function New() {
   const [shakeStyle, shake] = useShake()
   const loaded = useRef(false)
 
-  useEffect(() => {
+  // Before the first paint, so the last entry's draft never flashes up in the new one.
+  useLayoutEffect(() => {
     if (loaded.current || !t.b) return
     loaded.current = true
     reset(seed ?? blank(date ?? t.b.today))
@@ -86,7 +91,9 @@ export default function New() {
       kind: t.cat.get(f.category_id)?.type ?? 'Spending', ...(f.amount ? { amount: fromCents(f.amount) } : {}) }
   }
   const go = (s: Step) => {
+    if (s === step) return
     Haptics.selectionAsync().catch(() => {})
+    Keyboard.dismiss() // a focused field slides away with its page; the keyboard goes with it
     setDir(stepsFor(d.kind).indexOf(s) >= at ? 1 : -1)
     setSeen((x) => new Set(x).add(s))
     setErrors([])
@@ -124,10 +131,14 @@ export default function New() {
     set({ what: x.what, category_id: x.category_id, from_id: x.from_id, to_id: x.to_id, kind: t.catOf(x).type })
     go(nextStep('what', useDraft.getState().d, seen))
   }
-  // Splitting needs the full form: hand it the draft with the split already started.
+  // Splitting needs the full form: it slides in as one more page, with the split already started. (Swapping this
+  // modal for the editor's dropped the sheet without animating and slid a new one up.)
+  const [form, setForm] = useState(false)
   const split = () => {
+    Keyboard.dismiss()
+    Haptics.selectionAsync().catch(() => {})
     set({ split: [{ key: 'a', category_id: d.category_id, amount: d.amount }, { key: 'b', category_id: null, amount: '' }], target: 'b' })
-    router.replace({ pathname: '/entry', params: { keep: '1' } })
+    setForm(true)
   }
 
   async function save() {
@@ -167,126 +178,164 @@ export default function New() {
     }
   }
 
-  // Each step slides in a little from the side it comes from. Only a slide, never a fade: a layout animation (or a
-  // fade) starting while the modal is still presenting can stay stuck and leave the screen blank.
+  // Back grows in beside Next once there's somewhere to go back to, instead of popping in and squeezing it.
   const reduce = useReducedMotion()
-  const slide = useSharedValue(0)
-  useEffect(() => {
-    if (!reduce) slide.set(withSequence(withTiming(dir * 28, { duration: 0 }), withTiming(0, { duration: 220 })))
-  }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
-  const stepStyle = useAnimatedStyle(() => ({ transform: [{ translateX: slide.get() }] }))
+  const canBack = at > 0
+  const backK = useSharedValue(canBack ? 1 : 0)
+  useEffect(() => { backK.set(reduce ? (canBack ? 1 : 0) : withTiming(canBack ? 1 : 0, { duration: 320, easing: EASE })) }, [canBack]) // eslint-disable-line react-hooks/exhaustive-deps
+  const backStyle = useAnimatedStyle(() => ({ flex: backK.get(), marginRight: -space.s * (1 - backK.get()), opacity: backK.get() }))
 
-  // The Back / Next bar rides on top of the keyboard while "What was it?" is being typed.
-  const [kbH, setKbH] = useState(0)
+  // The Back / Next bar rides on top of the keyboard while "What was it?" is being typed, moving with it on the
+  // keyboard's own timing (it used to jump to the end position as the keyboard started to move).
+  const kb = useSharedValue(0)
   useEffect(() => {
-    const show = Keyboard.addListener('keyboardWillShow', (e) => setKbH(e.endCoordinates.height))
-    const hide = Keyboard.addListener('keyboardWillHide', () => setKbH(0))
+    const to = (h: number, ms?: number) => kb.set(reduce ? h : withTiming(h, { duration: ms || 250, easing: KEYBOARD }))
+    const show = Keyboard.addListener('keyboardWillShow', (e) => to(e.endCoordinates.height, e.duration))
+    const hide = Keyboard.addListener('keyboardWillHide', (e) => to(0, e.duration))
     return () => { show.remove(); hide.remove() }
-  }, [])
+  }, [reduce]) // eslint-disable-line react-hooks/exhaustive-deps
+  const bottom = insets.bottom
+  const barStyle = useAnimatedStyle(() => ({ paddingBottom: Math.max(kb.get(), bottom) + space.s }))
 
-  const title = { amount: 'New entry', what: d.kind === 'Money in' ? 'Where from?' : 'What was it?', category: 'Category',
-    from: d.kind === 'Spending' ? 'Paid from' : 'From', to: d.kind === 'Money in' ? 'Landed in' : 'To', review: 'Review' }[step]
+  // Each step's question sits at the top of its page and moves with it; the header stays put.
+  const heading: Partial<Record<Step, string>> = { category: 'Category', from: d.kind === 'Spending' ? 'Paid from' : 'From', to: d.kind === 'Money in' ? 'Landed in' : 'To' }
+
+  // The steps; splitting slides the full form in over them as one more page.
+  const flow = (
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      {/* Where you are: one dot per step. A dot you've been to jumps back there. */}
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, paddingVertical: space.s }}>
+        {steps.map((s, i) => (
+          <Dot key={s} on={s === step} done={i <= at} label={`Step ${i + 1} of ${steps.length}`} onPress={() => { if (seen.has(s)) go(s) }} />
+        ))}
+      </View>
+
+      <View style={{ flex: 1 }}>
+        <Pages page={step} dir={dir} render={(s) => (
+          <>
+            {s === 'amount' && (
+              <View style={{ flex: 1, paddingHorizontal: space.l, gap: space.l }}>
+                <Segmented options={KINDS} value={d.kind} onChange={setKind} />
+                {t.b && t.b.favorites.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l, flexGrow: 0 }} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
+                    {t.b.favorites.map((f) => {
+                      const fc = t.cat.get(f.category_id)
+                      const fv = fc ? categoryVisual({ ...fc, icon: f.icon ?? fc.icon, color: f.color ?? fc.color }) : null
+                      return <Chip key={f.id} label={f.label} selected={quick === f.id} onPress={() => pickQuick(f.id)}
+                        leading={fv ? <Mark kind="glyph" sf={fv.sf} md={fv.md} tint={tint(fv.tint)} size={28} /> : undefined} />
+                    })}
+                  </ScrollView>
+                )}
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xs }}>
+                  <Animated.View style={shakeStyle}>
+                    <RollingText text={formatCents(cents)} style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
+                  </Animated.View>
+                  {d.what ? <Txt variant="callout" tone="label2">{d.what}</Txt> : null}
+                </View>
+                <Keypad onKey={(k) => {
+                  const n = press(d.amount, k)
+                  if (n === d.amount && d.amount && k !== 'del') refuse()
+                  else set({ amount: n })
+                }} onClear={() => set({ amount: '' })} />
+              </View>
+            )}
+
+            {s === 'what' && <What history={history.data?.items ?? []} onPick={pickPast} onSubmit={next} />}
+
+            {s === 'category' && (
+              <ScrollView contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
+                <Heading text={heading.category!} />
+                <Group>
+                  {(t.b?.categories ?? []).filter((x) => x.type === d.kind && (x.active || x.id === d.category_id)).map((x) => {
+                    const v = categoryVisual(x)
+                    return <Row key={x.id} label={x.name} chevron={false} onPress={() => { set({ category_id: x.id }); next() }}
+                      leading={<Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={30} />}
+                      trailing={x.id === d.category_id ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : undefined} />
+                  })}
+                </Group>
+              </ScrollView>
+            )}
+
+            {(s === 'from' || s === 'to') && <Accounts side={s} heading={heading[s]!} onPick={next} />}
+
+            {s === 'review' && (
+              <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
+                <Tap feedback="opacity" onPress={() => go('amount')} style={{ alignItems: 'center', paddingVertical: space.s }} accessibilityLabel={`Amount ${formatCents(cents)}. Change`}>
+                  <Txt style={{ fontSize: 44, fontWeight: '700', letterSpacing: -1.2, color: c.label }}>{`${d.refund ? '−' : ''}${formatCents(cents)}`}</Txt>
+                  <Txt variant="callout" tone="label2">{KINDS.find(([k]) => k === d.kind)?.[1]}</Txt>
+                </Tap>
+                <Group>
+                  <Row label={d.kind === 'Money in' ? 'From' : 'What'} value={d.what || 'Add a name'} sf="text.alignleft" md="notes" onPress={() => go('what')} />
+                  <Row label="Category" value={cat?.name ?? 'Choose'} onPress={() => go('category')}
+                    leading={cat ? <CatMark id={cat.id} /> : undefined} sf={cat ? undefined : 'square.grid.2x2'} md={cat ? undefined : 'category'} />
+                  {shape.from !== 'blank' && <Row label="From" value={d.from_id ? t.acct.get(d.from_id)?.name : 'Choose'} sf="arrow.up.right" md="north_east" onPress={() => go('from')} />}
+                  {shape.to !== 'blank' && <Row label="To" value={d.to_id ? t.acct.get(d.to_id)?.name : shape.to === 'optional' ? 'None' : 'Choose'} sf="arrow.down.left" md="south_west" onPress={() => go('to')} />}
+                </Group>
+                <DateStrip />
+                <Extras onSplit={split} />
+                {errors.length > 0 && (
+                  <View style={{ padding: space.m, borderRadius: radius.input, backgroundColor: c.panel, gap: 4 }} accessibilityLiveRegion="assertive">
+                    {errors.map((e) => <Txt key={e} variant="callout" tone="neg">{e}</Txt>)}
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </>
+        )} />
+      </View>
+
+      <Animated.View style={[{ flexDirection: 'row', gap: space.s, paddingHorizontal: space.l, paddingTop: space.s }, barStyle]}>
+        <Animated.View style={[{ overflow: 'hidden' }, backStyle]} pointerEvents={canBack ? 'auto' : 'none'}
+          accessibilityElementsHidden={!canBack} importantForAccessibility={canBack ? 'auto' : 'no-hide-descendants'}>
+          <Button label="Back" secondary onPress={back} style={{ height: 52 }} />
+        </Animated.View>
+        {step !== 'review' ? (
+          <Button label="Next" onPress={next} style={{ flex: 2, height: 52 }} />
+        ) : done ? (
+          <Animated.View entering={ZoomIn.duration(180)} accessibilityLiveRegion="polite"
+            style={{ flex: 2, height: 52, borderRadius: radius.pill, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
+            <CheckDraw size={24} color={c.onInk} />
+            <Txt variant="headline" tone="onInk">Added</Txt>
+          </Animated.View>
+        ) : (
+          <Button label={saving ? 'Adding…' : `Add ${formatCents(cents)}`} onPress={save} disabled={saving} style={{ flex: 2, height: 52 }} />
+        )}
+      </Animated.View>
+    </View>
+  )
 
   return (
     <>
-      <Stack.Screen options={{ title }} />
+      <Stack.Screen options={{ title: 'New entry' }} />
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => close()} />
       </Stack.Toolbar>
-      <View style={{ flex: 1, backgroundColor: c.bg }}>
-        {/* Where you are: one dot per step. A dot you've been to jumps back there. */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, paddingVertical: space.s }}>
-          {steps.map((s, i) => (
-            <Tap key={s} onPress={() => { if (seen.has(s) && s !== step) go(s) }} hitSlop={6} accessibilityLabel={`Step ${i + 1} of ${steps.length}`}
-              style={{ width: s === step ? 18 : 6, height: 6, borderRadius: 3, backgroundColor: i <= at ? c.ink : c.fillStrong }}><View /></Tap>
-          ))}
-        </View>
-
-        <Animated.View style={[{ flex: 1 }, stepStyle]}>
-          {step === 'amount' && (
-            <View style={{ flex: 1, paddingHorizontal: space.l, gap: space.l }}>
-              <Segmented options={KINDS} value={d.kind} onChange={setKind} />
-              {t.b && t.b.favorites.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l, flexGrow: 0 }} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
-                  {t.b.favorites.map((f) => {
-                    const fc = t.cat.get(f.category_id)
-                    const fv = fc ? categoryVisual({ ...fc, icon: f.icon ?? fc.icon, color: f.color ?? fc.color }) : null
-                    return <Chip key={f.id} label={f.label} selected={quick === f.id} onPress={() => pickQuick(f.id)}
-                      leading={fv ? <Mark kind="glyph" sf={fv.sf} md={fv.md} tint={tint(fv.tint)} size={28} /> : undefined} />
-                  })}
-                </ScrollView>
-              )}
-              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xs }}>
-                <Animated.View style={shakeStyle}>
-                  <RollingText text={formatCents(cents)} style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
-                </Animated.View>
-                {d.what ? <Txt variant="callout" tone="label2">{d.what}</Txt> : null}
-              </View>
-              <Keypad onKey={(k) => {
-                const n = press(d.amount, k)
-                if (n === d.amount && d.amount && k !== 'del') refuse()
-                else set({ amount: n })
-              }} onClear={() => set({ amount: '' })} />
-            </View>
-          )}
-
-          {step === 'what' && <What history={history.data?.items ?? []} onPick={pickPast} onSubmit={next} />}
-
-          {step === 'category' && (
-            <ScrollView contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
-              <Group>
-                {(t.b?.categories ?? []).filter((x) => x.type === d.kind && (x.active || x.id === d.category_id)).map((x) => {
-                  const v = categoryVisual(x)
-                  return <Row key={x.id} label={x.name} chevron={false} onPress={() => { set({ category_id: x.id }); next() }}
-                    leading={<Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={30} />}
-                    trailing={x.id === d.category_id ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : undefined} />
-                })}
-              </Group>
-            </ScrollView>
-          )}
-
-          {(step === 'from' || step === 'to') && <Accounts side={step} onPick={next} />}
-
-          {step === 'review' && (
-            <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
-              <Tap feedback="opacity" onPress={() => go('amount')} style={{ alignItems: 'center', paddingVertical: space.s }} accessibilityLabel={`Amount ${formatCents(cents)}. Change`}>
-                <Txt style={{ fontSize: 44, fontWeight: '700', letterSpacing: -1.2, color: c.label }}>{`${d.refund ? '−' : ''}${formatCents(cents)}`}</Txt>
-                <Txt variant="callout" tone="label2">{KINDS.find(([k]) => k === d.kind)?.[1]}</Txt>
-              </Tap>
-              <Group>
-                <Row label={d.kind === 'Money in' ? 'From' : 'What'} value={d.what || 'Add a name'} sf="text.alignleft" md="notes" onPress={() => go('what')} />
-                <Row label="Category" value={cat?.name ?? 'Choose'} onPress={() => go('category')}
-                  leading={cat ? <CatMark id={cat.id} /> : undefined} sf={cat ? undefined : 'square.grid.2x2'} md={cat ? undefined : 'category'} />
-                {shape.from !== 'blank' && <Row label="From" value={d.from_id ? t.acct.get(d.from_id)?.name : 'Choose'} sf="arrow.up.right" md="north_east" onPress={() => go('from')} />}
-                {shape.to !== 'blank' && <Row label="To" value={d.to_id ? t.acct.get(d.to_id)?.name : shape.to === 'optional' ? 'None' : 'Choose'} sf="arrow.down.left" md="south_west" onPress={() => go('to')} />}
-              </Group>
-              <DateStrip />
-              <Extras onSplit={split} />
-              {errors.length > 0 && (
-                <View style={{ padding: space.m, borderRadius: radius.input, backgroundColor: c.panel, gap: 4 }} accessibilityLiveRegion="assertive">
-                  {errors.map((e) => <Txt key={e} variant="callout" tone="neg">{e}</Txt>)}
-                </View>
-              )}
-            </ScrollView>
-          )}
-        </Animated.View>
-
-        <View style={{ flexDirection: 'row', gap: space.s, paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: Math.max(kbH, insets.bottom) + space.s }}>
-          {at > 0 && <Button label="Back" secondary onPress={back} style={{ flex: 1, height: 52 }} />}
-          {step !== 'review' ? (
-            <Button label="Next" onPress={next} style={{ flex: 2, height: 52 }} />
-          ) : done ? (
-            <Animated.View entering={ZoomIn.duration(180)} accessibilityLiveRegion="polite"
-              style={{ flex: 2, height: 52, borderRadius: radius.pill, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
-              <CheckDraw size={24} color={c.onInk} />
-              <Txt variant="headline" tone="onInk">Added</Txt>
-            </Animated.View>
-          ) : (
-            <Button label={saving ? 'Adding…' : `Add ${formatCents(cents)}`} onPress={save} disabled={saving} style={{ flex: 2, height: 52 }} />
-          )}
-        </View>
+      <View style={{ flex: 1 }}>
+        <Pages page={form ? 'form' : 'steps'} dir={1} render={(k) => (k === 'form' ? <Entry embedded /> : flow)} />
       </View>
     </>
+  )
+}
+
+/** A step's question, at the top of its page. */
+function Heading({ text }: { text: string }) {
+  return <Txt variant="title2" accessibilityRole="header" style={{ paddingHorizontal: space.xs, marginBottom: -space.xs }}>{text}</Txt>
+}
+
+/** One step in the progress dots. The current one stretches into a dash; both the stretch and the fill ease over. */
+function Dot({ on, done, label, onPress }: { on: boolean; done: boolean; label: string; onPress: () => void }) {
+  const { c } = useTheme()
+  const reduce = useReducedMotion()
+  const w = useSharedValue(on ? 18 : 6)
+  const k = useSharedValue(done ? 1 : 0)
+  useEffect(() => { w.set(reduce ? (on ? 18 : 6) : withTiming(on ? 18 : 6, { duration: 300, easing: EASE })) }, [on]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { k.set(reduce ? (done ? 1 : 0) : withTiming(done ? 1 : 0, { duration: 300, easing: EASE })) }, [done]) // eslint-disable-line react-hooks/exhaustive-deps
+  const from = c.fillStrong, to = c.ink
+  const style = useAnimatedStyle(() => ({ width: w.get(), backgroundColor: interpolateColor(k.get(), [0, 1], [from, to]) }))
+  return (
+    <Tap feedback="opacity" onPress={on ? undefined : onPress} hitSlop={6} accessibilityLabel={label} accessibilityState={{ selected: on }}>
+      <Animated.View style={[{ height: 6, borderRadius: 3 }, style]} />
+    </Tap>
   )
 }
 
@@ -304,6 +353,9 @@ function What({ history, onPick, onSubmit }: { history: Txn[]; onPick: (x: Txn) 
   const { c } = useTheme()
   const t = useTally()
   const { d, set } = useDraft()
+  // Focus once the page has slid in: focusing it while it's still off to the side can drag its parent along with it.
+  const input = useRef<TextInput>(null)
+  useEffect(() => { const id = setTimeout(() => input.current?.focus(), PAGE_MS); return () => clearTimeout(id) }, [])
   const list = useMemo(() => {
     const k = merchantKey(d.what)
     const seen = new Set<string>()
@@ -319,7 +371,7 @@ function What({ history, onPick, onSubmit }: { history: Txn[]; onPick: (x: Txn) 
   }, [d.what, d.kind, history]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
-      <TextInput autoFocus value={d.what} onChangeText={(what) => set({ what })} placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'}
+      <TextInput ref={input} value={d.what} onChangeText={(what) => set({ what })} placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'}
         placeholderTextColor={c.label3} returnKeyType="next" onSubmitEditing={onSubmit} submitBehavior="submit" autoCapitalize="words" autoCorrect={false}
         maxFontSizeMultiplier={1.4} style={{ fontSize: 22, fontWeight: '600', color: c.label, paddingVertical: space.s, paddingHorizontal: space.xs }} />
       {list.length > 0 && (
@@ -334,7 +386,7 @@ function What({ history, onPick, onSubmit }: { history: Txn[]; onPick: (x: Txn) 
   )
 }
 
-function Accounts({ side, onPick }: { side: 'from' | 'to'; onPick: () => void }) {
+function Accounts({ side, heading, onPick }: { side: 'from' | 'to'; heading: string; onPick: () => void }) {
   const t = useTally()
   const { c, bank } = useTheme()
   const { d, set } = useDraft()
@@ -346,6 +398,7 @@ function Accounts({ side, onPick }: { side: 'from' | 'to'; onPick: () => void })
   const check = (on: boolean) => (on ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : <View style={{ width: 16 }} />)
   return (
     <ScrollView contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
+      <Heading text={heading} />
       {SHAPES[d.kind][side] === 'optional' && <Group><Row label="None" chevron={false} onPress={() => choose(null)} trailing={check(current == null)} /></Group>}
       {KIND_ORDER.map((k) => {
         const list = t.b!.accounts.filter((a) => a.kind === k && a.id !== other && (a.active || a.id === current))

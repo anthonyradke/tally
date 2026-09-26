@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshControl, ScrollView, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import * as Haptics from 'expo-haptics'
 import Animated, { Easing, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
 import { Chip } from '@/components/Chip'
@@ -57,6 +57,8 @@ export default function Activity() {
     queryFn: ({ pageParam }) => api.transactions({ ...query, limit: PAGE, offset: pageParam }),
     initialPageParam: 0,
     getNextPageParam: (last, pages) => (pages.length * PAGE < last.total ? pages.length * PAGE : undefined),
+    // A new filter or search keeps the current list up until its results land, instead of flashing the skeleton.
+    placeholderData: keepPreviousData,
   })
   const pull = usePullRefresh(() => Promise.all([q.refetch(), t.q.refetch()]))
   const rows = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data])

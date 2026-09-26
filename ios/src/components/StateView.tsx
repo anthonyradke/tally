@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { router } from 'expo-router'
-import { Pressable, View } from 'react-native'
+import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api'
@@ -17,6 +17,18 @@ export function Skel({ w, h, r = 8, style }: { w: number | `${number}%`; h: numb
   useEffect(() => { if (!reduce) o.set(withRepeat(withTiming(0.55, { duration: 900 }), -1, true)) }, [o, reduce])
   const a = useAnimatedStyle(() => ({ opacity: o.get() }))
   return <Animated.View style={[{ width: w, height: h, borderRadius: r, backgroundColor: c.fill }, a, style]} />
+}
+
+/** Content that replaces a skeleton fades up over it instead of snapping in. `on` is false when the data was already
+ *  there on the first frame (the usual case, thanks to the cache), and then nothing moves. */
+export function Arrive({ on, children, style }: { on: boolean; children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const reduce = useReducedMotion()
+  const k = useSharedValue(on && !reduce ? 0 : 1)
+  useEffect(() => {
+    if (k.get() < 1) k.set(withTiming(1, { duration: 300 }, (ok) => { if (!ok) k.set(1) }))
+  }, [k])
+  const a = useAnimatedStyle(() => ({ opacity: k.get(), transform: [{ translateY: (1 - k.get()) * 8 }] }))
+  return <Animated.View style={[a, style]}>{children}</Animated.View>
 }
 
 /** First-load skeleton for panel screens, and the error state when Tally can't be reached. */
