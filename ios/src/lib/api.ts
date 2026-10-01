@@ -6,7 +6,9 @@ export type Kind = 'cash' | 'card' | 'investment' | 'loan'
 export type CatType = 'Money in' | 'Spending' | 'Saving' | 'Transfer' | 'Loan'
 export type Freq = 'weekly' | 'biweekly' | 'monthly' | 'yearly'
 
-export interface Account { id: number; name: string; kind: Kind; bank: string | null; start_balance: number; apy: number | null; loan_rate: number | null; ef: boolean; color: string | null; icon: string | null; active: boolean }
+/** `opened` is the first month ("2026-10-01") of a loan or investment that began after Tally started counting; it's
+ *  zero in the months before. */
+export interface Account { id: number; name: string; kind: Kind; bank: string | null; start_balance: number; apy: number | null; loan_rate: number | null; ef: boolean; color: string | null; icon: string | null; active: boolean; opened: string | null }
 /** `active: false` = hidden in Settings: kept for existing entries and totals, left out of pickers. */
 export interface Category { id: number; name: string; type: CatType; icon: string | null; color: string | null; budget: number | null; active: boolean }
 export interface Txn { id: number; date: string; what: string; category_id: number; from_id: number | null; to_id: number | null; amount: number; note: string; tags: string[]; split_group: string | null; receipt: string | null; recurring_id: number | null }

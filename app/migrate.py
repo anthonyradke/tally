@@ -1,13 +1,15 @@
 """Additive schema migrations for the 2026-09 rebuild. Idempotent; db.connect() runs this after SCHEMA.
 
-Nothing here changes how the engine reads rows: new transaction columns are metadata the engine ignores.
+Nothing here changes how the engine reads rows: new transaction columns are metadata the engine ignores. The one
+engine input is `accounts.opened`, and an empty one (every account before 2026-10) means "since the start month".
 Split transactions are ordinary rows sharing a `split_group`; budgets/recurring/saved_views are new tables."""
 from __future__ import annotations
 import sqlite3
 
 COLUMNS: dict[str, list[tuple[str, str]]] = {
     "categories":   [("icon", "TEXT"), ("color", "TEXT"), ("budget", "INTEGER")],
-    "accounts":     [("icon", "TEXT"), ("color", "TEXT")],
+    "accounts":     [("icon", "TEXT"), ("color", "TEXT"),
+                     ("opened", "TEXT")],  # first month of an account opened after the start month (YYYY-MM-01)
     "transactions": [("note", "TEXT NOT NULL DEFAULT ''"), ("tags", "TEXT NOT NULL DEFAULT ''"),
                      ("split_group", "TEXT"), ("receipt", "TEXT"), ("recurring_id", "INTEGER"),
                      ("client_id", "TEXT")],  # set by the phone's offline outbox, so a retried save can't double up

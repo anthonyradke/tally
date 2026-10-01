@@ -328,3 +328,19 @@ def test_get_one_transaction(client, world):
     t = ok(client.post("/api/transactions", json=txn(world, note="n", tags=["x"])), 201)
     assert ok(client.get(f"/api/transactions/{t['id']}")) == t
     assert client.get("/api/transactions/999999").status_code == 404
+
+
+def test_account_opening_month(client, world):
+    a = ok(client.post("/api/accounts", json={"name": "Car loan", "kind": "loan", "start_balance": 1000, "loan_rate": 12,
+                                              "opened": "2026-09"}), 201)
+    assert a["opened"] == "2026-09-01"
+    b = ok(client.get("/api/bootstrap"))
+    assert next(x for x in b["accounts"] if x["id"] == a["id"])["opened"] == "2026-09-01"
+    by_month = {m["month"]: m["balances"][str(a["id"])] for m in b["months"]}
+    assert by_month["2026-08-01"] == 0 and by_month["2026-09-01"] == 101000
+    # A save that leaves it out keeps it; an empty one clears it.
+    kept = ok(client.put(f"/api/accounts/{a['id']}", json={"name": "Car loan", "kind": "loan", "start_balance": 1000}))
+    assert kept["opened"] == "2026-09-01"
+    assert ok(client.put(f"/api/accounts/{a['id']}", json={"name": "Car loan", "kind": "loan", "start_balance": 1000, "opened": ""}))["opened"] is None
+    assert client.post("/api/accounts", json={"name": "X", "kind": "loan", "opened": "soon"}).status_code == 422
+    assert client.post("/api/accounts", json={"name": "Y", "kind": "cash", "opened": "2026-09"}).status_code == 422

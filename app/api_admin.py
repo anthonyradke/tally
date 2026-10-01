@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from . import db
 from .api import Con
 from .engine import KINDS, TYPES, month_of
-from .inputs import body, day, flag, ids, money, number, opt_id, opt_text, text, whole
+from .inputs import bad, body, day, flag, ids, money, month, number, opt_id, opt_text, text, whole
 
 router = APIRouter(prefix="/api")
 SETTING_KEYS = {"start_month", "ef_months", "roth_limit", "home_layout", "theme", "merchant_marks", "roth_category",
@@ -19,6 +19,16 @@ SETTING_KEYS = {"start_month", "ef_months", "roth_limit", "home_layout", "theme"
 
 def _pct(v, what: str):
     return number(v, what) / 100 if v not in (None, "") else None
+
+
+def _opened(v, kind: str) -> Optional[str]:
+    """The first month an account exists ("2026-10"), for one opened after Tally started counting. Loans and
+    investments only: the app works cash and card balances out day by day from the starting balance."""
+    if v in (None, ""):
+        return None
+    if kind not in ("loan", "investment"):
+        bad("Only loans and investments can have an opening month.")
+    return month(str(v).strip()[:7]).isoformat()
 
 
 def _opt_int(v, what: str = "Account"):
@@ -82,7 +92,8 @@ def admin(con: Con):
 # ---------- accounts ----------
 def _account_fields(b: dict) -> dict:
     """APY and loan rate are left alone when the body omits them: the editor shows them rounded, and re-saving the
-    rounded figure would nudge a rate imported to full precision."""
+    rounded figure would nudge a rate imported to full precision. The opening month too, so a client that doesn't
+    know about it can't clear it."""
     if b.get("kind") not in KINDS:
         raise HTTPException(422, {"errors": ["Bad account kind."]})
     if not text(b.get("name"), "Name"):
@@ -91,8 +102,9 @@ def _account_fields(b: dict) -> dict:
               "start_balance": money(b.get("start_balance") or 0, "Starting balance"), "apy": _pct(b.get("apy"), "APY"),
               "loan_rate": _pct(b.get("loan_rate"), "Interest rate"), "ef": flag(bool(b.get("ef")), "Emergency fund"),
               "sort": whole(b.get("sort") or 0, "sort"), "active": flag(b.get("active", True), "Active"),
-              "color": opt_text(b.get("color"), "Color"), "icon": opt_text(b.get("icon"), "Icon")}
-    return {k: v for k, v in fields.items() if k not in ("apy", "loan_rate") or k in b}
+              "color": opt_text(b.get("color"), "Color"), "icon": opt_text(b.get("icon"), "Icon"),
+              "opened": _opened(b.get("opened"), b["kind"])}
+    return {k: v for k, v in fields.items() if k not in ("apy", "loan_rate", "opened") or k in b}
 
 
 @router.put("/accounts/order")  # before /accounts/{id} so "order" is never parsed as an id

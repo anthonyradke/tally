@@ -56,6 +56,7 @@ export default function Edit() {
           // Rates are left out unless changed, so a rate imported at full precision isn't rounded by a re-save.
           if (orig && f.apy === pctStr(orig.apy)) delete body.apy
           if (orig && f.loan_rate === pctStr(orig.loan_rate)) delete body.loan_rate
+          if (f.kind !== 'loan' && f.kind !== 'investment') body.opened = ''
           return api.saveAccount(body, n)
         }
         case 'category': return api.saveCategory(f, n)
@@ -164,10 +165,13 @@ function AccountForm({ f, set }: { f: Form; set: (p: Form) => void }) {
           ))}
         </View>
       </View>
-      <Group footer={kind === 'investment' ? 'Investments are updated at month end with their typed balance.' : kind === 'loan' ? 'Loans grow by rate / 12 each month and shrink with each payment.' : 'The balance on the day Tally starts counting.'}>
+      <Group footer={kind === 'investment' ? 'Investments are updated at month end with their typed balance. For one opened since Tally started counting, Opened is its first month, like 2026-10.'
+        : kind === 'loan' ? 'Loans grow by rate / 12 each month and shrink with each payment. For one taken out since Tally started counting, Opened is its first month, like 2026-10, and Starting owed is what was owed at the start of it.'
+        : 'The balance on the day Tally starts counting.'}>
         <Field label={kind === 'card' || kind === 'loan' ? 'Starting owed' : 'Starting balance'} value={String(f.start_balance ?? '')} onChange={(v) => set({ start_balance: v })} money />
         {kind === 'cash' && <Field label="APY" value={String(f.apy ?? '')} onChange={(v) => set({ apy: v })} pct placeholder="None" />}
         {kind === 'loan' && <Field label="Interest rate" value={String(f.loan_rate ?? '')} onChange={(v) => set({ loan_rate: v })} pct placeholder="0" />}
+        {(kind === 'loan' || kind === 'investment') && <Field label="Opened" value={String(f.opened ?? '')} onChange={(v) => set({ opened: v })} placeholder="From the start" />}
       </Group>
       <Group>
         {kind === 'cash' && <Toggle label="Emergency fund" sub="Counts toward the emergency fund goal" value={!!f.ef} onChange={(v) => set({ ef: v })} />}

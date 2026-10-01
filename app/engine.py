@@ -5,6 +5,7 @@ Rules (from the workbook):
   credit card   = prior + sum(From == it) - sum(To == it)
   investment    = typed for the month, else carried forward; From/To never move it
   loan          = round(prior * (1 + rate/12)) - sum(To == it), floored at 0
+  opened        = an account with an opening month is 0 before it; that month starts from its starting balance
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -26,6 +27,7 @@ class Account:
     loan_rate: Optional[float] = None
     bank: Optional[str] = None
     ef: bool = False
+    opened: Optional[date] = None  # first month it exists; None = since the start month
 
 
 @dataclass(frozen=True)
@@ -157,16 +159,20 @@ def balances(accounts: list[Account], txns: list[Txn], typed: dict[tuple[int, da
     for m in months:
         cur = {}
         for a in accounts:
+            if a.opened and m < a.opened:  # not open yet: nothing held, nothing owed, no interest
+                cur[a.id] = 0
+                continue
+            prior = a.start_balance if a.opened == m else prev[a.id]
             ins = sum(t.amount for t in by_month[m] if t.to_id == a.id)
             outs = sum(t.amount for t in by_month[m] if t.from_id == a.id)
             if a.kind == "cash":
-                cur[a.id] = prev[a.id] + ins - outs
+                cur[a.id] = prior + ins - outs
             elif a.kind == "card":
-                cur[a.id] = prev[a.id] + outs - ins
+                cur[a.id] = prior + outs - ins
             elif a.kind == "investment":
-                cur[a.id] = typed.get((a.id, m), prev[a.id])
+                cur[a.id] = typed.get((a.id, m), prior)
             else:  # loan
-                cur[a.id] = max(0, _accrue(prev[a.id], a.loan_rate or 0.0) - ins)
+                cur[a.id] = max(0, _accrue(prior, a.loan_rate or 0.0) - ins)
         out[m] = cur
         prev = cur
     return out

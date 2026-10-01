@@ -105,3 +105,26 @@ def test_helpers():
     assert month_range(date(2026, 8, 15), date(2026, 10, 2)) == [AUG, SEP, date(2026, 10, 1)]
     assert cents("12.345") == 1235 and cents(-170) == -17000
     assert propose_interest(cents("10000"), 0.031) == cents("25.83")
+
+
+def test_account_opened_later_is_absent_before_and_starts_from_its_balance():
+    oct_ = date(2026, 10, 1)
+    car = Account(5, "Car loan", "loan", cents("38767"), loan_rate=0.0149, opened=oct_)
+    b = balances([CHK, car], [], {}, [AUG, SEP, oct_, date(2026, 11, 1)])
+    assert b[AUG][5] == 0 and b[SEP][5] == 0          # no debt, and no interest, before it existed
+    assert b[oct_][5] == cents("38815.14")            # 38767 * (1 + 0.0149 / 12)
+    pay = [tx(date(2026, 11, 10), 5, 1, 5, "563.54")]
+    b = balances([CHK, car], pay, {}, [AUG, SEP, oct_, date(2026, 11, 1)])
+    assert b[date(2026, 11, 1)][5] == cents("38299.80")   # 38815.14 accrues to 38863.34, less the payment
+    rows = month_table([CHK, car], CATS, [], {}, [AUG, SEP, oct_])
+    assert rows[1].loans == 0 and rows[1].net_worth == cents("1000")
+    assert rows[2].net_worth == cents("1000") - cents("38815.14")
+
+
+def test_opened_in_or_before_the_first_month_changes_nothing():
+    for opened in (AUG, date(2026, 5, 1)):
+        a = Account(4, "L", "loan", cents("14929.52"), loan_rate=0.0528, opened=opened)
+        assert balances([a], [], {}, MONTHS) == balances([LOAN], [], {}, MONTHS)
+    inv = Account(3, "IRA", "investment", cents("500"), opened=SEP)
+    b = balances([inv], [], {(3, AUG): cents("9")}, MONTHS)
+    assert b[AUG][3] == 0 and b[SEP][3] == cents("500")
