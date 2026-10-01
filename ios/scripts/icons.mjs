@@ -1,5 +1,5 @@
-// Renders the app icon (four tally strokes and the cross-stroke, paper on black, same mark as the old web app) and the
-// splash mark. Run after changing the mark: node scripts/icons.mjs
+// Renders the app icon (four tally strokes and the cross-stroke, paper on black, same mark as the old web app).
+// Run after changing the mark: node scripts/icons.mjs
 import sharp from 'sharp'
 
 const strokes = (color) => `
@@ -15,6 +15,4 @@ const out = async (file, s, size = 1024) => { await sharp(Buffer.from(s)).resize
 await out('icon.png', svg('#000000', '#f4f2ee'))                 // iOS flattens this; no transparency allowed
 await out('icon-dark.png', svg(null, '#f4f2ee'))                 // iOS 18+ dark icon: transparent background
 await out('icon-tinted.png', svg(null, '#ffffff'))               // iOS 18+ tinted icon: white on transparent
-await out('splash-icon.png', svg(null, '#000000'), 512)
-await out('splash-icon-dark.png', svg(null, '#f4f2ee'), 512)
 await out('favicon.png', svg('#000000', '#f4f2ee'), 48)

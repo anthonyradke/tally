@@ -8,6 +8,19 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## Unreleased
+Added
+- A launch animation: the t writes itself, glows and lifts away to show the app. It takes the colors of the app icon
+  you picked, or of your theme if you kept the app's own icon.
+
+Changed
+- Home opens on how far ahead you are this month (money in, less spending and loan payments) instead of net worth.
+  Tap the figure to swap to net worth and back. Net worth is still the figure at the top of Accounts.
+
+Fixed
+- The old tally-marks logo no longer shows while the app opens.
+- Next on the first step of a new entry was narrower than it should be; it now fills the row.
+
 ## 3.3.0 (2026-10-01)
 Added
 - Adding an entry is now a few quick steps instead of one long form: the amount and type on a full-screen keypad,
