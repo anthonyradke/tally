@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
+import { Launch } from '@/components/Launch'
 import { ThemeWash } from '@/components/ThemeWash'
 import { Toaster } from '@/components/Toaster'
 import { queryClient } from '@/lib/data'
@@ -60,6 +61,7 @@ export default function RootLayout() {
   const { c } = useTheme()
   const nav = scheme === 'dark' ? DarkTheme : DefaultTheme
   const [ready, setReady] = useState(false)
+  const [launching, setLaunching] = useState(true)
   useEffect(() => {
     Promise.all([loadServer(), loadOutbox(), loadTheme()]).finally(() => setReady(true))
   }, [])
@@ -67,8 +69,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <PersistQueryClientProvider client={queryClient}
-        persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 7, buster: 'v1' }}
-        onSuccess={() => SplashScreen.hideAsync().catch(() => {})}>
+        persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 7, buster: 'v1' }}>
         <ThemeProvider value={{ ...nav, colors: { ...nav.colors, primary: c.ink, background: c.bg, card: c.bg } }}>
           <RootStack />
           <OutboxSync />
@@ -76,6 +77,8 @@ export default function RootLayout() {
           <ThemeWash />
         </ThemeProvider>
       </PersistQueryClientProvider>
+      {/* Takes over from the native splash (it hides it), then lifts off the app underneath. */}
+      {launching && <Launch onDone={() => setLaunching(false)} />}
     </GestureHandlerRootView>
   )
 }

@@ -178,12 +178,13 @@ export default function New() {
     }
   }
 
-  // Back grows in beside Next once there's somewhere to go back to, instead of popping in and squeezing it.
+  // Back grows in beside Next once there's somewhere to go back to, instead of popping in and squeezing it. It grows
+  // from no width at all: `flex: 0` would size it to its label, and Next came up short on the first step.
   const reduce = useReducedMotion()
   const canBack = at > 0
   const backK = useSharedValue(canBack ? 1 : 0)
   useEffect(() => { backK.set(reduce ? (canBack ? 1 : 0) : withTiming(canBack ? 1 : 0, { duration: 320, easing: EASE })) }, [canBack]) // eslint-disable-line react-hooks/exhaustive-deps
-  const backStyle = useAnimatedStyle(() => ({ flex: backK.get(), marginRight: -space.s * (1 - backK.get()), opacity: backK.get() }))
+  const backStyle = useAnimatedStyle(() => ({ flexGrow: backK.get(), marginRight: -space.s * (1 - backK.get()), opacity: backK.get() }))
 
   // The Back / Next bar rides on top of the keyboard while "What was it?" is being typed, moving with it on the
   // keyboard's own timing (it used to jump to the end position as the keyboard started to move).
@@ -285,7 +286,7 @@ export default function New() {
       </View>
 
       <Animated.View style={[{ flexDirection: 'row', gap: space.s, paddingHorizontal: space.l, paddingTop: space.s }, barStyle]}>
-        <Animated.View style={[{ overflow: 'hidden' }, backStyle]} pointerEvents={canBack ? 'auto' : 'none'}
+        <Animated.View style={[{ overflow: 'hidden', flexBasis: 0 }, backStyle]} pointerEvents={canBack ? 'auto' : 'none'}
           accessibilityElementsHidden={!canBack} importantForAccessibility={canBack ? 'auto' : 'no-hide-descendants'}>
           <Button label="Back" secondary onPress={back} style={{ height: 52 }} />
         </Animated.View>

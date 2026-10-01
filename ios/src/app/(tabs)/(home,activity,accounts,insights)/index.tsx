@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
 import { router, Stack } from 'expo-router'
-import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated'
+import Animated, { FadeIn, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated'
+import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { closeSwipes } from '@/components/SwipeRow'
 import { Bar } from '@/components/Bar'
@@ -87,7 +88,7 @@ function Widgets({ b }: { b: Bootstrap }) {
 }
 
 const WIDGETS: Record<string, (b: Bootstrap) => ReactNode> = {
-  networth: (b) => <NetWorth b={b} />,
+  networth: (b) => <Hero b={b} />,
   review: (b) => <MonthReview b={b} />,
   stats: (b) => <ThisMonth b={b} />,
   quick: (b) => (b.favorites.length ? <QuickAdd b={b} /> : null),
@@ -114,8 +115,12 @@ function Delta({ cents, suffix }: { cents: number; suffix: string }) {
 
 const SEEN = 'tally.seen.networth'
 
-function NetWorth({ b }: { b: Bootstrap }) {
+/** The figure Home opens on: how far ahead this month is so far (money in, less spending and loan payments; money
+ *  moved to savings still counts as yours). Tapping it swaps to net worth and back; it always opens on the month. */
+function Hero({ b }: { b: Bootstrap }) {
   const { c } = useTheme()
+  const reduce = useReducedMotion()
+  const [worth, setWorth] = useState(false)
   const { cur, prev } = monthsNow(b)
   const now = cur?.net_worth
   // Net worth up since the last time Home showed it: a band of green light sweeps across the figure once.
@@ -130,11 +135,28 @@ function NetWorth({ b }: { b: Bootstrap }) {
     return () => { live = false }
   }, [now])
   if (!cur) return null
+  const out = cur.spent + cur.loan
+  const up = cur.money_in - out
   return (
-    <Tap href="/accounts" feedback="opacity" style={{ gap: 2, paddingHorizontal: space.xs, marginBottom: space.section - 4 }}>
-        <Txt variant="sub" tone="label2" style={{ fontSize: 15 }}>Net worth</Txt>
-        <Sheen play={rose} color={c.pos} render={(tone) => <RollingMoney cents={cur.net_worth} style={{ ...ramp.hero, color: tone ?? c.label }} rollIn />} />
-        {prev && <Delta cents={cur.net_worth - prev.net_worth} suffix={`since ${monthName(prev.month)}`} />}
+    <Tap feedback="opacity" onPress={() => { Haptics.selectionAsync().catch(() => {}); setWorth(!worth) }}
+      accessibilityHint={worth ? 'Shows this month' : 'Shows net worth'} style={{ paddingHorizontal: space.xs, marginBottom: space.section - 4 }}>
+      <Animated.View key={worth ? 'worth' : 'month'} entering={reduce ? undefined : FadeIn.duration(260)} style={{ gap: 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Txt variant="sub" tone="label2" style={{ fontSize: 15 }}>{worth ? 'Net worth' : `${up < 0 ? 'Down' : 'Up'} in ${monthName(cur.month)}`}</Txt>
+          <Icon sf="arrow.left.arrow.right" md="swap_horiz" size={11} color={c.label3} weight="semibold" />
+        </View>
+        {worth ? (
+          <>
+            <Sheen play={rose} color={c.pos} delay={300} render={(tone) => <RollingMoney cents={cur.net_worth} style={{ ...ramp.hero, color: tone ?? c.label }} />} />
+            {prev && <Delta cents={cur.net_worth - prev.net_worth} suffix={`since ${monthName(prev.month)}`} />}
+          </>
+        ) : (
+          <>
+            <RollingMoney cents={up} sign="always" style={{ ...ramp.hero, color: up > 0 ? c.pos : up < 0 ? c.neg : c.label }} rollIn />
+            <Txt variant="callout" tone="label2" num>{formatCents(cur.money_in, { cents: false })} in, {formatCents(out, { cents: false })} out</Txt>
+          </>
+        )}
+      </Animated.View>
     </Tap>
   )
 }

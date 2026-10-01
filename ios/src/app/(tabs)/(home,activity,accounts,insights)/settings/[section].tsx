@@ -315,7 +315,7 @@ function General({ a }: { a: AdminData }) {
 }
 
 const WIDGET_NAMES: Record<string, string> = {
-  networth: 'Net worth', review: 'Month in review', stats: 'This month', quick: 'Quick add', budgets: 'Budgets',
+  networth: 'This month and net worth', review: 'Month in review', stats: 'This month', quick: 'Quick add', budgets: 'Budgets',
   spending: 'Where it went', ef: 'Emergency fund', upcoming: 'Coming up', recent: 'Recent', roth: 'Roth IRA', chart: 'Net worth over time',
 }
 const ORDER = Object.keys(WIDGET_NAMES)

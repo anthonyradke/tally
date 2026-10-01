@@ -5,8 +5,10 @@ the top-grossing finance apps (Apple Card and Wallet, Copilot, Monarch, Robinhoo
 Changes to anything below get written here first.
 
 ## What the category agrees on (and this app does)
-- **One number first.** Every root screen opens on a single large figure (net worth, this month's spending, a
-  balance) with its change underneath in green or red. Everything else is supporting detail.
+- **One number first.** Every root screen opens on a single large figure (how far ahead this month is, net worth, a
+  balance) with its change underneath in green or red. Everything else is supporting detail. Home opens on the
+  month: money in, less spending and loan payments, green when it's up and red when it's down. Tapping the figure
+  swaps it for net worth and back; net worth is also the figure on Accounts.
 - **Charts you can touch.** Trend lines have no axes; dragging reads a day, and the figure above follows the finger.
   Past the finger the line dims. Releasing goes back to now.
 - **Merchants, not rows.** Every entry leads with a round mark: the brand's own glyph where one exists, a
@@ -85,7 +87,12 @@ Changes to anything below get written here first.
   - Reconcile to the cent draws its check and bursts confetti; so does the first look at a finished month that came
     in under budget (Insights badge; early in a month, a pill points back to it).
   - A budget bar ahead of its pace notch breathes three times after it fills.
-  - Net worth higher than when Home last showed it: a band of green light sweeps across the figure.
+  - Net worth higher than when Home last showed it: a band of green light sweeps across the figure when you swap
+    to it.
+  - Launch: the t from the app icon writes itself on a cold start (the stem runs down into its curl, the bar strikes
+    across), a glow blooms behind it and it lifts away to show the app, about a second in all. It wears the colors
+    of the app icon picked in Settings, or the theme's when the icon is the app's own. The native splash is a plain
+    background, so no other mark shows first.
   - The month chart's end dot (today) breathes while the chart is at rest.
   - Changing theme fades the old background off and spreads a ripple of the new accent from the tapped card.
 
