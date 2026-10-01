@@ -128,3 +128,9 @@ def test_opened_in_or_before_the_first_month_changes_nothing():
     inv = Account(3, "IRA", "investment", cents("500"), opened=SEP)
     b = balances([inv], [], {(3, AUG): cents("9")}, MONTHS)
     assert b[AUG][3] == 0 and b[SEP][3] == cents("500")
+
+
+def test_loan_typed_balance_replaces_the_worked_out_one_and_carries_on():
+    b = balances([LOAN], [], {(4, AUG): cents("15000")}, MONTHS)
+    assert b[AUG][4] == cents("15000")
+    assert b[SEP][4] == cents("15066")   # September accrues from the typed figure: 15000 * (1 + 0.0528 / 12)

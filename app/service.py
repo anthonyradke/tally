@@ -72,6 +72,11 @@ class State:
                     and month_of(t.date) == m and "interest" in t.what.lower()]
             bal = next(r for r in self.rows if r.month == m).balances[a.id]
             interest[a.id] = {"logged": done, "proposed": propose_interest(bal, a.apy)}
+        # Loans work themselves out; a statement balance typed for the month replaces the worked-out one. Optional,
+        # so it never holds up typed_done.
+        row = next(r for r in self.rows if r.month == m)
+        loans = {a.id: {"typed": self.typed.get((a.id, m)), "balance": row.balances[a.id]}
+                 for a in self.by_kind("loan") if not a.opened or a.opened <= m}
         recon = {}
         end = month_end(m)
         for a in self.by_kind("cash") + self.by_kind("card"):
@@ -80,7 +85,7 @@ class State:
                 "ORDER BY date DESC, id DESC LIMIT 1",
                 (a.id, m.isoformat(), end.isoformat())).fetchone()
             recon[a.id] = dict(r) if r else None
-        return {"typed": typed, "interest": interest, "recon": recon,
+        return {"typed": typed, "loans": loans, "interest": interest, "recon": recon,
                 "typed_done": all(v is not None for v in typed.values()),
                 "interest_done": all(v["logged"] for v in interest.values()),
                 "recon_done": all(v and v["actual"] == v["expected"] for v in recon.values())}

@@ -1,4 +1,5 @@
-// Month end, three steps: type investment balances, confirm savings interest, reconcile cash and cards.
+// Month end, three steps: type investment balances, confirm savings interest, reconcile cash and cards. Loans work
+// themselves out, and a statement balance can be typed over one at the bottom.
 import { useEffect, useState } from 'react'
 import { ScrollView, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
@@ -33,9 +34,11 @@ export default function MonthEnd() {
   const q = useQuery({ queryKey: ['month-end', ym], queryFn: () => api.monthEnd(ym), enabled: !!ym })
   const [typed, setTyped] = useState<Record<string, string>>({})
   const [interest, setInterest] = useState<Record<string, string>>({})
+  const [loans, setLoans] = useState<Record<string, string>>({})
   useEffect(() => {
     if (!q.data) return
     setTyped(Object.fromEntries(Object.entries(q.data.typed).map(([k, v]) => [k, v == null ? '' : fromCents(v)])))
+    setLoans(Object.fromEntries(Object.entries(q.data.loans).map(([k, v]) => [k, v.typed == null ? '' : fromCents(v.typed)])))
     setInterest(Object.fromEntries(Object.entries(q.data.interest).map(([k, v]) => [k, v.logged.length ? '' : v.proposed ? fromCents(v.proposed) : ''])))
   }, [q.data])
   const b = t.b
@@ -50,8 +53,8 @@ export default function MonthEnd() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
     return true
   }
-  const saveTyped = async () => {
-    const { cents, bad } = amountsById(typed)
+  const saveTyped = async (fields = typed) => {
+    const { cents, bad } = amountsById(fields)
     if (typos(bad)) return
     try {
       await api.monthEndTyped(ym, cents)
@@ -86,7 +89,7 @@ export default function MonthEnd() {
                   <Field value={typed[k] ?? ''} onChange={(v) => setTyped((s) => ({ ...s, [k]: v }))} />} />
               ))}
             </Group>
-            <Button label="Save balances" onPress={saveTyped} secondary={d.typed_done} />
+            <Button label="Save balances" onPress={() => saveTyped()} secondary={d.typed_done} />
           </View>
         )}
         {Object.keys(d.interest).length > 0 && (
@@ -114,18 +117,33 @@ export default function MonthEnd() {
             ))}
           </Group>
         </View>
+        {Object.keys(d.loans).length > 0 && (
+          <View style={{ gap: space.m }}>
+            <View style={{ paddingHorizontal: space.xs }}>
+              <Txt variant="headline">Loan balances</Txt>
+              <Txt variant="foot" tone="label2">Optional. Tally adds a month of interest and takes off your payments; the grey figure is what it worked out. If the statement says otherwise, type its balance and Tally carries on from there.</Txt>
+            </View>
+            <Group>
+              {Object.entries(d.loans).map(([k, v]) => (
+                <Row key={k} label={acct(k)?.name ?? k} chevron={false} value={
+                  <Field value={loans[k] ?? ''} placeholder={fromCents(v.balance)} onChange={(val) => setLoans((s) => ({ ...s, [k]: val }))} />} />
+              ))}
+            </Group>
+            <Button label="Save loan balances" onPress={() => saveTyped(loans)} secondary />
+          </View>
+        )}
         </Arrive>
       </ScrollView>
     </>
   )
 }
 
-function Field({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function Field({ value, onChange, placeholder = '0.00' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const { c } = useTheme()
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: c.fill, borderRadius: radius.input, paddingHorizontal: space.m, height: 36, width: 128 }}>
       <Txt variant="body" tone="label2">$</Txt>
-      <TextInput value={value} onChangeText={(v) => onChange(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.label3}
+      <TextInput value={value} onChangeText={(v) => onChange(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder={placeholder} placeholderTextColor={c.label3}
         style={{ flex: 1, minWidth: 48, fontSize: 17, color: c.label, textAlign: 'right', fontVariant: ['tabular-nums'] }} />
     </View>
   )

@@ -43,7 +43,7 @@ def month_end(ym: str, con: Con):
     if m not in st.months:
         raise HTTPException(404, {"errors": ["Tally has no such month."]})
     s = st.month_end_status(m)
-    return {"month": m.isoformat(), "typed": s["typed"], "recon": s["recon"],
+    return {"month": m.isoformat(), "typed": s["typed"], "loans": s["loans"], "recon": s["recon"],
             "interest": {aid: {"logged": [_txn(t) for t in v["logged"]], "proposed": v["proposed"]}
                          for aid, v in s["interest"].items()},
             "typed_done": s["typed_done"], "interest_done": s["interest_done"], "recon_done": s["recon_done"]}
@@ -51,9 +51,9 @@ def month_end(ym: str, con: Con):
 
 @router.post("/month-end/{ym}/typed")
 async def month_end_typed(ym: str, request: Request, con: Con):
-    """Body: {"<account_id>": dollars, ...}"""
+    """Body: {"<account_id>": dollars, ...}. Investments and loans: the balance at the end of the month."""
     m = parse_month(ym)
-    known = {r[0] for r in con.execute("SELECT id FROM accounts")}
+    known = {r[0] for r in con.execute("SELECT id FROM accounts WHERE kind IN ('investment','loan')")}
     for k, v in (await body(request)).items():
         if v not in (None, ""):
             aid = whole(k, "Account")
