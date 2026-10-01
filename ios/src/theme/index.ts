@@ -12,7 +12,7 @@ export const isTint = (t: string | null | undefined): t is Tint => !!t && (TINTS
 // Bank identity: each bank's own color, whatever the theme.
 const BANK: Record<string, [string, string]> = {
   chase: ['#1570D1', '#59A0F9'], amex: ['#008A48', '#43C07A'], sofi: ['#D35F00', '#F98942'],
-  hsa: ['#8E8E93', '#98989F'], roth: ['#7D5FAD', '#AA8DDE'],
+  wells: ['#C8102E', '#F0606F'], hsa: ['#8E8E93', '#98989F'], roth: ['#7D5FAD', '#AA8DDE'],
 }
 
 // The chosen theme is a setting on this phone, not on the server.
