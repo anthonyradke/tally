@@ -8,7 +8,7 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## Unreleased (next: 3.3.0)
+## 3.3.0 (2026-10-01)
 Added
 - Adding an entry is now a few quick steps instead of one long form: the amount and type on a full-screen keypad,
   then what it was, the category and the account, and a review with Add. Tapping a choice moves on by itself, and
