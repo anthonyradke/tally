@@ -4,7 +4,8 @@ Rules (from the workbook):
   cash account  = prior + sum(To == it) - sum(From == it)
   credit card   = prior + sum(From == it) - sum(To == it)
   investment    = typed for the month, else carried forward; From/To never move it
-  loan          = round(prior * (1 + rate/12)) - sum(To == it), floored at 0
+  loan          = typed for the month (from the statement), else
+                  round(prior * (1 + rate/12)) - sum(To == it), floored at 0
   opened        = an account with an opening month is 0 before it; that month starts from its starting balance
 """
 from __future__ import annotations
@@ -172,7 +173,7 @@ def balances(accounts: list[Account], txns: list[Txn], typed: dict[tuple[int, da
             elif a.kind == "investment":
                 cur[a.id] = typed.get((a.id, m), prior)
             else:  # loan
-                cur[a.id] = max(0, _accrue(prior, a.loan_rate or 0.0) - ins)
+                cur[a.id] = typed.get((a.id, m), max(0, _accrue(prior, a.loan_rate or 0.0) - ins))
         out[m] = cur
         prev = cur
     return out

@@ -23,7 +23,8 @@ export interface Bootstrap { today: string; start: string; accounts: Account[]; 
 export interface TxnPage { total: number; sum: number; by_type: Partial<Record<CatType, number>>; items: Txn[] }
 export interface TxnQuery { q?: string; category?: number; account?: number; type?: CatType | ''; start?: string; end?: string; amount_min?: number; amount_max?: number; tag?: string; group?: string; sort?: 'date' | 'amount'; dir?: 'asc' | 'desc'; limit?: number; offset?: number }
 export interface Diagnosis { expected: number; actual: number; gap: number; saved: boolean; doubled: Txn[]; single: Txn[]; future: Txn[] }
-export interface MonthEnd { month: string; typed: Record<string, number | null>; recon: Record<string, { actual: number; expected: number; date: string } | null>; interest: Record<string, { logged: Txn[]; proposed: number }>; typed_done: boolean; interest_done: boolean; recon_done: boolean }
+/** `loans`: each loan's balance for the month as Tally works it out, and the statement balance typed over it, if any. */
+export interface MonthEnd { month: string; typed: Record<string, number | null>; loans: Record<string, { typed: number | null; balance: number }>; recon: Record<string, { actual: number; expected: number; date: string } | null>; interest: Record<string, { logged: Txn[]; proposed: number }>; typed_done: boolean; interest_done: boolean; recon_done: boolean }
 export interface Reconciliation { id: number; account_id: number; date: string; actual: number; expected: number }
 export interface Backups { latest: { name: string; size: number; at: string } | null; count: number; folder: string }
 /** Settings rows straight from the tables: `active` and `ef` are SQLite's 0/1 here. Saving one returns the same. */

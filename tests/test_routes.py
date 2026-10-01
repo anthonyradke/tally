@@ -344,3 +344,16 @@ def test_account_opening_month(client, world):
     assert ok(client.put(f"/api/accounts/{a['id']}", json={"name": "Car loan", "kind": "loan", "start_balance": 1000, "opened": ""}))["opened"] is None
     assert client.post("/api/accounts", json={"name": "X", "kind": "loan", "opened": "soon"}).status_code == 422
     assert client.post("/api/accounts", json={"name": "Y", "kind": "cash", "opened": "2026-09"}).status_code == 422
+
+
+def test_month_end_loan_balance_from_the_statement(client, world):
+    me = ok(client.get("/api/month-end/2026-09"))
+    loan = next(iter(me["loans"]))
+    worked = me["loans"][loan]
+    assert worked["typed"] is None and worked["balance"] > 0
+    ok(client.post("/api/month-end/2026-09/typed", json={loan: "123.45"}))
+    me = ok(client.get("/api/month-end/2026-09"))
+    assert me["loans"][loan] == {"typed": 12345, "balance": 12345}
+    months = ok(client.get("/api/bootstrap"))["months"]
+    assert next(m for m in months if m["month"] == "2026-09-01")["balances"][loan] == 12345
+    assert client.post("/api/month-end/2026-09/typed", json={str(world["chk"]): 5}).status_code == 404

@@ -11,6 +11,8 @@ release gets a git tag (`v3.0.0`) and an entry here, newest first.
 ## Unreleased
 Added
 - Wells Fargo as a bank color for accounts.
+- Month end has an optional Loan balances section: type the balance from a loan's statement and Tally uses it for
+  that month and carries on from there, instead of its own interest estimate.
 - A loan or investment can have an opening month (Settings, the account, Opened). Before that month it counts as
   nothing: no balance, no interest, and earlier months' net worth stays as it was.
 - A launch animation: the t writes itself, glows and lifts away to show the app. It takes the colors of the app icon
