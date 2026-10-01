@@ -43,7 +43,7 @@ export default function AccountDetail() {
       const s = dailyBalances(a, all.data.items, b.start, b.today)
       return { values: s.values, labels: s.dates.map((d) => (d === b.today ? 'Today' : short(d))) }
     }
-    const months = b.months.filter((m) => m.month <= b.today)
+    const months = b.months.filter((m) => m.month <= b.today && (!a.opened || m.month >= a.opened)) // not the empty months before it opened
     return { values: months.map((m) => m.balances[String(a.id)] ?? a.start_balance), labels: months.map((m) => `End of ${monthLabel(m.month, 'long')}`) }
   }, [a, b, all.data, daily])
 

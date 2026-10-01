@@ -2,7 +2,7 @@
 import type { Account, Bootstrap, Category, MonthRow, Txn } from '@/lib/api'
 
 export const acct = (id: number, kind: Account['kind'], start = 0, x: Partial<Account> = {}): Account =>
-  ({ id, name: `A${id}`, kind, bank: null, start_balance: start, apy: null, loan_rate: null, ef: false, color: null, icon: null, active: true, ...x })
+  ({ id, name: `A${id}`, kind, bank: null, start_balance: start, apy: null, loan_rate: null, ef: false, color: null, icon: null, active: true, opened: null, ...x })
 export const cat = (id: number, type: Category['type'], x: Partial<Category> = {}): Category =>
   ({ id, name: `C${id}`, type, icon: null, color: null, budget: null, active: true, ...x })
 export const month = (m: string, x: Partial<MonthRow> = {}): MonthRow =>

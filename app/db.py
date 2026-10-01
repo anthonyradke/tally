@@ -87,7 +87,8 @@ def set_setting(con, key: str, value: str) -> None:
 def load_accounts(con, active_only=True) -> list[Account]:
     q = "SELECT * FROM accounts" + (" WHERE active=1" if active_only else "") + " ORDER BY sort, id"
     return [Account(r["id"], r["name"], r["kind"], r["start_balance"], r["apy"],
-                    r["loan_rate"], r["bank"], bool(r["ef"])) for r in con.execute(q)]
+                    r["loan_rate"], r["bank"], bool(r["ef"]),
+                    date.fromisoformat(r["opened"]) if r["opened"] else None) for r in con.execute(q)]
 
 
 def load_categories(con, active_only=True) -> list[Category]:

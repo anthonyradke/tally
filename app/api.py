@@ -21,7 +21,7 @@ Con = Annotated[sqlite3.Connection, Depends(db.session)]
 def _acct(a, x: dict):
     return {"id": a.id, "name": a.name, "kind": a.kind, "bank": a.bank, "start_balance": a.start_balance,
             "apy": a.apy, "loan_rate": a.loan_rate, "ef": a.ef, "color": x.get("color"), "icon": x.get("icon"),
-            "active": bool(x.get("active", 1))}
+            "active": bool(x.get("active", 1)), "opened": a.opened.isoformat() if a.opened else None}
 
 
 def _cat(c, x: dict):
