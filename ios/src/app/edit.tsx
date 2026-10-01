@@ -159,7 +159,7 @@ function AccountForm({ f, set }: { f: Form; set: (p: Form) => void }) {
       <View style={{ gap: space.s }}>
         <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Bank color</Txt>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-          {[[null, 'None'], ['chase', 'Chase'], ['amex', 'Amex'], ['sofi', 'SoFi'], ['hsa', 'Grey'], ['roth', 'Violet']].map(([v, l]) => (
+          {[[null, 'None'], ['chase', 'Chase'], ['amex', 'Amex'], ['sofi', 'SoFi'], ['wells', 'Wells Fargo'], ['hsa', 'Grey'], ['roth', 'Violet']].map(([v, l]) => (
             <Chip key={String(v)} label={l!} selected={f.bank === v} onPress={() => set({ bank: v })} />
           ))}
         </View>

@@ -10,6 +10,7 @@ release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
 ## Unreleased
 Added
+- Wells Fargo as a bank color for accounts.
 - A launch animation: the t writes itself, glows and lifts away to show the app. It takes the colors of the app icon
   you picked, or of your theme if you kept the app's own icon.
 
