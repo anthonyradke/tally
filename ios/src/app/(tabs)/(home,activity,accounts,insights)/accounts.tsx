@@ -78,11 +78,12 @@ function Body({ b, bal }: { b: Bootstrap; bal: Map<number, number> }) {
               <Txt variant="title2" accessibilityRole="header">{KIND_LABEL[k]}</Txt>
               <Txt variant="callout" tone="label2" num>{groupTotal(sum, k)}</Txt>
             </View>
-            <Panel pad={false} style={{ paddingVertical: space.xs }}>
+            <Panel pad={false}>
               {list.map((a, i) => (
                 <View key={a.id}>
                   {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-                  <AccountRow a={a} bal={bal.get(a.id) ?? 0} prev={prev?.balances[String(a.id)]} ef={b.ef} />
+                  <AccountRow a={a} bal={bal.get(a.id) ?? 0} prev={prev?.balances[String(a.id)]} ef={b.ef}
+                    padTop={i === 0 ? space.xs : 0} padBottom={i === list.length - 1 ? space.xs : 0} />
                 </View>
               ))}
             </Panel>
@@ -97,7 +98,8 @@ function Body({ b, bal }: { b: Bootstrap; bal: Map<number, number> }) {
   )
 }
 
-function AccountRow({ a, bal, prev }: { a: Account; bal: number; prev?: number; ef: Bootstrap['ef'] }) {
+/** `padTop`/`padBottom` pad the first and last rows inside the row, so the press highlight fills the panel's corners. */
+function AccountRow({ a, bal, prev, padTop, padBottom }: { a: Account; bal: number; prev?: number; ef: Bootstrap['ef']; padTop: number; padBottom: number }) {
   const { c, bank } = useTheme()
   const owed = a.kind === 'card' || a.kind === 'loan'
   const delta = prev != null ? bal - prev : null
@@ -106,7 +108,7 @@ function AccountRow({ a, bal, prev }: { a: Account; bal: number; prev?: number; 
   const sub = a.apy ? `${+(a.apy * 100).toFixed(2)}% APY` : a.loan_rate ? `${+(a.loan_rate * 100).toFixed(2)}% interest` : a.ef ? 'Emergency fund' : a.kind === 'investment' ? 'Updated at month end' : null
   return (
     <Tap feedback="highlight" href={{ pathname: '/account/[id]', params: { id: String(a.id) } }}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m }}>
+      style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingTop: space.m + padTop, paddingBottom: space.m + padBottom }}>
       <Mark kind="glyph" sf={KIND_SYMBOL[a.kind][0]} md={KIND_SYMBOL[a.kind][1]} tint={bank(bankKey(a))} />
       <View style={{ flex: 1, gap: 2 }}>
         <Txt variant="row" numberOfLines={1}>{a.name}</Txt>

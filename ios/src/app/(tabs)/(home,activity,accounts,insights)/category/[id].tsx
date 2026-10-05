@@ -78,12 +78,13 @@ export default function CategoryDetail() {
           )}
         </View>
         <Section title="Entries" href={{ pathname: '/activity', params: { category: String(x.id) } }}>
-          <Panel pad={false} style={{ paddingVertical: space.xs }}>
+          <Panel pad={false}>
             {(rows.data?.items ?? []).length === 0 && <Txt variant="callout" tone="label2" style={{ padding: space.l }}>{rows.isLoading ? ' ' : `Nothing in ${x.name} yet.`}</Txt>}
-            {(rows.data?.items ?? []).slice(0, 15).map((r, i) => (
+            {(rows.data?.items ?? []).slice(0, 15).map((r, i, all) => (
               <View key={r.id}>
                 {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-                <TxnRow t={r} c={x} acct={t.acct} mark={t.markFor(r.what)} today={b.today} showDate={dayLabel(r.date, b.today)} />
+                <TxnRow t={r} c={x} acct={t.acct} mark={t.markFor(r.what)} today={b.today} showDate={dayLabel(r.date, b.today)}
+                  padTop={i === 0 ? space.xs : 0} padBottom={i === all.length - 1 ? space.xs : 0} />
               </View>
             ))}
           </Panel>
