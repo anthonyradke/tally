@@ -131,12 +131,13 @@ export default function AccountDetail() {
         )}
 
         <Section title="Entries" href={{ pathname: '/activity', params: { account: String(a.id) } }}>
-          <Panel pad={false} style={{ paddingVertical: space.xs }}>
+          <Panel pad={false}>
             {rows.length === 0 && <Txt variant="callout" tone="label2" style={{ padding: space.l }}>{all.isLoading ? ' ' : 'No entries touch this account yet.'}</Txt>}
-            {rows.slice(0, 12).map((x, i) => (
+            {rows.slice(0, 12).map((x, i, all) => (
               <View key={x.id}>
                 {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-                <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={b.today} showDate={`${dayLabel(x.date, b.today)}, ${t.catOf(x).name}`} />
+                <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={b.today} showDate={`${dayLabel(x.date, b.today)}, ${t.catOf(x).name}`}
+                  padTop={i === 0 ? space.xs : 0} padBottom={i === all.length - 1 ? space.xs : 0} />
               </View>
             ))}
           </Panel>

@@ -341,13 +341,14 @@ function Spending({ b }: { b: Bootstrap }) {
   const max = rows[0].spent
   return (
     <Section title="Where it went" href="/insights">
-      <Panel pad={false} style={{ paddingVertical: space.xs }}>
-        {rows.slice(0, 5).map(({ x, spent }, i) => {
+      <Panel pad={false}>
+        {rows.slice(0, 5).map(({ x, spent }, i, top) => {
           const v = categoryVisual(x)
           return (
             <View key={x.id}>
               {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-              <Tap href={{ pathname: '/category/[id]', params: { id: String(x.id) } }} feedback="highlight" style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m }}>
+              <Tap href={{ pathname: '/category/[id]', params: { id: String(x.id) } }} feedback="highlight" style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l,
+                paddingTop: space.m + (i === 0 ? space.xs : 0), paddingBottom: space.m + (i === top.length - 1 ? space.xs : 0) }}>
                   <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} />
                   <View style={{ flex: 1, gap: 6 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -396,11 +397,12 @@ function Upcoming({ b }: { b: Bootstrap }) {
   if (!rows.length) return null
   return (
     <Section title="Coming up" href={{ pathname: '/activity', params: { when: 'upcoming' } }}>
-      <Panel pad={false} style={{ paddingVertical: space.xs }}>
-        {rows.slice(0, 4).map((x, i) => (
+      <Panel pad={false}>
+        {rows.slice(0, 4).map((x, i, all) => (
           <View key={x.id}>
             {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-            <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={b.today} showDate={short(x.date)} />
+            <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={b.today} showDate={short(x.date)}
+              padTop={i === 0 ? space.xs : 0} padBottom={i === all.length - 1 ? space.xs : 0} />
           </View>
         ))}
       </Panel>
@@ -414,13 +416,14 @@ function Recent({ b }: { b: Bootstrap }) {
   const rows = q.data?.items ?? []
   return (
     <Section title="Recent" href="/activity">
-      <Panel pad={false} style={{ paddingVertical: space.xs }}>
+      <Panel pad={false}>
         {rows.length === 0 && <Txt variant="callout" tone="label2" style={{ padding: space.l }}>{q.isLoading ? ' ' : 'Nothing logged yet. Tap + to add your first entry.'}</Txt>}
         {rows.map((x, i) => (
           <View key={x.id}>
             {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
             <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={b.today}
-              showDate={x.date === b.today ? t.catOf(x).name : `${short(x.date)}, ${t.catOf(x).name}`} />
+              showDate={x.date === b.today ? t.catOf(x).name : `${short(x.date)}, ${t.catOf(x).name}`}
+              padTop={i === 0 ? space.xs : 0} padBottom={i === rows.length - 1 ? space.xs : 0} />
           </View>
         ))}
       </Panel>

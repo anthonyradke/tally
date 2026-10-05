@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Linking, RefreshControl, ScrollView, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, ZoomIn } from 'react-native-reanimated'
+import Animated, { Easing, LinearTransition, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming, ZoomIn } from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
 import { Bar } from '@/components/Bar'
@@ -106,12 +107,22 @@ function Body({ b }: { b: Bootstrap }) {
   const m = months[i]
   const prev = months[i - 1]
   const isNow = m?.month === monthOf(b.today)
-  const settle = useMonthShift(m?.month)
+  const [settle, title, leave] = useMonthShift(m?.month)
+  const target = useRef<number | null>(null) // the month being switched to while the current one fades out
   const cats = useMemo(() => !m ? [] : b.categories.filter((x) => x.type === 'Spending')
     .map((x) => ({ x, spent: m.by_category[String(x.id)] ?? 0, budget: budgetFor(b, x, m.month) }))
     .filter((r) => r.spent > 0 || (r.budget ?? 0) > 0).sort((a, z) => z.spent - a.spent), [b, m])
   if (!m) return null
-  const go = (d: number) => { Haptics.selectionAsync().catch(() => {}); setSel(null); setI((k) => Math.max(0, Math.min(months.length - 1, k + d))) }
+  const show = (next: number) => {
+    const from = target.current ?? i
+    next = Math.max(0, Math.min(months.length - 1, next))
+    if (next === from) return
+    Haptics.selectionAsync().catch(() => {})
+    setSel(null)
+    target.current = next
+    leave(next > from ? 1 : -1, () => { if (target.current != null) setI(target.current); target.current = null })
+  }
+  const go = (d: number) => show((target.current ?? i) + d)
   const delta = prev ? m.spent - prev.spent : null
   const selected = cats.find((r) => String(r.x.id) === sel)
   const under = isNow ? null : underBy(b, m)
@@ -125,7 +136,7 @@ function Body({ b }: { b: Bootstrap }) {
         <Tap feedback="opacity" onPress={() => go(-1)} disabled={i === 0} hitSlop={10} accessibilityLabel="Previous month" style={{ opacity: i === 0 ? 0.25 : 1, padding: space.s }}>
           <Icon sf="chevron.left" md="chevron_left" size={18} color={c.label} weight="bold" />
         </Tap>
-        <Animated.View style={settle}>
+        <Animated.View style={title}>
           <Txt variant="headline" accessibilityRole="header">{monthLabel(m.month, 'long')}{isNow ? ', so far' : ''}</Txt>
         </Animated.View>
         <Tap feedback="opacity" onPress={() => go(1)} disabled={i === months.length - 1} hitSlop={10} accessibilityLabel="Next month" style={{ opacity: i === months.length - 1 ? 0.25 : 1, padding: space.s }}>
@@ -133,6 +144,8 @@ function Body({ b }: { b: Bootstrap }) {
         </Tap>
       </View>
 
+      {/* Everything about the month slides out to one side and back in from the other when you switch. */}
+      <Animated.View style={settle}>
       {under != null && <UnderBudget month={m.month} by={under} />}
       {last != null && prev && (
         <Tap feedback="scale" onPress={() => go(-1)} style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -space.s, marginBottom: space.l,
@@ -142,9 +155,6 @@ function Body({ b }: { b: Bootstrap }) {
           <Icon sf="chevron.left" md="chevron_left" size={11} color={c.label3} weight="bold" />
         </Tap>
       )}
-
-      {/* Everything about the month eases in from the side it came from when you switch. */}
-      <Animated.View style={settle}>
       {/* Spending share */}
       <Panel style={{ alignItems: 'center', gap: space.l, marginBottom: space.section - 4, paddingVertical: space.xxl }}>
         <View style={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -167,7 +177,7 @@ function Body({ b }: { b: Bootstrap }) {
 
       {/* Categories, with budgets where set */}
       <Section title="Categories" href="/settings/budgets" action="Budgets">
-        <Panel pad={false} style={{ paddingVertical: space.xs }}>
+        <Panel pad={false}>
           {cats.length === 0 && <Txt variant="callout" tone="label2" style={{ padding: space.l }}>No spending in {name(m.month)}.</Txt>}
           {cats.map((r, k) => {
             const v = categoryVisual(r.x)
@@ -179,7 +189,8 @@ function Body({ b }: { b: Bootstrap }) {
                 {/* Pressing a row lights its slice in the donut, then opens the category. */}
                 <Tap feedback="highlight" href={{ pathname: '/category/[id]', params: { id: String(r.x.id) } }}
                   onPressIn={() => setSel(String(r.x.id))} onPressOut={() => setSel(null)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m, backgroundColor: on ? c.fill : undefined }}>
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, backgroundColor: on ? c.fill : undefined,
+                    paddingTop: space.m + (k === 0 ? space.xs : 0), paddingBottom: space.m + (k === cats.length - 1 ? space.xs : 0) }}>
                   <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} />
                   <View style={{ flex: 1, gap: 6 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.s }}>
@@ -204,7 +215,9 @@ function Body({ b }: { b: Bootstrap }) {
       </Section>
       </Animated.View>
 
-      <CashFlow b={b} months={months} at={i} onPick={(k) => { setSel(null); setI(k) }} />
+      {/* The month above changes height; everything under it glides to its new place. */}
+      <Animated.View layout={LinearTransition.duration(340).easing(EASE)}>
+      <CashFlow b={b} months={months} at={i} onPick={show} />
       <NetWorth b={b} />
 
       <Section title="Month end">
@@ -229,26 +242,38 @@ function Body({ b }: { b: Bootstrap }) {
           ))}
         </Panel>
       </Section>
+      </Animated.View>
     </>
   )
 }
 
-/** Switching months: the month's content comes in a little from the side it came from, and brightens as it lands.
- *  Nothing on this screen shows the first time. */
+/** Switching months: the month's content slides a little toward the side it's leaving by and fades, the switch happens
+ *  while it's invisible, then the new month comes in from the other side. Nothing on this screen shows the first time. */
 function useMonthShift(month: string | undefined) {
   const reduce = useReducedMotion()
-  const k = useSharedValue(1)
-  const side = useSharedValue(0)
+  const o = useSharedValue(1)
+  const x = useSharedValue(0)
   const last = useRef(month)
   useLayoutEffect(() => {
     const was = last.current
     last.current = month
-    if (!was || !month || was === month || reduce) return
-    side.set(month > was ? 1 : -1)
-    k.set(0)
-    k.set(withTiming(1, { duration: 360, easing: EASE }))
+    if (!was || !month || was === month) return
+    if (reduce) { o.set(1); x.set(0); return }
+    const side = month > was ? 1 : -1
+    x.set(withSequence(withTiming(side * 22, { duration: 0 }), withTiming(0, { duration: 340, easing: EASE })))
+    o.set(withTiming(1, { duration: 300, easing: EASE }))
   }, [month]) // eslint-disable-line react-hooks/exhaustive-deps
-  return useAnimatedStyle(() => ({ opacity: 0.35 + 0.65 * k.get(), transform: [{ translateX: side.get() * 22 * (1 - k.get()) }] }))
+  // One style per view: Reanimated styles can't be shared between views.
+  const style = useAnimatedStyle(() => ({ opacity: o.get(), transform: [{ translateX: x.get() }] }))
+  const title = useAnimatedStyle(() => ({ opacity: o.get(), transform: [{ translateX: x.get() }] }))
+  /** Fades the current month out (`side` 1 = moving forward), then runs `then`. A second tap mid-fade takes over. */
+  const leave = (side: number, then: () => void) => {
+    if (reduce) { then(); return }
+    const out = { duration: 130, easing: Easing.in(Easing.quad) }
+    x.set(withTiming(-side * 22, out))
+    o.set(withTiming(0, out, (ok) => { if (ok) scheduleOnRN(then) }))
+  }
+  return [style, title, leave] as const
 }
 
 function Stat({ label, cents, tone }: { label: string; cents: number; tone?: 'pos' | 'neg' }) {
