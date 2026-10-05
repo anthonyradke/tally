@@ -8,7 +8,7 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## Unreleased
+## 3.4.0 (2026-10-05)
 Added
 - Wells Fargo as a bank color for accounts.
 - Month end has an optional Loan balances section: type the balance from a loan's statement and Tally uses it for
@@ -21,10 +21,15 @@ Added
 Changed
 - Home opens on how far ahead you are this month (money in, less spending and loan payments) instead of net worth.
   Tap the figure to swap to net worth and back. Net worth is still the figure at the top of Accounts.
+- Switching months in Insights slides the old month out and the new one in, and the sections below glide to their
+  new place instead of jumping.
 
 Fixed
 - The old tally-marks logo no longer shows while the app opens.
 - Next on the first step of a new entry was narrower than it should be; it now fills the row.
+- Reconcile shows the amount as you type it.
+- The highlight on a pressed row fills the rounded corners of its box (Accounts, Home, Insights, account and
+  category pages), like Activity.
 
 ## 3.3.0 (2026-10-01)
 Added
