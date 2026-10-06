@@ -225,7 +225,7 @@ function Empty({ filtered }: { filtered: boolean }) {
       <Icon sf={filtered ? 'magnifyingglass' : 'tray'} md={filtered ? 'search_off' : 'inbox'} size={32} color={c.label3} />
       <Txt variant="headline">{filtered ? 'No matches' : 'Nothing logged yet'}</Txt>
       <Txt variant="callout" tone="label2" style={{ textAlign: 'center' }}>
-        {filtered ? 'Try fewer filters, or search for part of a name, a note, a tag or an amount.' : 'Tap + to add your first entry.'}
+        {filtered ? 'Try fewer filters, or search for part of a name, a note, a tag or an amount. Search also takes >50, <20, a month like aug, and #tags.' : 'Tap + to add your first entry.'}
       </Txt>
     </View>
   )
