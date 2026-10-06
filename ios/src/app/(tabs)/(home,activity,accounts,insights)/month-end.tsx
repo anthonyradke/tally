@@ -53,11 +53,13 @@ export default function MonthEnd() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
     return true
   }
-  const saveTyped = async (fields = typed) => {
+  // `had`: what each field held when the screen loaded. Emptying one that had a balance takes it back out.
+  const saveTyped = async (fields: Record<string, string>, had: Record<string, number | null>) => {
     const { cents, bad } = amountsById(fields)
     if (typos(bad)) return
+    const cleared = Object.keys(fields).filter((k) => fields[k].trim() === '' && had[k] != null).map(Number)
     try {
-      await api.monthEndTyped(ym, cents)
+      await api.monthEndTyped(ym, cents, cleared)
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       toast({ text: 'Balances saved' }); await refresh()
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
@@ -89,7 +91,7 @@ export default function MonthEnd() {
                   <Field value={typed[k] ?? ''} onChange={(v) => setTyped((s) => ({ ...s, [k]: v }))} />} />
               ))}
             </Group>
-            <Button label="Save balances" onPress={() => saveTyped()} secondary={d.typed_done} />
+            <Button label="Save balances" onPress={() => saveTyped(typed, d.typed)} secondary={d.typed_done} />
           </View>
         )}
         {Object.keys(d.interest).length > 0 && (
@@ -121,7 +123,7 @@ export default function MonthEnd() {
           <View style={{ gap: space.m }}>
             <View style={{ paddingHorizontal: space.xs }}>
               <Txt variant="headline">Loan balances</Txt>
-              <Txt variant="foot" tone="label2">Optional. Tally adds a month of interest and takes off your payments; the grey figure is what it worked out. If the statement says otherwise, type its balance and Tally carries on from there.</Txt>
+              <Txt variant="foot" tone="label2">{"Optional. Tally adds a month of interest and takes off your payments; the grey figure is what it worked out. If the statement says otherwise, type its balance and Tally carries on from there. Empty a field and save to go back to Tally's figure."}</Txt>
             </View>
             <Group>
               {Object.entries(d.loans).map(([k, v]) => (
@@ -129,7 +131,7 @@ export default function MonthEnd() {
                   <Field value={loans[k] ?? ''} placeholder={fromCents(v.balance)} onChange={(val) => setLoans((s) => ({ ...s, [k]: val }))} />} />
               ))}
             </Group>
-            <Button label="Save loan balances" onPress={() => saveTyped(loans)} secondary />
+            <Button label="Save loan balances" onPress={() => saveTyped(loans, Object.fromEntries(Object.entries(d.loans).map(([k, v]) => [k, v.typed])))} secondary />
           </View>
         )}
         </Arrive>

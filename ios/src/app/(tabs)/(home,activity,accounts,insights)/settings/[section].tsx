@@ -16,7 +16,8 @@ import { categoryVisual, KIND_LABEL, KIND_SYMBOL } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
 import { api, type AdminData, type CatType, type Kind } from '@/lib/api'
 import { suggestBudgets } from '@/lib/budgets'
-import { dayLabel } from '@/lib/dates'
+import { budgetAmount } from '@/lib/forms'
+import { dayLabel, toISO } from '@/lib/dates'
 import { fromCents, toCents } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { discard, flush, useOutbox } from '@/lib/outbox'
@@ -221,7 +222,8 @@ function Budgets({ a }: { a: AdminData }) {
   const save = (id: number, v: string) => {
     typing.current.delete(id)
     const was = a.categories.find((x) => x.id === id)?.budget ?? null
-    const now = v.trim() === '' ? null : toCents(v)
+    const now = budgetAmount(v)
+    if (now === undefined) { toast({ text: `Check the ${a.categories.find((x) => x.id === id)?.name ?? ''} budget: it isn't a number.`, tone: 'error' }); return }
     if (now === was) return
     write(() => api.setBudget(id, now))
   }
@@ -303,7 +305,7 @@ function General({ a }: { a: AdminData }) {
         <Row label="Limit" chevron={false} value={
           <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: c.fill, borderRadius: radius.input, paddingHorizontal: space.m, height: 36, width: 120 }}>
             <Txt variant="body" tone="label2">$</Txt>
-            <TextInput value={roth} onChangeText={(t) => setRoth(t.replace(/[^0-9.]/g, ''))} onBlur={() => write(() => api.putSettings({ roth_limit: roth || 0 }), 'Saved')}
+            <TextInput value={roth} onChangeText={(t) => setRoth(t.replace(/[^0-9.]/g, ''))} onBlur={() => { if (toCents(roth) !== Number(s.roth_limit ?? 0)) write(() => api.putSettings({ roth_limit: roth || 0 }), 'Saved') }}
               keyboardType="decimal-pad" style={{ flex: 1, minWidth: 48, fontSize: 17, color: c.label, textAlign: 'right', fontVariant: ['tabular-nums'] }} />
           </View>
         } />
@@ -389,7 +391,7 @@ function Server() {
       {queued.length > 0 && (
         <Group header="Waiting to send" footer="These were saved while Tally was unreachable. They send on their own when it's back.">
           {queued.map((q) => (
-            <Row key={q.cid} label={q.label} sub={q.error ?? `${formatCents(q.lines.reduce((n, l) => n + l.amount, 0))}, saved ${dayLabel(q.at.slice(0, 10))}`} chevron={false}
+            <Row key={q.cid} label={q.label} sub={q.error ?? `${formatCents(q.lines.reduce((n, l) => n + l.amount, 0))}, saved ${dayLabel(toISO(new Date(q.at)))}`} chevron={false}
               trailing={<Tap feedback="opacity" onPress={() => { discard(q.cid); toast({ text: 'Discarded' }) }} hitSlop={8}><Txt variant="callout" tone="neg">Discard</Txt></Tap>} />
           ))}
           <Row label="Send now" sf="arrow.up.circle" md="upload" chevron={false} onPress={() => flush().then((n) => toast({ text: n ? `Sent ${n}` : 'Still unreachable' }))} />

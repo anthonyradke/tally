@@ -2,7 +2,7 @@
 // (Mar 8 and Nov 1), plus a zone east of UTC where date strings built with toISOString() shift a day.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addDays, dayLabel, fromISO, isFuture, monthBefore, monthOf, toISO } from '@/lib/dates'
+import { addDays, dayLabel, fromISO, isFuture, lastOfMonth, monthBefore, monthOf, toISO } from '@/lib/dates'
 
 process.env.TZ = 'America/Denver'
 const inZone = (tz: string, fn: () => void) => { const was = process.env.TZ; process.env.TZ = tz; try { fn() } finally { process.env.TZ = was } }
@@ -43,6 +43,8 @@ test('month helpers', () => {
   assert.equal(monthBefore('2026-09-24'), '2026-08-01')
   assert.equal(monthBefore('2026-01-05'), '2025-12-01')
   assert.equal(monthBefore('2026-03-31'), '2026-02-01')
+  assert.equal(lastOfMonth('2026-02-10'), '2026-02-28')
+  assert.equal(lastOfMonth('2026-12-01'), '2026-12-31')
   assert.ok(isFuture('2026-09-25', '2026-09-24') && !isFuture('2026-09-24', '2026-09-24'))
 })
 

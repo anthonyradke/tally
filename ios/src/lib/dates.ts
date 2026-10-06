@@ -25,6 +25,12 @@ export function monthBefore(iso: string): string {
   return toISO(new Date(d.getFullYear(), d.getMonth() - 1, 1)) // toISOString() would be UTC: a day early east of it
 }
 
+/** The last day of the month containing `iso`. */
+export function lastOfMonth(iso: string): string {
+  const d = fromISO(iso)
+  return toISO(new Date(d.getFullYear(), d.getMonth() + 1, 0))
+}
+
 export function monthLabel(iso: string, style: 'short' | 'long' = 'short'): string {
   return fromISO(iso).toLocaleDateString('en-US', { month: style, year: 'numeric' })
 }

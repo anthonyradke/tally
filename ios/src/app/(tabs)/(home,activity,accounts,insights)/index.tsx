@@ -392,8 +392,9 @@ function Goal({ b, kind, wide }: { b: Bootstrap; kind: 'ef' | 'roth'; wide?: boo
 
 function Upcoming({ b }: { b: Bootstrap }) {
   const t = useTally()
-  const q = useTransactions({ start: b.today, end: addDays(b.today, 30), sort: 'date', dir: 'asc', limit: 6 })
-  const rows = (q.data?.items ?? []).filter((x) => x.date > b.today)
+  // From tomorrow: starting today, a busy day's entries filled the six rows and hid what's coming.
+  const q = useTransactions({ start: addDays(b.today, 1), end: addDays(b.today, 30), sort: 'date', dir: 'asc', limit: 6 })
+  const rows = q.data?.items ?? []
   if (!rows.length) return null
   return (
     <Section title="Coming up" href={{ pathname: '/activity', params: { when: 'upcoming' } }}>
