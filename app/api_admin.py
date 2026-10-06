@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from . import db
 from .api import Con
-from .engine import KINDS, TYPES, month_of
+from .engine import KINDS, SHAPE_HINT, TYPES, Txn, month_of, validate
 from .inputs import bad, body, day, flag, ids, money, month, number, opt_id, opt_text, text, whole
 
 router = APIRouter(prefix="/api")
@@ -104,7 +104,8 @@ def _account_fields(b: dict) -> dict:
               "sort": whole(b.get("sort") or 0, "sort"), "active": flag(b.get("active", True), "Active"),
               "color": opt_text(b.get("color"), "Color"), "icon": opt_text(b.get("icon"), "Icon"),
               "opened": _opened(b.get("opened"), b["kind"])}
-    return {k: v for k, v in fields.items() if k not in ("apy", "loan_rate", "opened") or k in b}
+    keep = ("opened",) if b["kind"] not in ("loan", "investment") else ()  # a cash or card account never has one
+    return {k: v for k, v in fields.items() if k not in ("apy", "loan_rate", "opened") or k in b or k in keep}
 
 
 @router.put("/accounts/order")  # before /accounts/{id} so "order" is never parsed as an id
@@ -156,10 +157,32 @@ async def create_category(request: Request, con: Con):
     return _get(con, "categories", id)
 
 
+def _misfits(con, id: int, new_type: str) -> list[str]:
+    """Changing a category's type re-reads every entry in it by the new type's From/To rules, so a spending category
+    turned into Money in would count each purchase as income. Refuse while its entries or recurring templates don't
+    fit the new type; an unused category (or one whose entries all fit) can change freely."""
+    old = _get(con, "categories", id)
+    if old["type"] == new_type:
+        return []
+    accounts = {a.id: a for a in db.load_accounts(con, active_only=False)}
+    fits = lambda r: not validate(Txn(None, date.today(), "", id, r[0], r[1], 1), new_type, accounts)
+    rows = con.execute("SELECT from_account_id, to_account_id FROM transactions WHERE category_id=?", (id,)).fetchall()
+    plans = con.execute("SELECT from_account_id, to_account_id FROM recurring WHERE category_id=?", (id,)).fetchall()
+    n, m = sum(not fits(r) for r in rows), sum(not fits(r) for r in plans)
+    if not n and not m:
+        return []
+    what = " and ".join(x for x in (f"{n} {'entry' if n == 1 else 'entries'}" if n else "",
+                                     f"{m} recurring" if m else "") if x)
+    return [f"{what} in {old['name']} don't fit {new_type}. {SHAPE_HINT[new_type]} Move them to another category "
+            f"first, or make a new {new_type} category instead."]
+
+
 @router.put("/categories/{id}")
 async def update_category(id: int, request: Request, con: Con):
-    _get(con, "categories", id)
-    _upsert(con, "categories", _category_fields(await body(request)), id)
+    f = _category_fields(await body(request))
+    if errs := _misfits(con, id, f["type"]):
+        raise HTTPException(409, {"errors": errs})
+    _upsert(con, "categories", f, id)
     con.commit()
     return _get(con, "categories", id)
 
@@ -274,7 +297,9 @@ async def put_settings(request: Request, con: Con):
         elif k == "roth_limit":
             v = str(money(v or 0, "Roth limit"))
         elif k == "ef_months":
-            v = str(whole(v, "Months of spending"))
+            v = whole(v, "Months of spending")
+            if not 1 <= v <= 24:
+                raise HTTPException(422, {"errors": ["Months of spending must be between 1 and 24."]})
         elif k in ("roth_category", "interest_category"):
             v = str(whole(v, "Category")) if v else ""
             if v and not con.execute("SELECT 1 FROM categories WHERE id=?", (int(v),)).fetchone():
