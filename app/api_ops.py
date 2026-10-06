@@ -51,14 +51,19 @@ def month_end(ym: str, con: Con):
 
 @router.post("/month-end/{ym}/typed")
 async def month_end_typed(ym: str, request: Request, con: Con):
-    """Body: {"<account_id>": dollars, ...}. Investments and loans: the balance at the end of the month."""
+    """Body: {"<account_id>": dollars | null, ...}. Investments and loans: the balance at the end of the month. null
+    takes a typed balance back out (a loan goes back to working itself out); "" leaves it as it is."""
     m = parse_month(ym)
     known = {r[0] for r in con.execute("SELECT id FROM accounts WHERE kind IN ('investment','loan')")}
     for k, v in (await body(request)).items():
-        if v not in (None, ""):
-            aid = whole(k, "Account")
-            if aid not in known:
-                raise HTTPException(404)
+        if v == "":
+            continue
+        aid = whole(k, "Account")
+        if aid not in known:
+            raise HTTPException(404)
+        if v is None:
+            con.execute("DELETE FROM typed_balances WHERE account_id=? AND month=?", (aid, m.isoformat()))
+        else:
             db.set_typed(con, aid, m, money(v, "Balance"))
     con.commit()
     return {"ok": True}
