@@ -9,7 +9,7 @@ from dataclasses import replace
 from datetime import date
 from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
-from . import db, service, recurring
+from . import db, recurring, search, service
 from .engine import validate
 from .entries import META_COLS, _client_id, _full, _landed, _parse, _remove, _sent, _txn, _write
 from .inputs import body, day, ids as id_list, money, opt_id, whole, words
@@ -74,21 +74,31 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
                  start: str = "", end: str = "", amount_min: Optional[float] = None,
                  amount_max: Optional[float] = None, tag: str = "", group: str = "",
                  sort: str = "date", dir: str = "desc", limit: int = 200, offset: int = 0):
-    """Filtered list. Search matches description, note, tags, category, account names and the amount.
-    `by_type` sums the matches per category type, so the client can show a real net across types."""
+    """Filtered list. Search matches description, note, tags, category, account names and the amount, and takes the
+    shortcuts in search.py (>100, aug, #trip). `by_type` sums the matches per category type, so the client can show a
+    real net across types."""
     first, last = day(start, "Start") if start else None, day(end, "End") if end else None
     st = service.load(con)
     meta = _meta(st.con)
     items = list(st.txns)
-    if q:
-        needle = q.lower().strip()
+    s = search.parse(q, st.today)
+    if s.min is not None:
+        items = [t for t in items if abs(t.amount) >= s.min]
+    if s.max is not None:
+        items = [t for t in items if abs(t.amount) <= s.max]
+    if s.first:
+        items = [t for t in items if s.first <= t.date <= s.last]
+    for tg in s.tags:
+        items = [t for t in items if tg in (meta.get(t.id, {}).get("tags") or "").split()]
+    if s.text:
+        needle = s.text
         digits = needle.replace("$", "").replace(",", "")
 
         def hit(t):
             m = meta.get(t.id, {})
             names = [t.what, m.get("note") or "", m.get("tags") or "", st.cat[t.category_id].name]
             names += [st.acct[a].name for a in (t.from_id, t.to_id) if a in st.acct]
-            return any(needle in s.lower() for s in names) or (digits and digits in f"{abs(t.amount) / 100:.2f}")
+            return any(needle in x.lower() for x in names) or (digits and digits in f"{abs(t.amount) / 100:.2f}")
         items = [t for t in items if hit(t)]
     if category:
         items = [t for t in items if t.category_id == category]
