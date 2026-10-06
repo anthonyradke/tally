@@ -39,16 +39,18 @@ the cent.
 
 - Home shows net worth, this month's spending drawn against last month's pace (drag across the chart to read any
   day), quick actions, budgets, where the money went, goals, what's coming up and recent entries.
-- Activity lists every entry grouped by day, with search, filters, saved views, a long-press menu (edit, duplicate,
+- Activity lists every entry grouped by day, with search (which also takes shortcuts like `>50`, `aug` and
+  `#trip`), filters, saved views, a long-press menu (edit, duplicate,
   delete with undo) and multi-select for recategorizing, tagging or deleting.
 - Adding an entry has a big keypad, merchant memory (type a name and it fills in the category and account from last
   time), date shortcuts, refunds, splits, notes, tags and receipt photos. If the phone can't reach the server, the
   entry waits on the phone and sends itself later, never twice.
 - Accounts shows balances, what I own against what I owe, and for each account a balance chart and reconciling
-  against the bank with a diagnosis when they don't match.
+  against the bank with a diagnosis when they don't match. A loan's page works out when it'll be paid off at the
+  current payment, and what paying a bit more each month would save.
 - Insights has a month-by-month spending donut, categories against budgets, cash flow, net worth, the month-end
   checklist and CSV export.
-- Settings covers quick actions, recurring entries, saved views, accounts, categories, budgets (with suggestions
+- Settings covers quick actions, recurring entries (with suggestions for entries that repeat), saved views, accounts, categories, budgets (with suggestions
   from past spending), goals, the Home layout and the server address.
 
 ## Running the backend
@@ -103,6 +105,7 @@ app/db.py            database schema and connections
 app/migrate.py       schema changes
 app/api*.py          the JSON API
 app/recurring.py     recurring entries
+app/search.py        search shortcuts (>50, aug, #trip)
 app/importer.py      spreadsheet import
 app/main.py          app setup and CSV export
 tests/               backend tests, each against a throwaway database
