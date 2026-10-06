@@ -30,7 +30,8 @@ const TITLE: Record<string, [string, string]> = {
 }
 
 export default function Edit() {
-  const { kind, id } = useLocalSearchParams<{ kind: string; id?: string }>()
+  // prefill: starting fields for a new item, as JSON (a suggested recurring template from Settings → Recurring).
+  const { kind, id, prefill } = useLocalSearchParams<{ kind: string; id?: string; prefill?: string }>()
   const { c } = useTheme()
   const admin = useAdmin()
   const t = useTally()
@@ -41,7 +42,9 @@ export default function Edit() {
 
   useEffect(() => {
     if (!a || !t.b || f) return
-    setF(initial(kind, id ? Number(id) : undefined, a, t.b.today))
+    let extra: Form = {}
+    try { extra = !id && prefill ? JSON.parse(prefill) : {} } catch { /* ignore a bad prefill */ }
+    setF({ ...initial(kind, id ? Number(id) : undefined, a, t.b.today), ...extra })
   }, [a, t.b]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async () => {
