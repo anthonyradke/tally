@@ -102,7 +102,10 @@ function UnderBudget({ month, by }: { month: string; by: number }) {
 function Body({ b }: { b: Bootstrap }) {
   const { c, tint } = useTheme()
   const months = b.months.filter((m) => m.month <= monthOf(b.today))
-  const [i, setI] = useState(months.length - 1)
+  // The latest month until you pick one: data from the phone's cache can be a month behind on the first frame, and
+  // the fresh months that arrive a moment later should show without leaving and coming back.
+  const [picked, setI] = useState<number | null>(null)
+  const i = Math.min(picked ?? months.length - 1, months.length - 1)
   const [sel, setSel] = useState<string | null>(null)
   const m = months[i]
   const prev = months[i - 1]

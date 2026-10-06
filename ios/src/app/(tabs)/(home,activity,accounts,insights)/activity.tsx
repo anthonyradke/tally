@@ -16,7 +16,7 @@ import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { api, type CatType, type Txn } from '@/lib/api'
 import { deleteTxns } from '@/lib/actions'
-import { dayLabel } from '@/lib/dates'
+import { addDays, dayLabel } from '@/lib/dates'
 import { extraCount, toQuery, useFilters } from '@/lib/filters'
 import { formatCents } from '@/lib/money'
 import { useOutbox } from '@/lib/outbox'
@@ -43,7 +43,7 @@ export default function Activity() {
   // Deep links from Home, a category, an account or a tag set the filters once.
   useEffect(() => {
     const p: Partial<typeof f> = {}
-    if (params.when === 'upcoming' && t.b) { p.start = t.b.today; p.sort = 'date'; p.dir = 'asc' }
+    if (params.when === 'upcoming' && t.b) { p.start = addDays(t.b.today, 1); p.end = undefined; p.sort = 'date'; p.dir = 'asc' }
     if (params.category) p.category = Number(params.category)
     if (params.account) p.account = Number(params.account)
     if (params.tag) p.tag = params.tag

@@ -11,7 +11,7 @@ import { categoryVisual } from '@/icons/categories'
 import { api } from '@/lib/api'
 import { close } from '@/lib/nav'
 import { invalidateAll } from '@/lib/data'
-import { addDays, monthBefore, monthOf } from '@/lib/dates'
+import { addDays, lastOfMonth, monthBefore, monthOf } from '@/lib/dates'
 import { extraCount, fromViewQuery, useFilters, viewQuery, type Filters } from '@/lib/filters'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
@@ -31,7 +31,7 @@ export default function FiltersSheet() {
   const lastStart = monthBefore(today)
   const ranges: Record<Range, [string, Partial<Filters>]> = {
     all: ['All time', { start: undefined, end: undefined }],
-    month: ['This month', { start: monthOf(today), end: undefined }],
+    month: ['This month', { start: monthOf(today), end: lastOfMonth(today) }], // not next month's scheduled entries
     last: ['Last month', { start: lastStart, end: addDays(monthOf(today), -1) }],
     '90': ['90 days', { start: addDays(today, -90), end: undefined }],
     year: ['This year', { start: `${today.slice(0, 4)}-01-01`, end: undefined }],

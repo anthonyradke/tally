@@ -56,12 +56,13 @@ export default function New() {
   const history = useTransactions({ limit: 600 }, !!t.b)
   // Seed the draft once: blank, from an account, or from a quick action (which may already have an amount, and then
   // it starts on the first step still missing something).
-  const [seed] = useState(() => {
+  const makeSeed = () => {
     if (!t.b) return null
     const base = { ...blank(date ?? t.b.today), from_id: from && t.acct.has(Number(from)) ? Number(from) : null }
     const f = fav ? t.b.favorites.find((x) => x.id === Number(fav)) : undefined
     return f ? { ...base, ...fill(f.id) } : base
-  })
+  }
+  const [seed] = useState(makeSeed)
   const [step, setStep] = useState<Step>(() => (seed?.amount ? nextStep('amount', seed, new Set()) : 'amount'))
   const [dir, setDir] = useState<1 | -1>(1)
   const [seen, setSeen] = useState<Set<Step>>(new Set(['amount']))
@@ -76,7 +77,10 @@ export default function New() {
   useLayoutEffect(() => {
     if (loaded.current || !t.b) return
     loaded.current = true
-    reset(seed ?? blank(date ?? t.b.today))
+    // Opened before anything had loaded (no cache yet): seed now, so a quick action or account isn't lost.
+    const s = seed ?? makeSeed()!
+    reset(s)
+    if (!seed && s.amount) setStep(nextStep('amount', s, new Set())) // eslint-disable-line react-hooks/set-state-in-effect
   }, [t.b]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const steps = stepsFor(d.kind)

@@ -101,8 +101,9 @@ export const api = {
     call<Diagnosis>('POST', `/reconcile/${accountId}`, { actual: actualCents / 100, save }),
   reconciliations: () => call<Reconciliation[]>('GET', '/reconciliations'),
   monthEnd: (ym: string) => call<MonthEnd>('GET', `/month-end/${ym}`),
-  monthEndTyped: (ym: string, byAccount: Record<number, number>) =>
-    call<{ ok: true }>('POST', `/month-end/${ym}/typed`, Object.fromEntries(Object.entries(byAccount).map(([k, v]) => [k, v / 100]))),
+  /** `cleared`: accounts whose typed balance comes back out (a loan goes back to working itself out). */
+  monthEndTyped: (ym: string, byAccount: Record<number, number>, cleared: number[] = []) =>
+    call<{ ok: true }>('POST', `/month-end/${ym}/typed`, { ...Object.fromEntries(cleared.map((k) => [k, null])), ...Object.fromEntries(Object.entries(byAccount).map(([k, v]) => [k, v / 100])) }),
   monthEndInterest: (ym: string, byAccount: Record<number, number>) =>
     call<{ ok: true }>('POST', `/month-end/${ym}/interest`, Object.fromEntries(Object.entries(byAccount).map(([k, v]) => [k, v / 100]))),
   // settings-style CRUD (dollar fields converted at the call site)

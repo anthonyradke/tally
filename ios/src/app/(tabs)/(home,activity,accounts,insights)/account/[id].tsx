@@ -60,8 +60,8 @@ export default function AccountDetail() {
   const mine = (recs.data ?? []).filter((r) => r.account_id === a.id).slice(0, 3)
   const inOut = rows.filter((x) => monthOf(x.date) === monthOf(b.today) && x.date <= b.today)
     .reduce((acc, x) => {
-      const into = (x.to_id === a.id) !== owed // money into a cash account, or a payment onto a card
-      if (into) acc.in += Math.abs(x.amount); else acc.out += Math.abs(x.amount)
+      // Money into a cash account, or a payment onto a card, is To it. Signed, so a refund takes off what was charged.
+      if (x.to_id === a.id) acc.in += x.amount; else acc.out += x.amount
       return acc
     }, { in: 0, out: 0 })
 
