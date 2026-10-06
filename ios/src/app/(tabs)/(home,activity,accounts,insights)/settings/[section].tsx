@@ -9,6 +9,7 @@ import { Mark } from '@/components/Mark'
 import { Group, Row } from '@/components/Row'
 import { StateView } from '@/components/StateView'
 import { AppIconPicker } from '@/components/AppIconPicker'
+import { RepeatSuggestions } from '@/components/RepeatSuggestions'
 import { ThemePicker } from '@/components/ThemePicker'
 import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
@@ -170,8 +171,11 @@ function RecurringList({ a }: { a: AdminData }) {
   const { tint } = useTheme()
   const { b } = useTally()
   const cats = new Map(a.categories.map((x) => [x.id, x]))
-  if (!a.recurring.length) return <Empty sf="repeat" md="repeat" title="Nothing recurring yet" body="Add a paycheck, rent or a subscription and Tally posts it ahead of time, about 45 days out." />
+  const ideas = b ? <RepeatSuggestions b={b} /> : null
+  if (!a.recurring.length) return <>{ideas}<Empty sf="repeat" md="repeat" title="Nothing recurring yet" body="Add a paycheck, rent or a subscription and Tally posts it ahead of time, about 45 days out." /></>
   return (
+    <>
+    {ideas}
     <Group>
       {a.recurring.map((r) => {
         const cat = cats.get(r.category_id)
@@ -183,6 +187,7 @@ function RecurringList({ a }: { a: AdminData }) {
         )
       })}
     </Group>
+    </>
   )
 }
 
