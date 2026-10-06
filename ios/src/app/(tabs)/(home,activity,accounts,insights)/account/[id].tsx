@@ -6,6 +6,7 @@ import { useSharedValue } from 'react-native-reanimated'
 import { closeSwipes } from '@/components/SwipeRow'
 import { Icon } from '@/components/Icon'
 import { Money } from '@/components/Money'
+import { Payoff } from '@/components/Payoff'
 import { Hairline, Panel, Section } from '@/components/Panel'
 import { ScrubChart } from '@/components/ScrubChart'
 import { ScrubFigure } from '@/components/ScrubFigure'
@@ -109,6 +110,8 @@ export default function AccountDetail() {
             </Panel>
           </Section>
         )}
+
+        {a.kind === 'loan' && all.data && <Payoff b={b} a={a} rows={rows} />}
 
         {mine.length > 0 && (
           <Section title="Reconciled">
