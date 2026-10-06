@@ -8,6 +8,36 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## Unreleased
+Added
+- A loan's page has a Payoff section: when it will be paid off at the rate you're paying it (your recurring payment,
+  or your average over the last few months), how much interest is still to come, and what $25 to $100 more a month
+  would save.
+- Search in Activity takes shortcuts: `>50` or `<=20` for amounts, a month like `aug` or `aug 2025`, and `#trip` for
+  a tag. They mix with words, so `coffee >5 aug` works.
+- Settings → Recurring suggests templates for entries that repeat on a steady schedule at the same amount (a
+  subscription, rent, a paycheck). Tapping one opens the editor filled in; the X hides it.
+- Month end: empty a loan or investment balance and save to take it back out, so a loan goes back to Tally's own
+  figure.
+
+Changed
+- A category's type can't be changed while entries or recurring templates in it don't fit the new type (spending
+  turned into Money in would have counted every purchase as income). Move them first, or make a new category.
+- "This month" in Activity's filters stops at the end of the month instead of taking in next month's scheduled
+  entries.
+
+Fixed
+- A credit card's page had Paid off and Charged the wrong way round.
+- Coming up on Home could be empty on a busy day: today's entries took its places.
+- Activity opened from Coming up didn't light the Upcoming chip and also listed today's entries.
+- Insights could stay on last month after the app opened on a new month, until you left and came back.
+- A new entry opened before anything had loaded lost the quick action or account it was opened from.
+- A budget typed as "1.2.3" in Settings → Budgets was saved as $0; it now says to check it.
+- Settings → Server showed an entry waiting to send as saved tomorrow if it was saved in the evening.
+- Leaving the Roth limit field saved it and said "Saved" even when nothing changed.
+- Switching a loan or investment to cash or card clears its opening month, and the emergency fund goal stays between
+  1 and 24 months.
+
 ## 3.4.0 (2026-10-05)
 Added
 - Wells Fargo as a bank color for accounts.
