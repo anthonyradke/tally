@@ -13,6 +13,8 @@ Added
 - A loan's page has a Payoff section: when it will be paid off at the rate you're paying it (your recurring payment,
   or your average over the last few months), how much interest is still to come, and what $25 to $100 more a month
   would save.
+- An account can have its own symbol and color (Settings → Accounts → the account), like a car for a car loan. The
+  bank's color stays the default.
 - The emergency fund card on Home says when it reaches the goal at the pace it has grown over the last few months
   ("At +$400 a month, there by September 2027").
 - A loan's Payoff has "What if you paid some now": drag to try a one-time payment (a bonus, or money from selling
