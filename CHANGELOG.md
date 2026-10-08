@@ -13,6 +13,9 @@ Added
 - A loan's page has a Payoff section: when it will be paid off at the rate you're paying it (your recurring payment,
   or your average over the last few months), how much interest is still to come, and what $25 to $100 more a month
   would save.
+- A loan's Payoff has "What if you paid some now": drag to try a one-time payment (a bonus, or money from selling
+  something) and see the new payoff month and the interest it saves. For a loan with no payments yet, it shows what
+  would be left and the interest it would add each month.
 - Search in Activity takes shortcuts: `>50` or `<=20` for amounts, a month like `aug` or `aug 2025`, and `#trip` for
   a tag. They mix with words, so `coffee >5 aug` works.
 - Settings → Recurring suggests templates for entries that repeat on a steady schedule at the same amount (a
