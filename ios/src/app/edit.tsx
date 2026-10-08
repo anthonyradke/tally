@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react'
 import { KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
+import { AccountMark } from '@/components/AccountMark'
 import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
@@ -14,7 +15,7 @@ import { Group, Row } from '@/components/Row'
 import { StateView } from '@/components/StateView'
 import { Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
-import { categoryVisual, GLYPH_NAMES, GLYPHS } from '@/icons/categories'
+import { categoryVisual, GLYPH_NAMES, GLYPHS, KIND_SYMBOL } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
 import { close } from '@/lib/nav'
 import { api, ApiError, type AdminData, type CatType, type Freq, type Kind } from '@/lib/api'
@@ -156,16 +157,45 @@ function Choice<T extends string | number | null>({ label, value, options, onCha
 
 function AccountForm({ f, set }: { f: Form; set: (p: Form) => void }) {
   const kind = f.kind as Kind
+  const { c, tint } = useTheme()
+  const look = { kind, bank: f.bank as string | null, icon: f.icon as string | null, color: f.color as string | null }
   return (
     <>
+      <View style={{ alignItems: 'center' }}><AccountMark a={look} size={72} /></View>
       <Group><Field label="Name" value={String(f.name)} onChange={(v) => set({ name: v })} auto /></Group>
       <Segmented options={[['cash', 'Cash'], ['card', 'Card'], ['investment', 'Invest'], ['loan', 'Loan']]} value={kind} onChange={(v) => set({ kind: v })} />
       <View style={{ gap: space.s }}>
         <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Bank color</Txt>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
           {[[null, 'None'], ['chase', 'Chase'], ['amex', 'Amex'], ['sofi', 'SoFi'], ['wells', 'Wells Fargo'], ['hsa', 'Grey'], ['roth', 'Violet']].map(([v, l]) => (
-            <Chip key={String(v)} label={l!} selected={f.bank === v} onPress={() => set({ bank: v })} />
+            <Chip key={String(v)} label={l!} selected={f.bank === v} onPress={() => set({ bank: v, color: null })} />
           ))}
+        </View>
+      </View>
+      <View style={{ gap: space.s }}>
+        <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Or a color of its own</Txt>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.m, paddingHorizontal: space.xs }}>
+          {TINTS.map((k) => (
+            <Tap key={k} feedback="scale" onPress={() => set({ color: f.color === k ? null : k })} accessibilityLabel={k} accessibilityState={{ selected: f.color === k }}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: tint(k as Tint), borderWidth: f.color === k ? 3 : 0, borderColor: c.panel, boxShadow: f.color === k ? `0 0 0 2px ${c.ink}` : undefined }}>
+              <View />
+            </Tap>
+          ))}
+        </View>
+      </View>
+      <View style={{ gap: space.s }}>
+        <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Symbol</Txt>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s, backgroundColor: c.panel, borderRadius: radius.panel, padding: space.m }}>
+          {[null, ...GLYPH_NAMES].map((g) => {
+            const on = (f.icon ?? null) === g
+            const [sf, md] = g ? GLYPHS[g] : KIND_SYMBOL[kind]
+            return (
+              <Tap key={g ?? 'kind'} feedback="scale" onPress={() => set({ icon: g })} accessibilityLabel={g ?? 'The usual symbol'} accessibilityState={{ selected: on }}
+                style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.ink : c.fill }}>
+                <Icon sf={sf} md={md} size={19} color={on ? c.onInk : c.label} />
+              </Tap>
+            )
+          })}
         </View>
       </View>
       <Group footer={kind === 'investment' ? 'Investments are updated at month end with their typed balance. For one opened since Tally started counting, Opened is its first month, like 2026-10.'
