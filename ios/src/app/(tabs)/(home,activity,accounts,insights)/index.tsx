@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
 import { router, Stack } from 'expo-router'
 import Animated, { FadeIn, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated'
@@ -167,11 +167,9 @@ function ThisMonth({ b }: { b: Bootstrap }) {
   const pace = usePace(b)
   const scrub = useSharedValue(-1)
   const { cur, prev } = monthsNow(b)
-  const totalBudget = useMemo(() => {
-    const vals = b.categories.filter((x) => x.type === 'Spending' && x.active).map((x) => budgetFor(b, x, cur?.month ?? ''))
-    const set = vals.filter((v): v is number => v != null)
-    return set.length ? set.reduce((a, v) => a + v, 0) : null
-  }, [b, cur?.month])
+  const budgets = b.categories.filter((x) => x.type === 'Spending' && x.active).map((x) => budgetFor(b, x, cur?.month ?? ''))
+    .filter((v): v is number => v != null)
+  const totalBudget = budgets.length ? budgets.reduce((a, v) => a + v, 0) : null
   if (!cur) return null
   const spent = pace?.cur.at(-1) ?? cur.spent
   const prevAt = pace ? pace.prev[Math.max(0, (pace.cur.length || 1) - 1)] : null
@@ -462,7 +460,7 @@ function NetWorthChart({ b }: { b: Bootstrap }) {
   return (
     <Section title="Net worth over time">
       <Panel style={{ gap: space.m }}>
-        <ScrubFigure cents={values.at(-1)!} values={values} labels={upTo.map((m) => `End of ${monthLabel(m.month, 'long')}`)} scrub={scrub}
+        <ScrubFigure cents={values.at(-1)!} values={values} labels={upTo.map((m, i) => (i === upTo.length - 1 ? `${monthName(m.month)} so far` : `End of ${monthLabel(m.month, 'long')}`))} scrub={scrub}
           style={{ ...ramp.title, color: c.label }} caption={<Txt variant="callout" tone="label2">Month-end balances</Txt>} />
         <ScrubChart scrub={scrub} slots={values.length} series={[{ values, color: c.ink }]} height={120} />
       </Panel>

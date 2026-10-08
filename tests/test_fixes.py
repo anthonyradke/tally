@@ -1,5 +1,6 @@
 """Fixes from the 2026-10 pass: category type changes, clearing a typed balance, account opening months, settings."""
 from __future__ import annotations
+from datetime import date
 from .conftest import txn
 
 
@@ -22,7 +23,7 @@ def test_category_type_change_allowed_when_entries_fit_or_none(client, world):
 
 def test_category_type_change_checks_recurring_templates(client, world):
     client.post("/api/recurring", json={"label": "Rent", "category_id": world["gas"], "from_account_id": world["chk"],
-                                        "amount": 900, "freq": "monthly", "next_date": "2099-01-01"})
+                                        "amount": 900, "freq": "monthly", "next_date": f"{date.today().year + 1}-01-01"})
     r = client.put(f"/api/categories/{world['gas']}", json={"name": "Gas", "type": "Money in"})
     assert r.status_code == 409 and "1 recurring" in r.json()["detail"]["errors"][0]
 

@@ -91,6 +91,12 @@ def day(v: Any, what: str = "Date") -> date:
     bad(f"{what} must be a date like 2026-09-24.")
 
 
+def far(today: date) -> date:
+    """The latest date an entry or a template can have: ten years out. Further is a typo'd year, and one row dated
+    9999-12-31 made every balance calculation (and so every screen) fail."""
+    return date(today.year + 10, today.month, min(today.day, 28))
+
+
 def month(ym: str) -> date:
     """A 'YYYY-MM' path segment."""
     m = re.fullmatch(r"(\d{4})-(\d{2})", ym)

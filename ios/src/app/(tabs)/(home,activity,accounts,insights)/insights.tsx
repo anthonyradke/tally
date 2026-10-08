@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Linking, RefreshControl, ScrollView, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
@@ -27,6 +27,7 @@ import { api, type Bootstrap, type MonthRow } from '@/lib/api'
 import { budgetFor, elapsed } from '@/lib/budgets'
 import { fromISO, monthLabel, monthOf } from '@/lib/dates'
 import { compactCents, formatCents, pct } from '@/lib/money'
+import { usePace } from '@/lib/pace'
 import { usePullRefresh } from '@/lib/refresh'
 import { getServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
@@ -112,9 +113,10 @@ function Body({ b }: { b: Bootstrap }) {
   const isNow = m?.month === monthOf(b.today)
   const [settle, title, leave] = useMonthShift(m?.month)
   const target = useRef<number | null>(null) // the month being switched to while the current one fades out
-  const cats = useMemo(() => !m ? [] : b.categories.filter((x) => x.type === 'Spending')
+  const pace = usePace(b)
+  const cats = !m ? [] : b.categories.filter((x) => x.type === 'Spending')
     .map((x) => ({ x, spent: m.by_category[String(x.id)] ?? 0, budget: budgetFor(b, x, m.month) }))
-    .filter((r) => r.spent > 0 || (r.budget ?? 0) > 0).sort((a, z) => z.spent - a.spent), [b, m])
+    .filter((r) => r.spent > 0 || (r.budget ?? 0) > 0).sort((a, z) => z.spent - a.spent)
   if (!m) return null
   const show = (next: number) => {
     const from = target.current ?? i
@@ -126,7 +128,9 @@ function Body({ b }: { b: Bootstrap }) {
     leave(next > from ? 1 : -1, () => { if (target.current != null) setI(target.current); target.current = null })
   }
   const go = (d: number) => show((target.current ?? i) + d)
-  const delta = prev ? m.spent - prev.spent : null
+  // This month is still going: compare it with last month up to the same day, not with all of last month.
+  const sameDay = isNow && pace && pace.cur.length ? pace.cur.at(-1)! - pace.prev[pace.cur.length - 1] : null
+  const delta = !prev ? null : isNow ? sameDay : m.spent - prev.spent
   const selected = cats.find((r) => String(r.x.id) === sel)
   const under = isNow ? null : underBy(b, m)
   // Early in a month, point back at last month if it came in under budget.
@@ -166,7 +170,7 @@ function Body({ b }: { b: Bootstrap }) {
             <Txt variant="sub" tone="label2">{selected ? selected.x.name : 'Spent'}</Txt>
             <RollingMoney cents={selected ? selected.spent : m.spent} whole style={{ ...ramp.title2, fontSize: 26, color: c.label }} />
             {!selected && delta != null && prev && (
-              <Txt variant="foot" tone={delta > 0 ? 'neg' : 'pos'} num>{delta > 0 ? '+' : '−'}{formatCents(Math.abs(delta), { cents: false })} vs {shortName(prev.month)}</Txt>
+              <Txt variant="foot" tone={delta > 0 ? 'neg' : 'pos'} num>{delta > 0 ? '+' : '−'}{formatCents(Math.abs(delta), { cents: false })} vs {shortName(prev.month)}{isNow ? ` 1–${pace?.cur.length}` : ''}</Txt>
             )}
             {selected && <Txt variant="foot" tone="label2" num>{Math.round(pct(selected.spent, m.spent) * 100)}% of spending</Txt>}
           </View>
@@ -340,13 +344,13 @@ function Key({ color, label }: { color: string; label: string }) {
 function NetWorth({ b }: { b: Bootstrap }) {
   const { c } = useTheme()
   const scrub = useSharedValue(-1)
-  const months = b.months.filter((m) => m.month <= b.today)
+  const months = b.months.filter((m) => m.month <= monthOf(b.today))
   if (months.length < 2) return null
   const values = months.map((m) => m.net_worth)
   return (
     <Section title="Net worth">
       <Panel style={{ gap: space.m }}>
-        <ScrubFigure cents={values.at(-1)!} values={values} labels={months.map((m) => `End of ${monthLabel(m.month, 'long')}`)} scrub={scrub}
+        <ScrubFigure cents={values.at(-1)!} values={values} labels={months.map((m) => (m.month === monthOf(b.today) ? `${name(m.month)} so far` : `End of ${monthLabel(m.month, 'long')}`))} scrub={scrub}
           style={{ ...ramp.title, color: c.label }} caption={<Txt variant="callout" tone="label2">Month-end, {months.length} months</Txt>} />
         <ScrubChart scrub={scrub} slots={values.length} series={[{ values, color: c.ink }]} height={110} />
       </Panel>

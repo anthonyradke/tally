@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
@@ -12,8 +13,8 @@ import { useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
 import { space, themeById, useTheme } from '@/theme'
 
-const ago = (iso: string) => {
-  const h = (Date.now() - new Date(iso).getTime()) / 36e5
+const ago = (iso: string, now: number) => {
+  const h = (now - new Date(iso).getTime()) / 36e5
   return h < 1 ? 'Under an hour ago' : h < 48 ? `${Math.round(h)} hours ago` : `${Math.round(h / 24)} days ago`
 }
 
@@ -25,7 +26,8 @@ export default function Settings() {
   const icon = useAppIcon((s) => s.name)
   const backups = useQuery({ queryKey: ['backups'], queryFn: api.backups })
   const last = backups.data?.latest
-  const stale = last ? Date.now() - new Date(last.at).getTime() > 36 * 36e5 : false
+  const [now] = useState(() => Date.now())
+  const stale = last ? now - new Date(last.at).getTime() > 36 * 36e5 : false
   const budgets = b ? b.categories.filter((x) => x.budget).length : 0
   return (
     <>
@@ -52,7 +54,7 @@ export default function Settings() {
         <Group header="Backups" footer={backups.data ? `${backups.data.count} nightly snapshots on x1. Your Mac copies them to iCloud each day.` : undefined}>
           <Row label="Last backup" chevron={false}
             leading={<Icon sf={stale ? 'exclamationmark.triangle.fill' : 'checkmark.shield'} md={stale ? 'warning' : 'verified_user'} size={18} color={stale ? c.neg : c.label2} />}
-            value={<Txt variant="body" tone={stale ? 'neg' : 'label2'}>{last ? ago(last.at) : backups.isLoading ? '' : 'None found'}</Txt>} />
+            value={<Txt variant="body" tone={stale ? 'neg' : 'label2'}>{last ? ago(last.at, now) : backups.isLoading ? '' : 'None found'}</Txt>} />
         </Group>
         <View style={{ alignItems: 'center', gap: 2 }}>
           <Txt variant="foot" tone="label2">Tally {Constants.expoConfig?.version ?? ''}</Txt>

@@ -82,7 +82,8 @@ function Body({ b, bal }: { b: Bootstrap; bal: Map<number, number> }) {
               {list.map((a, i) => (
                 <View key={a.id}>
                   {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-                  <AccountRow a={a} bal={bal.get(a.id) ?? 0} prev={prev?.balances[String(a.id)]} ef={b.ef}
+                  <AccountRow a={a} bal={bal.get(a.id) ?? 0} ef={b.ef}
+                    prev={prev && (!a.opened || a.opened <= prev.month) ? prev.balances[String(a.id)] : undefined /* new this month: no change to show */}
                     padTop={i === 0 ? space.xs : 0} padBottom={i === list.length - 1 ? space.xs : 0} />
                 </View>
               ))}
@@ -114,8 +115,8 @@ function AccountRow({ a, bal, prev, padTop, padBottom }: { a: Account; bal: numb
         <Txt variant="row" numberOfLines={1}>{a.name}</Txt>
         {(sub || a.ef) && (
           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-            {sub && <Txt variant="sub" tone="label2">{sub}</Txt>}
-            {a.ef && !!a.apy && <View style={{ paddingHorizontal: 6, height: 18, borderRadius: radius.pill, backgroundColor: c.fill, justifyContent: 'center' }}><Txt variant="foot" tone="label2">Emergency fund</Txt></View>}
+            {sub && <Txt variant="sub" tone="label2" numberOfLines={1} style={{ flexShrink: 0 }}>{sub}</Txt>}
+            {a.ef && !!a.apy && <View style={{ flexShrink: 1, paddingHorizontal: 6, height: 18, borderRadius: radius.pill, backgroundColor: c.fill, justifyContent: 'center' }}><Txt variant="foot" tone="label2" numberOfLines={1}>Emergency fund</Txt></View>}
           </View>
         )}
       </View>

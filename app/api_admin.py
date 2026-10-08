@@ -291,9 +291,12 @@ async def put_settings(request: Request, con: Con):
             raise HTTPException(422, {"errors": [f"Unknown setting {k}."]})
         if k == "start_month":  # every balance starts here: a bad value would break every screen
             try:
-                v = month_of(date.fromisoformat(str(v))).isoformat()
+                v = month_of(date.fromisoformat(str(v)))
             except ValueError:
                 raise HTTPException(422, {"errors": ["The start month must be a date like 2026-08-01."]})
+            if v > month_of(date.today()):  # this month would have no row, and nothing could be counted yet
+                raise HTTPException(422, {"errors": ["The start month can't be later than this month."]})
+            v = v.isoformat()
         elif k == "roth_limit":
             v = str(money(v or 0, "Roth limit"))
         elif k == "ef_months":

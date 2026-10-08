@@ -399,7 +399,10 @@ function Server() {
             <Row key={q.cid} label={q.label} sub={q.error ?? `${formatCents(q.lines.reduce((n, l) => n + l.amount, 0))}, saved ${dayLabel(toISO(new Date(q.at)))}`} chevron={false}
               trailing={<Tap feedback="opacity" onPress={() => { discard(q.cid); toast({ text: 'Discarded' }) }} hitSlop={8}><Txt variant="callout" tone="neg">Discard</Txt></Tap>} />
           ))}
-          <Row label="Send now" sf="arrow.up.circle" md="upload" chevron={false} onPress={() => flush().then((n) => toast({ text: n ? `Sent ${n}` : 'Still unreachable' }))} />
+          <Row label="Send now" sf="arrow.up.circle" md="upload" chevron={false} onPress={() => flush().then((n) => {
+            const refused = useOutbox.getState().items.filter((q) => q.error).length
+            toast({ text: n ? `Sent ${n}` : refused ? 'Tally refused these. Discard them, or fix and add them again.' : 'Still unreachable', tone: !n && refused ? 'error' : undefined })
+          })} />
         </Group>
       )}
     </>

@@ -37,6 +37,19 @@ Fixed
 - Leaving the Roth limit field saved it and said "Saved" even when nothing changed.
 - Switching a loan or investment to cash or card clears its opening month, and the emergency fund goal stays between
   1 and 24 months.
+- One entry with a mistyped year (like 9999) stopped every screen from loading. Dates more than ten years out are
+  refused now.
+- An entry dated before the month Tally starts counting from vanished from every balance without a word. It's refused
+  with the reason, and the calendars grey out those days. Recurring templates can't start before it either (they'd
+  post a backlog that counts nowhere), and the start month can't be in the future.
+- Insights compared this month so far with all of last month ("−$1,446 vs Sep" on the 8th). It now compares the same
+  days ("+$154 vs Sep 1–8").
+- A loan or investment opened this month showed its whole balance as a change since last month on Accounts.
+- Reconcile can take a balance below zero (a card in credit, an overdrawn account).
+- Bank colors typed with a capital ("Chase") showed grey.
+- Net worth charts called the month in progress "End of October"; it's "October so far".
+- "Send now" for entries waiting on the phone said "Still unreachable" when Tally had refused them.
+- The APY under a savings account wrapped onto two lines next to the Emergency fund tag.
 
 ## 3.4.0 (2026-10-05)
 Added

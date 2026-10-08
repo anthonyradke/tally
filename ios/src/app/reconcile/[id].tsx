@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics'
 import { useQueryClient } from '@tanstack/react-query'
 import { closeSwipes } from '@/components/SwipeRow'
 import { CheckDraw } from '@/components/CheckDraw'
+import { Chip } from '@/components/Chip'
 import { Confetti } from '@/components/Confetti'
 import { Icon } from '@/components/Icon'
 import { Keypad } from '@/components/Keypad'
@@ -32,6 +33,7 @@ export default function Reconcile() {
   const qc = useQueryClient()
   const a = t.acct.get(Number(id))
   const [amount, setAmount] = useState('')
+  const [neg, setNeg] = useState(false) // a card in credit, or an overdrawn account: the keypad has no minus
   const [dx, setDx] = useState<Diagnosis | null>(null)
   const [busy, setBusy] = useState(false)
   const [party, setParty] = useState(0)
@@ -42,7 +44,7 @@ export default function Reconcile() {
   const check = async (save = false) => {
     setBusy(true)
     try {
-      const r = await api.reconcile(a.id, toCents(amount), save)
+      const r = await api.reconcile(a.id, toCents(amount) * (neg ? -1 : 1), save)
       setDx(r)
       if (save) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
@@ -65,8 +67,9 @@ export default function Reconcile() {
           <Txt variant="title2" accessibilityRole="header">Reconcile {a.name}</Txt>
           <Txt variant="callout" tone="label2">{owed ? 'What does the card show as the current balance?' : 'What does the bank show right now?'}</Txt>
         </View>
-        <View style={{ alignItems: 'center', paddingVertical: space.s }}>
-          <Animated.View style={shakeStyle}><RollingText text={formatCents(toCents(amount))} style={{ fontSize: 52, fontWeight: '700', letterSpacing: -1.2, color: amount ? c.label : c.label3 }} /></Animated.View>
+        <View style={{ alignItems: 'center', paddingVertical: space.s, gap: space.m }}>
+          <Animated.View style={shakeStyle}><RollingText text={formatCents(toCents(amount) * (neg ? -1 : 1))} style={{ fontSize: 52, fontWeight: '700', letterSpacing: -1.2, color: amount ? c.label : c.label3 }} /></Animated.View>
+          {!dx && <Chip label={owed ? 'In credit' : 'Below zero'} selected={neg} onDark onPress={() => setNeg(!neg)} />}
         </View>
         {dx && <Animated.View entering={FadeIn.duration(260)}><Result dx={dx} /></Animated.View>}
       </ScrollView>

@@ -431,7 +431,7 @@ function DateStrip() {
   const [cal, setCal] = useState(false)
   if (!t.b) return null
   const today = t.b.today
-  const days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6))
+  const days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6)).filter((x) => x >= t.b!.start)
   const inWeek = days.includes(d.date)
   return (
     <View style={{ gap: space.s }}>
@@ -460,7 +460,7 @@ function DateStrip() {
       </View>
       {cal && (
         <View style={{ backgroundColor: c.panel, borderRadius: radius.panel, borderCurve: 'continuous', padding: space.s }}>
-          <DatePick value={d.date} onChange={(date) => set({ date })} />
+          <DatePick value={d.date} min={t.b.start} onChange={(date) => set({ date })} />
         </View>
       )}
     </View>
