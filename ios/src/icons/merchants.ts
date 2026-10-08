@@ -140,7 +140,8 @@ export const MARK_OPTIONS = REGISTRY.filter(([id]) => id !== 'paycheck').map(([i
 export const merchantKey = (what: string) =>
   what.toLowerCase().replace(/\(.*?\)/g, '').replace(/[^\p{L}\p{N}&'+ -]/gu, '').replace(/\s+/g, ' ').trim()
 
-/** User overrides, keyed by merchantKey. Value: a registry id, `tint:<tint>` (letter tile) or `category` (no mark). */
+/** User overrides, keyed by merchantKey. Value: a registry id, `tint:<tint>` (letter tile), `category` (no mark) or
+ *  `auto` (the built-in patterns, for a name under a shorter one's override). */
 export type MarkOverrides = Record<string, string>
 export function parseOverrides(raw: string | undefined): MarkOverrides {
   try { const v = raw ? JSON.parse(raw) : {}; return v && typeof v === 'object' && !Array.isArray(v) ? v : {} } catch { return {} }
@@ -165,7 +166,7 @@ export function specFor(value: string, what: string): MarkSpec | null {
 /** Override first, then the built-in patterns. null = show the category glyph. */
 export function resolveMark(what: string, o: MarkOverrides): MarkSpec | null {
   const k = overrideKey(what, o)
-  if (k) return specFor(o[k], what)
+  if (k && o[k] !== 'auto') return specFor(o[k], what) // 'auto': the built-in patterns, under a shorter name's override
   for (const [, re, spec] of REGISTRY) if (re.test(what)) return spec
   return null
 }

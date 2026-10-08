@@ -53,3 +53,12 @@ test('dayName', () => {
   assert.equal(dayName('2026-09-11'), 'Friday the 11th')
   assert.equal(dayName('2026-09-23'), 'Wednesday the 23rd')
 })
+
+test('buildStory: a month still going leaves out what is scheduled and compares day for day', () => {
+  const rows2 = [...rows, row('2026-10-02', 2000, { what: 'Coffee', category_id: 2 }), row('2026-10-31', 90000, { what: 'Rent', category_id: 2 }),
+    row('2026-09-01', 500, { what: 'Gum', category_id: 2 })]
+  const s = buildStory(b, '2026-10-01', rows2)!
+  assert.equal(s.entries, 1)
+  assert.equal(s.biggestDay?.date, '2026-10-02')
+  assert.deepEqual(s.vs, { now: 2000, before: 30000 + 1500 + 500 }) // Sep 1-3
+})

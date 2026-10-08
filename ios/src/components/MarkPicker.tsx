@@ -23,13 +23,15 @@ export function MarkPicker({ what, merchant }: { what: string; merchant: string 
   const [all, setAll] = useState(false)
   const o = parseOverrides(t.b?.settings.merchant_marks)
   const k = overrideKey(what, o)
-  const cur = k ? o[k] : null // null: automatic
+  const cur = k && o[k] !== 'auto' ? o[k] : null // null: automatic
   const choose = (value: string | null) => {
     Haptics.selectionAsync().catch(() => {})
     play('tick', 0.6)
     const next = { ...o }
     delete next[merchant]
     if (value) next[merchant] = value
+    // Automatic under a logo set for a shorter name ("Costco" covering "Costco Gas") needs saying so for this one.
+    else if (k && k !== merchant) next[merchant] = 'auto'
     write(() => api.putSettings({ merchant_marks: next }))
   }
   const brands = all ? MARK_OPTIONS : MARK_OPTIONS.slice(0, 12)

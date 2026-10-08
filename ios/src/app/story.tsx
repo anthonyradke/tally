@@ -17,7 +17,7 @@ import { StoryControls, storyPages, type Page } from '@/components/StoryPages'
 import { Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { useTransactions } from '@/lib/data'
-import { lastOfMonth, monthOf } from '@/lib/dates'
+import { lastOfMonth, monthBefore, monthOf } from '@/lib/dates'
 import { close } from '@/lib/nav'
 import { play } from '@/lib/sound'
 import { buildStory } from '@/lib/story'
@@ -31,7 +31,7 @@ export default function StoryRoute() {
   const t = useTally()
   const b = t.b
   const month = params.month ?? (b ? monthOf(b.today) : '')
-  const q = useTransactions({ start: month, end: month ? lastOfMonth(month) : undefined, limit: 5000 }, !!month)
+  const q = useTransactions({ start: month ? monthBefore(month) : undefined, end: month ? lastOfMonth(month) : undefined, limit: 8000 }, !!month)
   const pages = useMemo(() => {
     if (!b || !q.data) return null
     const s = buildStory(b, month, q.data.items)

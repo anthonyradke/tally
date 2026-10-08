@@ -73,7 +73,8 @@ def _write(st, t: Txn, meta: dict) -> int:
     errs = validate(t, st.cat[t.category_id].type, st.acct)
     if errs:
         raise HTTPException(422, {"errors": errs})
-    _in_range(st, t.date)
+    was = st.con.execute("SELECT date FROM transactions WHERE id=?", (t.id,)).fetchone() if t.id else None
+    _in_range(st, t.date, restoring=bool(was) and was[0] == t.date.isoformat())  # an old row keeps its date: still editable
     cols = {"date": t.date.isoformat(), "what": t.what, "category_id": t.category_id, "from_account_id": t.from_id,
             "to_account_id": t.to_id, "amount": t.amount, **{k: meta[k] for k in ("note", "tags", "split_group") if k in meta}}
     if t.id is None:
