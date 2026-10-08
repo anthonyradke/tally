@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ScrollView, Switch, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
+import { AccountMark } from '@/components/AccountMark'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Group, Row } from '@/components/Row'
@@ -13,7 +14,7 @@ import { RepeatSuggestions } from '@/components/RepeatSuggestions'
 import { ThemePicker } from '@/components/ThemePicker'
 import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
-import { categoryVisual, KIND_LABEL, KIND_SYMBOL } from '@/icons/categories'
+import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
 import { api, type AdminData, type CatType, type Kind } from '@/lib/api'
 import { suggestBudgets } from '@/lib/budgets'
@@ -96,7 +97,6 @@ function Hidden() {
 }
 
 function Accounts({ a, reorder }: { a: AdminData; reorder: boolean }) {
-  const { bank } = useTheme()
   const ids = a.accounts.map((x) => x.id)
   return (
     <>
@@ -107,7 +107,7 @@ function Accounts({ a, reorder }: { a: AdminData; reorder: boolean }) {
           <Group key={k} header={KIND_LABEL[k]}>
             {list.map((x) => (
               <Row key={x.id} label={x.name} chevron={!reorder}
-                leading={<Mark kind="glyph" sf={KIND_SYMBOL[x.kind][0]} md={KIND_SYMBOL[x.kind][1]} tint={bank(x.bank ?? (x.kind === 'investment' ? 'roth' : 'hsa'))} size={30} />}
+                leading={<AccountMark a={x} size={30} />}
                 trailing={reorder ? <Mover ids={ids} i={ids.indexOf(x.id)} save={api.orderAccounts} /> : !x.active ? <Hidden /> : undefined}
                 onPress={reorder ? undefined : () => router.push({ pathname: '/edit', params: { kind: 'account', id: String(x.id) } })} />
             ))}
@@ -323,7 +323,7 @@ function General({ a }: { a: AdminData }) {
 
 const WIDGET_NAMES: Record<string, string> = {
   networth: 'This month and net worth', review: 'Month in review', stats: 'This month', quick: 'Quick add', budgets: 'Budgets',
-  spending: 'Where it went', ef: 'Emergency fund', upcoming: 'Coming up', recent: 'Recent', roth: 'Roth IRA', chart: 'Net worth over time',
+  spending: 'Where it went', ef: 'Emergency fund', forecast: 'Next 30 days', upcoming: 'Coming up', recent: 'Recent', roth: 'Roth IRA', chart: 'Net worth over time',
 }
 const ORDER = Object.keys(WIDGET_NAMES)
 

@@ -15,6 +15,9 @@ Changes to anything below get written here first.
   brand-colored monogram otherwise, the category symbol as a fallback. Category symbols sit white on a solid tint.
 - **Grouped by day, inset panels.** Activity reads like a statement: day headers with the day's spending, entries on
   rounded panels, the account under each amount.
+- **What's coming, drawn ahead.** Scheduled entries carry a cash account's line past today as a dashed path (red
+  if it dips below zero); Home's Next 30 days shows each account's path as a small line. Only what's on the books
+  counts, never a guess at everyday spending.
 - **Budgets as bars with a pace notch.** The notch marks how much of the month has gone by; a bar past its notch is
   on pace to go over, and says by how much.
 - **A keypad for money.** Entering an amount is a full-width keypad with the figure rolling as you type (Cash App),

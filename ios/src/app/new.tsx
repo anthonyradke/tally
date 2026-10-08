@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { CheckDraw } from '@/components/CheckDraw'
 import { Chip } from '@/components/Chip'
+import { AccountMark } from '@/components/AccountMark'
 import { Icon } from '@/components/Icon'
 import { Keypad } from '@/components/Keypad'
 import { Mark } from '@/components/Mark'
@@ -24,7 +25,7 @@ import { useShake } from '@/components/Shake'
 import { Group, Row } from '@/components/Row'
 import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
-import { categoryVisual, KIND_LABEL, KIND_SYMBOL } from '@/icons/categories'
+import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import { merchantKey } from '@/icons/merchants'
 import { api, ApiError, type CatType, type Kind, type Txn } from '@/lib/api'
 import { close } from '@/lib/nav'
@@ -398,7 +399,7 @@ function What({ history, onPick, onSubmit }: { history: Txn[]; onPick: (x: Txn) 
 
 function Accounts({ side, heading, onPick }: { side: 'from' | 'to'; heading: string; onPick: () => void }) {
   const t = useTally()
-  const { c, bank } = useTheme()
+  const { c } = useTheme()
   const { d, set } = useDraft()
   if (!t.b) return null
   const bal = monthsNow(t.b).cur?.balances ?? {}
@@ -417,7 +418,7 @@ function Accounts({ side, heading, onPick }: { side: 'from' | 'to'; heading: str
           <Group key={k} header={KIND_LABEL[k]}>
             {list.map((a) => (
               <Row key={a.id} label={a.name} chevron={false} onPress={() => choose(a.id)} trailing={check(a.id === current)}
-                leading={<Mark kind="glyph" sf={KIND_SYMBOL[a.kind][0]} md={KIND_SYMBOL[a.kind][1]} tint={bank(a.bank ?? (a.kind === 'investment' ? 'roth' : 'hsa'))} size={30} />}
+                leading={<AccountMark a={a} size={30} />}
                 value={<Money cents={bal[String(a.id)] ?? a.start_balance} tone="neutral" muted variant="callout" />} />
             ))}
           </Group>

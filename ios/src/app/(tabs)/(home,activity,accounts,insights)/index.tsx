@@ -8,6 +8,7 @@ import { closeSwipes } from '@/components/SwipeRow'
 import { Bar } from '@/components/Bar'
 import { Chip } from '@/components/Chip'
 import { EASE } from '@/components/ease'
+import { Forecast } from '@/components/Forecast'
 import { Glow } from '@/components/Glow'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
@@ -37,7 +38,7 @@ import { usePullRefresh } from '@/lib/refresh'
 import { useTally } from '@/lib/tally'
 import { radius, space, font as ramp, useTheme } from '@/theme'
 
-const DEFAULT_ORDER = ['networth', 'review', 'stats', 'quick', 'budgets', 'spending', 'ef', 'upcoming', 'recent', 'roth', 'chart']
+const DEFAULT_ORDER = ['networth', 'review', 'stats', 'quick', 'budgets', 'spending', 'ef', 'forecast', 'upcoming', 'recent', 'roth', 'chart']
 
 /** Home layout from Settings (`home_layout`): saved order, new widgets joining at their default position. */
 function layout(b: Bootstrap): string[] {
@@ -101,6 +102,7 @@ const WIDGETS: Record<string, (b: Bootstrap) => ReactNode> = {
   spending: (b) => <Spending b={b} />,
   ef: (b) => <Goal b={b} kind="ef" wide />,
   roth: (b) => <Goal b={b} kind="roth" wide />,
+  forecast: (b) => <Forecast b={b} />,
   upcoming: (b) => <Upcoming b={b} />,
   recent: (b) => <Recent b={b} />,
   chart: (b) => <NetWorthChart b={b} />,

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ScrollView, TextInput, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
+import { AccountMark } from '@/components/AccountMark'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
@@ -11,7 +12,7 @@ import { DatePick } from '@/components/native/DatePick'
 import { Group, Row } from '@/components/Row'
 import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
-import { categoryVisual, KIND_LABEL, KIND_SYMBOL } from '@/icons/categories'
+import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import { api, ApiError, type CatType, type Kind } from '@/lib/api'
 import { close } from '@/lib/nav'
 import { invalidateAll } from '@/lib/data'
@@ -96,7 +97,7 @@ function Categories({ line, ids, checked }: { line?: string; ids?: string; check
 
 function Accounts({ side }: { side: 'from' | 'to' }) {
   const t = useTally()
-  const { c, bank } = useTheme()
+  const { c } = useTheme()
   const { d, set } = useDraft()
   if (!t.b) return null
   const bal = monthsNow(t.b).cur?.balances ?? {}
@@ -115,7 +116,7 @@ function Accounts({ side }: { side: 'from' | 'to' }) {
           <Group key={k} header={KIND_LABEL[k]}>
             {list.map((a) => (
               <Row key={a.id} label={a.name} onPress={() => choose(a.id)} chevron={false}
-                leading={<Mark kind="glyph" sf={KIND_SYMBOL[a.kind][0]} md={KIND_SYMBOL[a.kind][1]} tint={bank(a.bank ?? (a.kind === 'investment' ? 'roth' : 'hsa'))} size={30} />}
+                leading={<AccountMark a={a} size={30} />}
                 value={<Money cents={bal[String(a.id)] ?? a.start_balance} tone="neutral" muted variant="callout" />}
                 trailing={a.id === current ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : <View style={{ width: 16 }} />} />
             ))}
