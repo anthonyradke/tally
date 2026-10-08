@@ -19,6 +19,9 @@ Added
   subscription, rent, a paycheck). Tapping one opens the editor filled in; the X hides it.
 - Month end: empty a loan or investment balance and save to take it back out, so a loan goes back to Tally's own
   figure.
+- Day by day in Insights: the month as a calendar, each day shaded by how much went out (scheduled days get a dot).
+  Tap a day for its total, tap again for its entries in Activity. Under it: how many days went by without spending,
+  and which day of the week tends to cost the most.
 - Month stories: a full-screen recap of a month, one page at a time like stories in a social app. What came in and
   went out, how much you kept, where most of it went, your biggest day, your regular place, quiet days on a little
   calendar, how it compares with the month before, net worth and budgets kept. Tap through, hold to pause, swipe down
