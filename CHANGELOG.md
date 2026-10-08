@@ -52,6 +52,8 @@ Added
   and scrubbing included, until you switch it back. The keypad screens still show what you type.
 
 Changed
+- Activity folds entries scheduled for later into one "5 scheduled" row at the top, so the list opens on what has
+  happened. Tap it to show them; a date filter or Upcoming lists them as before.
 - A category's type can't be changed while entries or recurring templates in it don't fit the new type (spending
   turned into Money in would have counted every purchase as income). Move them first, or make a new category.
 - "This month" in Activity's filters stops at the end of the month instead of taking in next month's scheduled
