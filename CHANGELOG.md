@@ -68,6 +68,7 @@ Fixed
 - Net worth charts called the month in progress "End of October"; it's "October so far".
 - "Send now" for entries waiting on the phone said "Still unreachable" when Tally had refused them.
 - The APY under a savings account wrapped onto two lines next to the Emergency fund tag.
+- A rolling figure measured while its screen was hidden could cache zero-width digits and show "$." from then on.
 
 Developer
 - `expo-audio` is new (a native module, so Tally Dev needs a rebuild). The sounds are drawn by

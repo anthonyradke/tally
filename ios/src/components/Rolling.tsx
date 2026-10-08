@@ -31,6 +31,9 @@ const Digit = memo(function Digit({ d, h, style, fromZero, reduce }: { d: number
   const column = useAnimatedStyle(() => ({ transform: [{ translateY: y.get() }] }))
   const size = useAnimatedStyle(() => (w.get() > 0 ? { width: w.get() } : {}))
   const onLayout = (n: number, width: number) => {
+    // A screen laid out while hidden can report zero widths; caching those collapsed every later figure in that style
+    // to "$." (seen in the web preview). Keep measuring until it's real.
+    if (!(width > 0)) return
     pending.current[n] = width
     if (pending.current.filter((x) => x !== undefined).length < DIGITS.length) return
     measured.set(styleKey, pending.current)
