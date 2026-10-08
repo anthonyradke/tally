@@ -39,6 +39,7 @@ import { QUEUED, sendOrQueue } from '@/lib/outbox'
 import { Reveal } from '@/lib/privacy'
 import { play } from '@/lib/sound'
 import { expression, operate, total, type Calc } from '@/lib/calc'
+import { fromLink } from '@/lib/capture'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
 import { nextStep, stepsFor, type Step } from '@/lib/steps'
 import { useTally } from '@/lib/tally'
@@ -55,7 +56,9 @@ export default function New() {
   const insets = useSafeAreaInsets()
   const t = useTally()
   // fav: a quick action from Home. from: opened from an account's page. date: "Add another" keeps the last date.
-  const { fav, from, date } = useLocalSearchParams<{ fav?: string; from?: string; date?: string }>()
+  // amount, what, card, category: a quick-capture link (lib/capture.ts), e.g. from an iOS Shortcuts automation.
+  const link = useLocalSearchParams<{ fav?: string; from?: string; date?: string; amount?: string; what?: string; card?: string; account?: string; category?: string }>()
+  const { fav, from, date } = link
   const { d, set, reset } = useDraft()
   const history = useTransactions({ limit: 600 }, !!t.b)
   // Seed the draft once: blank, from an account, or from a quick action (which may already have an amount, and then
@@ -64,7 +67,8 @@ export default function New() {
     if (!t.b) return null
     const base = { ...blank(date ?? t.b.today), from_id: from && t.acct.has(Number(from)) ? Number(from) : null }
     const f = fav ? t.b.favorites.find((x) => x.id === Number(fav)) : undefined
-    return f ? { ...base, ...fill(f.id) } : base
+    if (f) return { ...base, ...fill(f.id) }
+    return link.amount || link.what ? { ...base, ...fromLink(link, t.b, history.data?.items ?? []) } : base
   }
   const [seed] = useState(makeSeed)
   const [step, setStep] = useState<Step>(() => (seed?.amount ? nextStep('amount', seed, new Set()) : 'amount'))
@@ -86,6 +90,16 @@ export default function New() {
     reset(s)
     if (!seed && s.amount) setStep(nextStep('amount', s, new Set())) // eslint-disable-line react-hooks/set-state-in-effect
   }, [t.b]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A link's place seen before the history loaded: fill in its category and accounts once it does.
+  const linked = useRef(false)
+  useEffect(() => {
+    if (linked.current || !link.what || !history.data || !t.b || useDraft.getState().d.category_id) return
+    linked.current = true
+    const more = fromLink(link, t.b, history.data.items)
+    if (more.category_id) set({ category_id: more.category_id, from_id: more.from_id ?? null, to_id: more.to_id ?? null, kind: more.kind ?? 'Spending' })
+    if (more.category_id && step === 'category') go(nextStep('category', useDraft.getState().d, seen))
+  }, [history.data, t.b]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const steps = stepsFor(d.kind)
   const at = steps.indexOf(step)
