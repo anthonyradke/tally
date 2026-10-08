@@ -13,6 +13,8 @@ Added
 - A loan's page has a Payoff section: when it will be paid off at the rate you're paying it (your recurring payment,
   or your average over the last few months), how much interest is still to come, and what $25 to $100 more a month
   would save.
+- Lock with Face ID (Settings, off unless you turn it on): Tally asks when it opens and when you come back after a
+  minute away. Whether it's on or not, Tally is blurred in the app switcher. (Needs the rebuild.)
 - Two new themes: Forest (deep green) and Midnight (navy and gold in the dark, warm gold on paper in the light), each
   with its own glowing t in Settings → App icon (the icons need the rebuild).
 - The keypad in a new entry adds up: + and − above it start a sum ("12.50 + 4.25 − 1.00" under the figure, the total
@@ -90,7 +92,8 @@ Fixed
 - A rolling figure measured while its screen was hidden could cache zero-width digits and show "$." from then on.
 
 Developer
-- `expo-audio` is new (a native module, so Tally Dev needs a rebuild). The sounds are drawn by
+- `expo-audio` and `expo-local-authentication` are new (native modules, so Tally Dev needs a rebuild; `app.json`
+  gained the Face ID permission text). The sounds are drawn by
   `ios/scripts/sounds.mjs` into `ios/assets/sounds/`.
 
 ## 3.4.0 (2026-10-05)

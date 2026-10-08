@@ -11,6 +11,8 @@ import { iconLabel, useAppIcon } from '@/lib/appIcon'
 import { useOutbox } from '@/lib/outbox'
 import { usePrivacy } from '@/lib/privacy'
 import { play, useSounds } from '@/lib/sound'
+import { setLockEnabled, useLock } from '@/lib/lock'
+import { toast } from '@/lib/toast'
 import { useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
 import { space, themeById, useTheme } from '@/theme'
@@ -28,6 +30,7 @@ export default function Settings() {
   const icon = useAppIcon((s) => s.name)
   const hidden = usePrivacy((s) => s.hidden)
   const sounds = useSounds((s) => s.on)
+  const locking = useLock((s) => s.enabled)
   const backups = useQuery({ queryKey: ['backups'], queryFn: api.backups })
   const last = backups.data?.latest
   const [now] = useState(() => Date.now())
@@ -56,6 +59,8 @@ export default function Settings() {
             trailing={<Switch value={hidden} onValueChange={(v) => usePrivacy.getState().set(v)} />} />
           <Row label="Sounds" sub="Soft clicks and chimes under the haptics. The silent switch mutes them." sf="speaker.wave.2" md="volume_up" chevron={false}
             trailing={<Switch value={sounds} onValueChange={(v) => { useSounds.getState().set(v); if (v) play('toggle') }} />} />
+          <Row label="Lock with Face ID" sub="Asks when Tally opens, and when you come back after a minute away." sf="faceid" md="lock" chevron={false}
+            trailing={<Switch value={locking} onValueChange={(v) => setLockEnabled(v).then((ok) => { if (!ok) toast({ text: "Face ID isn't available, or it didn't match. Tally stays unlocked.", tone: 'error' }) })} />} />
           <Row label="Server" value={url ? url.replace(/^https?:\/\//, '').split('.')[0] : process.env.EXPO_OS === 'web' ? 'This site' : 'Not set'} sf="server.rack" md="dns" href="/settings/server" />
           {queued.length > 0 && <Row label="Waiting to send" value={String(queued.length)} sf="icloud.and.arrow.up" md="cloud_upload" href="/settings/server" />}
         </Group>

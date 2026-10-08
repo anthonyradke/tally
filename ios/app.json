@@ -45,6 +45,12 @@
           "photosPermission": "Tally attaches receipt photos you pick to an entry.",
           "cameraPermission": "Tally uses the camera to photograph receipts for an entry."
         }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Tally can ask for Face ID before it shows your money, if you turn that on in Settings."
+        }
       ]
     ],
     "experiments": {
