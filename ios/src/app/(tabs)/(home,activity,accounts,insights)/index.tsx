@@ -32,6 +32,7 @@ import { monthsNow } from '@/lib/months'
 import { useQuickFloat } from '@/lib/motion'
 import { usePace } from '@/lib/pace'
 import { usePrivacy } from '@/lib/privacy'
+import { play } from '@/lib/sound'
 import { usePullRefresh } from '@/lib/refresh'
 import { useTally } from '@/lib/tally'
 import { radius, space, font as ramp, useTheme } from '@/theme'
@@ -61,7 +62,7 @@ export default function Home() {
     <>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button icon={hidden ? 'eye.slash' : 'eye'} accessibilityLabel={hidden ? 'Show amounts' : 'Hide amounts'}
-          onPress={() => { Haptics.selectionAsync().catch(() => {}); usePrivacy.getState().set(!hidden) }} />
+          onPress={() => { Haptics.selectionAsync().catch(() => {}); play('toggle'); usePrivacy.getState().set(!hidden) }} />
         <Stack.Toolbar.Button icon="gearshape" accessibilityLabel="Settings" onPress={() => router.push('/settings')} />
       </Stack.Toolbar>
       <ScrollView onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}

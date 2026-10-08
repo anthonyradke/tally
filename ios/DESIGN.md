@@ -103,6 +103,13 @@ Selection ticks on the keypad, chips and scrubbing; success on save, reconcile a
 an entry is saved offline; error when a save is refused or a keypad digit won't fit; a light tap for the tab bar's +
 and a theme change.
 
+## Sound
+Sounds sit under the haptics and are never the only signal: quiet (peaks around half scale, clicks lower), short
+(under a second), tuned (marimba, glass bells, a tine, breathy noise; drawn by `scripts/sounds.mjs`). They follow the
+silent switch and mix with other audio. Keypad and chips click; adding an entry rises two notes; money in rings a
+till; delete breathes out and Undo breathes back in; a match to the cent or a month under budget is a rising
+arpeggio; a refusal is a low double knock. Settings → Sounds turns them off.
+
 ## Open questions
 - Car and Entertainment share the blue tint, and Dining Out and Pets share orange. Worth giving one of each pair a
   different default.

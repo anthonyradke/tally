@@ -13,6 +13,7 @@ import { queryClient } from '@/lib/data'
 import { flush, loadOutbox } from '@/lib/outbox'
 import { loadPrivacy } from '@/lib/privacy'
 import { loadServer } from '@/lib/server'
+import { loadSounds } from '@/lib/sound'
 import { loadTheme, useTheme } from '@/theme'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
@@ -62,7 +63,7 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false)
   const [launching, setLaunching] = useState(true)
   useEffect(() => {
-    Promise.all([loadServer(), loadOutbox(), loadTheme(), loadPrivacy()]).finally(() => setReady(true))
+    Promise.all([loadServer(), loadOutbox(), loadTheme(), loadPrivacy(), loadSounds()]).finally(() => setReady(true))
   }, [])
   if (!ready) return null
   return (

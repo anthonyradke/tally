@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Pressable } from 'react-native'
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
+import { play } from '@/lib/sound'
 import { radius, space, useTheme } from '@/theme'
 import { Txt } from './Txt'
 
@@ -22,6 +23,7 @@ export function Chip({ label, selected, onPress, leading, onDark }: { label: str
       onPressOut={() => p.set(withSpring(0, { damping: 16, stiffness: 300 }))}
       onPress={() => {
         Haptics.selectionAsync().catch(() => {})
+        play('tick', 0.6)
         if (leading && !reduce) hop.set(withSequence(withTiming(1, { duration: 110 }), withSpring(0, { damping: 9, stiffness: 260 })))
         onPress?.()
       }}

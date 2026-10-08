@@ -11,6 +11,7 @@
     "@tanstack/react-query-persist-client": "^5.103.2",
     "expo": "~57.0.24",
     "expo-alternate-app-icons": "^8.0.0",
+    "expo-audio": "~57.0.5",
     "expo-blur": "~57.0.3",
     "expo-constants": "~57.0.19",
     "expo-dev-client": "~57.0.0",

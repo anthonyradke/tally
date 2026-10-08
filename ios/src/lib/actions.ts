@@ -4,6 +4,7 @@ import { router } from 'expo-router'
 import { api, ApiError, type Txn } from './api'
 import { invalidateAll } from './data'
 import { markFresh } from './motion'
+import { play } from './sound'
 import { toast } from './toast'
 
 const why = (e: unknown) => (e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable. Check Tailscale.')
@@ -11,6 +12,7 @@ const why = (e: unknown) => (e instanceof ApiError ? e.errors.join(' ') : 'Tally
 /** Resolves true once the rows are gone, false if the delete failed (the toast says why). */
 export async function deleteTxns(rows: Txn[]): Promise<boolean> {
   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+  play('remove')
   try {
     const gone = rows.length === 1 ? [await api.deleteTxn(rows[0].id)] : (await api.bulk({ ids: rows.map((r) => r.id), action: 'delete' })).deleted ?? []
     await invalidateAll()
@@ -30,6 +32,7 @@ export async function deleteTxns(rows: Txn[]): Promise<boolean> {
 async function undo(gone: Txn[]) {
   try {
     await api.restore(gone)
+    play('undo')
     markFresh(gone.map((t) => t.id)) // they unfold back into place
     await invalidateAll()
   } catch (e) {

@@ -23,6 +23,7 @@ import { close } from '@/lib/nav'
 import { fromCents, press, toCents } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { Reveal } from '@/lib/privacy'
+import { play } from '@/lib/sound'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
@@ -49,12 +50,14 @@ export default function Reconcile() {
       setDx(r)
       if (save) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+        play('add')
         qc.invalidateQueries({ queryKey: ['reconciliations'] })
         toast({ text: r.gap === 0 ? `${a.name} reconciled` : `Saved with a ${formatCents(Math.abs(r.gap))} gap` })
         close()
       } else {
         Haptics.notificationAsync(r.gap === 0 ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning).catch(() => {})
-        if (r.gap === 0) setParty((n) => n + 1) // matched to the cent
+        if (r.gap === 0) { setParty((n) => n + 1); play('success') } // matched to the cent
+        else play('tick')
       }
     } catch (e) {
       toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' })
