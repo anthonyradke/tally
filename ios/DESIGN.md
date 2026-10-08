@@ -39,6 +39,11 @@ Changes to anything below get written here first.
   letting go runs it (Delete slides the row away, then it folds shut). A half swipe rests open; tapping the row,
   swiping another or scrolling closes it. Long press has the same actions in a menu, lifted as a rounded rectangle.
 
+- **A month as a story.** A finished month can be played as full-screen pages (`app/story.tsx`): one fact per page
+  in big white type on a full-bleed gradient of its own, bars at the top that fill as it plays, tap sides to move,
+  hold to pause, swipe down to close. The only place the app leaves its grouped-panel look, on purpose: it's the
+  celebration, not the ledger.
+
 ## Structure
 - Native tab bar (Liquid Glass on iOS 26): Home, Activity, +, Accounts, Insights. It stays full size (never
   minimizes on scroll). The + in the middle opens the composer from anywhere; it's the only way in, so tab headers carry

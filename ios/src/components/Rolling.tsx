@@ -48,9 +48,10 @@ const Digit = memo(function Digit({ d, h, style, fromZero, reduce }: { d: number
   )
 })
 
-export function RollingText({ text, style, rollIn }: { text: string; style: TextStyle; rollIn?: boolean }) {
+/** `rollIn` rolls up from zero the first time per launch; `replay` every time it mounts (a story page). */
+export function RollingText({ text, style, rollIn, replay }: { text: string; style: TextStyle; rollIn?: boolean; replay?: boolean }) {
   const reduce = !!useReducedMotion()
-  const [fromZero] = useState(() => !!rollIn && !launched)
+  const [fromZero] = useState(() => !!replay || (!!rollIn && !launched))
   useEffect(() => { if (rollIn) launched = true }, [rollIn])
   const h = Math.round((style.fontSize ?? 17) * 1.2)
   const hidden = useHidden()
@@ -72,6 +73,6 @@ export function RollingText({ text, style, rollIn }: { text: string; style: Text
   )
 }
 
-export function RollingMoney({ cents, sign = 'auto', whole, style, rollIn }: { cents: number; sign?: Sign; whole?: boolean; style: TextStyle; rollIn?: boolean }) {
-  return <RollingText text={formatCents(cents, { sign, cents: !whole })} style={style} rollIn={rollIn} />
+export function RollingMoney({ cents, sign = 'auto', whole, style, rollIn, replay }: { cents: number; sign?: Sign; whole?: boolean; style: TextStyle; rollIn?: boolean; replay?: boolean }) {
+  return <RollingText text={formatCents(cents, { sign, cents: !whole })} style={style} rollIn={rollIn} replay={replay} />
 }

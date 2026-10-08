@@ -10,6 +10,7 @@ import { Chip } from '@/components/Chip'
 import { EASE } from '@/components/ease'
 import { Forecast } from '@/components/Forecast'
 import { Glow } from '@/components/Glow'
+import { StoryButton } from '@/components/StoryButton'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
@@ -453,6 +454,7 @@ function MonthReview({ b }: { b: Bootstrap }) {
           <Stat label="Left over" cents={prev.left_over} tone={prev.left_over < 0 ? 'neg' : undefined} />
         </View>
         {top?.cat && <Txt variant="callout" tone="label2">Most went to <Txt variant="callout" style={{ color: c.label, fontWeight: '600' }}>{top.cat.name}</Txt>, {formatCents(top.v, { cents: false })}.</Txt>}
+        <StoryButton month={prev.month} label={`Watch ${monthName(prev.month)}'s story`} />
       </Panel>
     </Section>
   )

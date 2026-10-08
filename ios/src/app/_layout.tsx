@@ -51,6 +51,7 @@ function RootStack() {
       }} />
       {/* A modal, not a form sheet: inside a form sheet the rolling amount never moved as you typed. */}
       <Stack.Screen name="reconcile/[id]" options={{ presentation: 'modal', headerShown: false, contentStyle: { backgroundColor: c.bg } }} />
+      <Stack.Screen name="story" options={{ presentation: 'fullScreenModal', headerShown: false, contentStyle: { backgroundColor: '#000000' } }} />
       <Stack.Screen name="edit" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
     </Stack>
   )

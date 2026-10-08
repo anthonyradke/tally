@@ -11,6 +11,7 @@ import { Confetti } from '@/components/Confetti'
 import { Donut } from '@/components/Donut'
 import { EASE } from '@/components/ease'
 import { Glow } from '@/components/Glow'
+import { StoryButton } from '@/components/StoryButton'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
@@ -182,6 +183,7 @@ function Body({ b }: { b: Bootstrap }) {
           <Stat label="Saved" cents={m.saving + m.loan} />
           <Stat label="Left over" cents={m.left_over} tone={m.left_over < 0 ? 'neg' : undefined} />
         </View>
+        <StoryButton month={m.month} label={isNow ? `Watch ${name(m.month)} so far` : `Watch ${name(m.month)}'s story`} />
       </Panel>
 
       {/* Categories, with budgets where set */}
