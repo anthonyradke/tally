@@ -19,7 +19,11 @@ function withExt(url) {
   return null
 }
 
+// lib/sound requires .wav assets, which node can't load: it gets a stub too.
 export async function resolve(specifier, context, next) {
+  if (specifier === `@/lib/sound` || (specifier === './sound' && context.parentURL?.includes('/src/lib/'))) {
+    return { url: new URL('test/stubs/sound.mjs', root).href, shortCircuit: true }
+  }
   if (STUBS[specifier]) return { url: new URL(`test/stubs/${STUBS[specifier]}`, root).href, shortCircuit: true }
   if (specifier.startsWith('@/')) {
     const url = withExt(new URL(`src/${specifier.slice(2)}`, root))

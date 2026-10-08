@@ -19,6 +19,10 @@ Added
   subscription, rent, a paycheck). Tapping one opens the editor filled in; the X hides it.
 - Month end: empty a loan or investment balance and save to take it back out, so a loan goes back to Tally's own
   figure.
+- Sounds, quiet ones under the haptics: a soft tock on the keypad, two rising marimba notes when an entry is added, a
+  till's "cha-ching" for money in, a breath for a delete and its reverse for Undo, glass bells for a reconcile that
+  matches or a month under budget, and a low double knock when something's refused. They follow the silent switch,
+  mix with music, and Settings → Sounds turns them off. (Needs a rebuild of the app; before that it stays silent.)
 - Hide amounts: the eye next to Settings on Home (or Settings → Hide amounts) turns every figure into $•••, charts
   and scrubbing included, until you switch it back. The keypad screens still show what you type.
 
@@ -52,6 +56,10 @@ Fixed
 - Net worth charts called the month in progress "End of October"; it's "October so far".
 - "Send now" for entries waiting on the phone said "Still unreachable" when Tally had refused them.
 - The APY under a savings account wrapped onto two lines next to the Emergency fund tag.
+
+Developer
+- `expo-audio` is new (a native module, so Tally Dev needs a rebuild). The sounds are drawn by
+  `ios/scripts/sounds.mjs` into `ios/assets/sounds/`.
 
 ## 3.4.0 (2026-10-05)
 Added

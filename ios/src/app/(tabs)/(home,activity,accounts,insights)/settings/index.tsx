@@ -10,6 +10,7 @@ import { api } from '@/lib/api'
 import { iconLabel, useAppIcon } from '@/lib/appIcon'
 import { useOutbox } from '@/lib/outbox'
 import { usePrivacy } from '@/lib/privacy'
+import { play, useSounds } from '@/lib/sound'
 import { useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
 import { space, themeById, useTheme } from '@/theme'
@@ -26,6 +27,7 @@ export default function Settings() {
   const queued = useOutbox((s) => s.items)
   const icon = useAppIcon((s) => s.name)
   const hidden = usePrivacy((s) => s.hidden)
+  const sounds = useSounds((s) => s.on)
   const backups = useQuery({ queryKey: ['backups'], queryFn: api.backups })
   const last = backups.data?.latest
   const [now] = useState(() => Date.now())
@@ -52,6 +54,8 @@ export default function Settings() {
           <Row label="Home screen" sub="Choose and order what Home shows" sf="square.stack" md="dashboard" href="/settings/home" />
           <Row label="Hide amounts" sub="Every figure reads $••• until you switch it off. The eye on Home does the same." sf="eye.slash" md="visibility_off" chevron={false}
             trailing={<Switch value={hidden} onValueChange={(v) => usePrivacy.getState().set(v)} />} />
+          <Row label="Sounds" sub="Soft clicks and chimes under the haptics. The silent switch mutes them." sf="speaker.wave.2" md="volume_up" chevron={false}
+            trailing={<Switch value={sounds} onValueChange={(v) => { useSounds.getState().set(v); if (v) play('toggle') }} />} />
           <Row label="Server" value={url ? url.replace(/^https?:\/\//, '').split('.')[0] : process.env.EXPO_OS === 'web' ? 'This site' : 'Not set'} sf="server.rack" md="dns" href="/settings/server" />
           {queued.length > 0 && <Row label="Waiting to send" value={String(queued.length)} sf="icloud.and.arrow.up" md="cloud_upload" href="/settings/server" />}
         </Group>

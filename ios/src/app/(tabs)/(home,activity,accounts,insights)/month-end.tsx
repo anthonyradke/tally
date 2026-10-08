@@ -17,6 +17,7 @@ import { fromCents } from '@/lib/draft'
 import { amountsById } from '@/lib/forms'
 import { formatCents } from '@/lib/money'
 import { useTally } from '@/lib/tally'
+import { play } from '@/lib/sound'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
 
@@ -63,7 +64,7 @@ export default function MonthEnd() {
     try {
       await api.monthEndTyped(ym, cents, cleared)
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
-      toast({ text: 'Balances saved' }); await refresh()
+      play('add'); toast({ text: 'Balances saved' }); await refresh()
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
   }
   const saveInterest = async () => {
@@ -72,7 +73,7 @@ export default function MonthEnd() {
     try {
       await api.monthEndInterest(ym, cents)
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
-      toast({ text: 'Interest logged' }); await refresh()
+      play('income'); toast({ text: 'Interest logged' }); await refresh()
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
   }
   const acct = (id: string) => t.acct.get(Number(id)) as Account

@@ -5,6 +5,7 @@ import { View, type GestureResponderEvent } from 'react-native'
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated'
 import Svg, { Defs, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
 import * as Haptics from 'expo-haptics'
+import { play } from '@/lib/sound'
 import { useThemeWash } from '@/lib/motion'
 import { radius, space, THEMES, useTheme, useThemeChoice, type ThemeSpec } from '@/theme'
 import { Icon } from './Icon'
@@ -22,6 +23,7 @@ export function ThemePicker() {
   const pick = (t: ThemeSpec, e: GestureResponderEvent) => {
     if (t.id === current) return
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    play('toggle')
     const p = dark ? t.dark : t.light
     if (!reduce) useThemeWash.getState().start(e.nativeEvent.pageX, e.nativeEvent.pageY, c.bg, p.glow?.[0] ?? p.ink)
     set(t.id)

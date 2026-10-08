@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Pressable, View } from 'react-native'
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
+import { play } from '@/lib/sound'
 import { useTheme } from '@/theme'
 import { Icon } from './Icon'
 import { Txt } from './Txt'
@@ -30,7 +31,7 @@ function Key({ k, onKey, onClear }: { k: string; onKey: (k: string) => void; onC
     <Pressable accessibilityRole="keyboardkey" accessibilityLabel={k === 'del' ? 'Delete' : k === '00' ? 'Double zero' : k}
       onPressIn={() => { hl.set(withTiming(1, { duration: 40 })); if (!reduce) s.set(withTiming(0.86, { duration: 70 })) }}
       onPressOut={() => { hl.set(withTiming(0, { duration: 260 })); if (!reduce) s.set(withSequence(withTiming(1.14, { duration: 90 }), withSpring(1, { damping: 12, stiffness: 320 }))) }}
-      onPress={() => { Haptics.selectionAsync().catch(() => {}); onKey(k) }}
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); play('key', 0.7); onKey(k) }}
       onLongPress={k === 'del' ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onClear() } : undefined}
       style={{ width: '33.333%', height: 58, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{ width: 72, height: 50, alignItems: 'center', justifyContent: 'center' }}>

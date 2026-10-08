@@ -36,6 +36,7 @@ import { markFresh, useQuickFloat } from '@/lib/motion'
 import { monthsNow } from '@/lib/months'
 import { QUEUED, sendOrQueue } from '@/lib/outbox'
 import { Reveal } from '@/lib/privacy'
+import { play } from '@/lib/sound'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
 import { nextStep, stepsFor, type Step } from '@/lib/steps'
 import { useTally } from '@/lib/tally'
@@ -110,7 +111,7 @@ export default function New() {
     go(nextStep(step, useDraft.getState().d, seen))
   }
   const back = () => (at > 0 ? go(steps[at - 1]) : close())
-  const refuse = () => { shake(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
+  const refuse = () => { shake(); play('error', 0.6); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
 
   // Changing the kind drops a category and accounts that no longer fit it. Nothing is picked for you.
   const setKind = (kind: CatType) => {
@@ -161,12 +162,14 @@ export default function New() {
       const saved = await sendOrQueue(lines, d.what || (cat?.name ?? 'Entry'))
       if (!saved) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {})
+        play('tick')
         close()
         toast({ text: QUEUED, action: again })
         return
       }
       if (d.photo && saved[0]) await api.uploadReceipt(saved[0].id, d.photo).catch(() => toast({ text: 'Saved, but the receipt photo did not upload.', tone: 'error' }))
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      play(d.kind === 'Money in' && !d.refund ? 'income' : 'add')
       markFresh(saved.map((x) => x.id))
       if (quick != null) useQuickFloat.getState().show(quick, cents)
       await invalidateAll()
@@ -178,6 +181,7 @@ export default function New() {
     } catch (e) {
       setErrors(e instanceof ApiError ? e.errors : ['Tally is unreachable. Check Tailscale and try again.'])
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
+      play('error')
     } finally {
       setSaving(false)
     }

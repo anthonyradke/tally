@@ -29,6 +29,7 @@ import { fromISO, monthLabel, monthOf } from '@/lib/dates'
 import { compactCents, formatCents, pct } from '@/lib/money'
 import { usePace } from '@/lib/pace'
 import { usePullRefresh } from '@/lib/refresh'
+import { play } from '@/lib/sound'
 import { getServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
 import { font as ramp, radius, space, useTheme } from '@/theme'
@@ -83,6 +84,7 @@ function UnderBudget({ month, by }: { month: string; by: number }) {
       const seen: string[] = v ? JSON.parse(v) : []
       if (!live || seen.includes(month)) return
       setFire((n) => n + 1)
+      play('success')
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       return AsyncStorage.setItem(CELEBRATED, JSON.stringify([...seen, month].slice(-36)))
     }).catch(() => {})

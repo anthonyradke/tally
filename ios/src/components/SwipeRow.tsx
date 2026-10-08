@@ -9,6 +9,7 @@ import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSprin
 import { scheduleOnRN } from 'react-native-worklets'
 import * as Haptics from 'expo-haptics'
 import type { SFSymbol } from 'expo-symbols'
+import { play } from '@/lib/sound'
 import { Icon } from './Icon'
 
 export interface SwipeAction { label: string; sf: SFSymbol; md: string; color: string; run: () => void; destructive?: boolean }
@@ -54,7 +55,7 @@ export function SwipeRow({ left = [], right = [], enabled = true, resetKey, chil
 
   const claim = () => registry.claim(closeFn)
   const settled = (isOpen: boolean) => { setOpen(isOpen); if (!isOpen) registry.release(closeFn) }
-  const tick = (on: boolean) => Haptics.impactAsync(on ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+  const tick = (on: boolean) => { Haptics.impactAsync(on ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light).catch(() => {}); if (on) play('tick', 0.5) }
   const fire = (side: 'left' | 'right') => {
     settled(false)
     const a = side === 'left' ? left[0] : right[nR - 1]

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { play } from './sound'
 
 export interface ToastMsg { id: number; text: string; action?: { label: string; run: () => void | Promise<void> }; tone?: 'error' }
 interface State { toast: ToastMsg | null; show: (t: Omit<ToastMsg, 'id'>) => void; hide: () => void }
@@ -17,4 +18,7 @@ export const useToast = create<State>((set) => ({
   },
   hide: () => { clearTimeout(timer); set({ toast: null }) },
 }))
-export const toast = (t: Omit<ToastMsg, 'id'>) => useToast.getState().show(t)
+export const toast = (t: Omit<ToastMsg, 'id'>) => {
+  if (t.tone === 'error') play('error')
+  useToast.getState().show(t)
+}

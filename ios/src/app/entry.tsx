@@ -32,6 +32,7 @@ import { formatCents } from '@/lib/money'
 import { markFresh, useQuickFloat } from '@/lib/motion'
 import { QUEUED, sendOrQueue } from '@/lib/outbox'
 import { Reveal } from '@/lib/privacy'
+import { play } from '@/lib/sound'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
@@ -142,7 +143,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     if (line) setLine(line.key, { amount: next })
     else set({ amount: next })
   }
-  const refuse = () => { shake(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
+  const refuse = () => { shake(); play('error', 0.6); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
   const onClear = () => (d.target === 'main' ? set({ amount: '' }) : setLine(d.target, { amount: '' }))
 
   const splitSum = d.split?.reduce((n, l) => n + toCents(l.amount), 0) ?? 0
@@ -178,6 +179,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
       }
       if (d.photo && saved[0]) await api.uploadReceipt(saved[0].id, d.photo).catch(() => toast({ text: 'Saved, but the receipt photo did not upload.', tone: 'error' }))
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      play(d.kind === 'Money in' && !d.refund && !editing ? 'income' : 'add')
       markFresh(saved.map((x) => x.id))
       if (fav && !editing) useQuickFloat.getState().show(Number(fav), cents)
       await invalidateAll()
@@ -188,6 +190,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     } catch (e) {
       setErrors(e instanceof ApiError ? e.errors : ['Tally is unreachable. Check Tailscale and try again.'])
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
+      play('error')
     } finally {
       setSaving(false)
     }
