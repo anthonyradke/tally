@@ -53,6 +53,12 @@ function layout(b: Bootstrap): string[] {
   return order.filter((id) => !hidden.has(id))
 }
 
+/** Home's large title says hello for the time of day; the tab itself stays "Home". */
+function greeting() {
+  const h = new Date().getHours()
+  return h < 5 ? 'Up late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 22 ? 'Good evening' : 'Good night'
+}
+
 const short = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 const monthName = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'long' })
 
@@ -62,8 +68,10 @@ export default function Home() {
   const { c } = useTheme()
   const [waited] = useState(!b) // the skeleton showed first
   const hidden = usePrivacy((s) => s.hidden)
+  const [title] = useState(greeting)
   return (
     <>
+      <Stack.Screen options={{ title }} />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button icon={hidden ? 'eye.slash' : 'eye'} accessibilityLabel={hidden ? 'Show amounts' : 'Hide amounts'}
           onPress={() => { Haptics.selectionAsync().catch(() => {}); play('toggle'); usePrivacy.getState().set(!hidden) }} />

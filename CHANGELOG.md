@@ -62,6 +62,7 @@ Added
   and scrubbing included, until you switch it back. The keypad screens still show what you type.
 
 Changed
+- Home's large title says hello for the time of day ("Good morning", "Up late"). The tab is still Home.
 - Saving a recurring template updates the entries it already scheduled ahead: a new amount, category or account
   reaches them, and moving its date no longer posts a second entry next to the old one. Pausing takes its scheduled
   entries out. Entries dated today or earlier, and scheduled ones you changed by hand, stay as they are.
