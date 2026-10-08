@@ -14,6 +14,8 @@ import { flush, loadOutbox } from '@/lib/outbox'
 import { loadPrivacy } from '@/lib/privacy'
 import { loadServer } from '@/lib/server'
 import { loadSounds } from '@/lib/sound'
+import { loadLock } from '@/lib/lock'
+import { LockScreen } from '@/components/LockScreen'
 import { loadTheme, useTheme } from '@/theme'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
@@ -64,7 +66,7 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false)
   const [launching, setLaunching] = useState(true)
   useEffect(() => {
-    Promise.all([loadServer(), loadOutbox(), loadTheme(), loadPrivacy(), loadSounds()]).finally(() => setReady(true))
+    Promise.all([loadServer(), loadOutbox(), loadTheme(), loadPrivacy(), loadSounds(), loadLock()]).finally(() => setReady(true))
   }, [])
   if (!ready) return null
   return (
@@ -76,6 +78,7 @@ export default function RootLayout() {
           <OutboxSync />
           <Toaster />
           <ThemeWash />
+          <LockScreen />
         </ThemeProvider>
       </PersistQueryClientProvider>
       {/* Takes over from the native splash (it hides it), then lifts off the app underneath. */}
