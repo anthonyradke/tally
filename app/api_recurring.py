@@ -9,7 +9,7 @@ from . import db
 from .api import Con
 from .api_admin import _get, _opt_int, _upsert
 from .engine import Txn, validate
-from .inputs import body, day, flag, money, text, whole
+from .inputs import bad, body, day, far, flag, money, text, whole
 from .recurring import first_on_or_after
 
 router = APIRouter(prefix="/api")
@@ -32,6 +32,8 @@ def _fields(con, b: dict) -> dict:
     if b.get("category_id") in (None, ""):
         raise HTTPException(422, {"errors": ["Pick a category."]})
     nxt = day(b.get("next_date"), "Next date")
+    if nxt > far(date.today()):
+        bad("The next date is more than ten years away. Check the year.")
     f = {"label": text(b["label"], "Label"), "category_id": whole(b["category_id"], "Category"),
          "from_account_id": _opt_int(b.get("from_account_id"), "From"), "to_account_id": _opt_int(b.get("to_account_id"), "To"),
          "amount": money(b.get("amount") or 0), "what": text(b.get("what"), "Shows as"), "freq": b["freq"],
@@ -48,9 +50,18 @@ def _fields(con, b: dict) -> dict:
     return f
 
 
+def _counted(con, f: dict) -> dict:
+    """An active template posts every date from next_date on, so one starting before the start month would post a
+    backlog of rows that count nowhere. A paused one posts nothing, and resuming skips the missed dates."""
+    start = db.setting(con, "start_month")
+    if f["active"] and f["next_date"] < start:
+        bad(f"Tally starts counting in {date.fromisoformat(start):%B %Y}. Pick a next date from then on.")
+    return f
+
+
 @router.post("/recurring", status_code=201)
 async def create_recurring(request: Request, con: Con):
-    id = _upsert(con, "recurring", _fields(con, await body(request)), None)
+    id = _upsert(con, "recurring", _counted(con, _fields(con, await body(request))), None)
     con.commit()
     return _get(con, "recurring", id)
 
@@ -64,7 +75,7 @@ async def update_recurring(id: int, request: Request, con: Con):
     if f["active"] and not old["active"]:
         f["next_date"] = first_on_or_after(date.fromisoformat(f["next_date"]), f["freq"], f["anchor_day"],
                                            date.today()).isoformat()
-    _upsert(con, "recurring", f, id)
+    _upsert(con, "recurring", _counted(con, f), id)
     con.commit()
     return _get(con, "recurring", id)
 

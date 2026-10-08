@@ -1,7 +1,7 @@
 // The editor modal for Settings items: account, category, quick action, recurring template, saved view, budget.
 // Its own Cancel/Save; destructive actions sit at the bottom and act at once (the server refuses deletes that would
 // orphan entries, and says to hide the item instead).
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
@@ -40,12 +40,12 @@ export default function Edit() {
   const set = (p: Form) => setF((s) => ({ ...s!, ...p }))
   const a = admin.data
 
-  useEffect(() => {
-    if (!a || !t.b || f) return
+  // The form starts once Settings data is in (set while rendering, so it's filled on the frame the data lands).
+  if (a && t.b && !f) {
     let extra: Form = {}
     try { extra = !id && prefill ? JSON.parse(prefill) : {} } catch { /* ignore a bad prefill */ }
     setF({ ...initial(kind, id ? Number(id) : undefined, a, t.b.today), ...extra })
-  }, [a, t.b]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const save = async () => {
     if (!f) return

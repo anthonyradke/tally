@@ -128,7 +128,7 @@ const fav = await hit('favorite', 'POST', '/api/favorites', { label: 'Contract',
 await hit('ok', 'DELETE', `/api/favorites/${fav.id}`)
 const view = await hit('view', 'POST', '/api/saved-views', { name: 'Contract', query: 'tag=check' })
 await hit('ok', 'DELETE', `/api/saved-views/${view.id}`)
-const rec = await hit('recurring', 'POST', '/api/recurring', { label: 'Contract', category_id: spend.id, from_account_id: card.id, amount: 1, freq: 'yearly', next_date: '2099-01-01' })
+const rec = await hit('recurring', 'POST', '/api/recurring', { label: 'Contract', category_id: spend.id, from_account_id: card.id, amount: 1, freq: 'yearly', next_date: `${Number(b.today.slice(0, 4)) + 1}-01-01` })
 await hit('ok', 'DELETE', `/api/recurring/${rec.id}`)
 await hit('ok', 'PUT', `/api/budgets/${spend.id}`, { amount: spend.budget == null ? null : spend.budget / 100 })
 await hit('settings', 'PUT', '/api/settings', { theme: b.settings.theme ?? '' })

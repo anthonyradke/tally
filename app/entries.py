@@ -6,7 +6,7 @@ from datetime import date
 from typing import Optional
 from fastapi import HTTPException
 from .engine import Txn, validate
-from .inputs import day, money, opt_id, opt_text, text, whole, words
+from .inputs import bad, day, far, money, opt_id, opt_text, text, whole, words
 
 META_COLS = ("note", "tags", "split_group", "receipt", "recurring_id")
 
@@ -55,6 +55,15 @@ def _landed(con, pattern: str) -> list[dict]:
     return _full(con, ids) if ids else []
 
 
+def _in_range(st, d: date, restoring: bool = False) -> None:
+    """Refuse a date Tally can't count. Before the start month an entry would count nowhere (no month has it), so it
+    used to vanish from every balance without a word. Undo can still put back a row from before it."""
+    if d > far(st.today):
+        bad("That date is more than ten years away. Check the year.")
+    if d < st.start and not restoring:
+        bad(f"Tally starts counting in {st.start:%B %Y}, so an entry before then wouldn't count anywhere.")
+
+
 def _write(st, t: Txn, meta: dict) -> int:
     """Validate and write one entry with its extras and client_id, without committing. Each request commits once,
     so a split, or a create and its client_id, lands whole or not at all: a half-written split used to look finished
@@ -64,6 +73,7 @@ def _write(st, t: Txn, meta: dict) -> int:
     errs = validate(t, st.cat[t.category_id].type, st.acct)
     if errs:
         raise HTTPException(422, {"errors": errs})
+    _in_range(st, t.date)
     cols = {"date": t.date.isoformat(), "what": t.what, "category_id": t.category_id, "from_account_id": t.from_id,
             "to_account_id": t.to_id, "amount": t.amount, **{k: meta[k] for k in ("note", "tags", "split_group") if k in meta}}
     if t.id is None:

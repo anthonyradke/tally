@@ -67,12 +67,11 @@ export default function Activity() {
   const items = useMemo<Item[]>(() => {
     if (f.sort === 'amount') return rows.map((r, i) => ({ kind: 'row', key: `r${r.id}`, t: r, first: i === 0, last: i === rows.length - 1 }))
     const out: Item[] = []
+    const spent = new Map<string, number>() // one pass: filtering every row for each day header was quadratic
+    for (const x of rows) if (t.typeOf(x) === 'Spending') spent.set(x.date, (spent.get(x.date) ?? 0) + x.amount)
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i]
-      if (i === 0 || rows[i - 1].date !== r.date) {
-        const day = rows.filter((x) => x.date === r.date)
-        out.push({ kind: 'head', key: `h${r.date}`, date: r.date, spent: day.reduce((n, x) => n + (t.typeOf(x) === 'Spending' ? x.amount : 0), 0) })
-      }
+      if (i === 0 || rows[i - 1].date !== r.date) out.push({ kind: 'head', key: `h${r.date}`, date: r.date, spent: spent.get(r.date) ?? 0 })
       out.push({ kind: 'row', key: `r${r.id}`, t: r, first: i === 0 || rows[i - 1].date !== r.date, last: i === rows.length - 1 || rows[i + 1].date !== r.date })
     }
     return out

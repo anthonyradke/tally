@@ -39,10 +39,10 @@ def post(url: str, body: dict) -> dict:
 c.put("/api/settings", json={"start_month": start.isoformat(), "ef_months": 6})
 
 acct = {a["name"]: a["id"] for a in (
-    post("/api/accounts", {"name": "Checking", "kind": "cash", "bank": "Chase", "start_balance": 3240}),
-    post("/api/accounts", {"name": "High-yield savings", "kind": "cash", "bank": "SoFi", "start_balance": 8600,
+    post("/api/accounts", {"name": "Checking", "kind": "cash", "bank": "chase", "start_balance": 3240}),
+    post("/api/accounts", {"name": "High-yield savings", "kind": "cash", "bank": "sofi", "start_balance": 8600,
                            "apy": 3.8, "ef": True}),
-    post("/api/accounts", {"name": "Credit card", "kind": "card", "bank": "Amex"}),
+    post("/api/accounts", {"name": "Credit card", "kind": "card", "bank": "amex"}),
     post("/api/accounts", {"name": "Roth IRA", "kind": "investment", "start_balance": 5200}),
     post("/api/accounts", {"name": "Student loan", "kind": "loan", "start_balance": 14800, "loan_rate": 4.5}),
 )}

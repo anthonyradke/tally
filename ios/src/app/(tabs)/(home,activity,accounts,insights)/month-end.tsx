@@ -1,6 +1,6 @@
 // Month end, three steps: type investment balances, confirm savings interest, reconcile cash and cards. Loans work
 // themselves out, and a statement balance can be typed over one at the bottom.
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ScrollView, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -35,12 +35,14 @@ export default function MonthEnd() {
   const [typed, setTyped] = useState<Record<string, string>>({})
   const [interest, setInterest] = useState<Record<string, string>>({})
   const [loans, setLoans] = useState<Record<string, string>>({})
-  useEffect(() => {
-    if (!q.data) return
+  // The fields start from each fresh answer (set while rendering, React's pattern for state that follows a prop).
+  const [seeded, setSeeded] = useState<typeof q.data>(undefined)
+  if (q.data && q.data !== seeded) {
+    setSeeded(q.data)
     setTyped(Object.fromEntries(Object.entries(q.data.typed).map(([k, v]) => [k, v == null ? '' : fromCents(v)])))
     setLoans(Object.fromEntries(Object.entries(q.data.loans).map(([k, v]) => [k, v.typed == null ? '' : fromCents(v.typed)])))
     setInterest(Object.fromEntries(Object.entries(q.data.interest).map(([k, v]) => [k, v.logged.length ? '' : v.proposed ? fromCents(v.proposed) : ''])))
-  }, [q.data])
+  }
   const b = t.b
   const d = q.data
   const [waited] = useState(!b || !d) // the skeleton showed first

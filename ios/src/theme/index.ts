@@ -36,7 +36,7 @@ export function useTheme() {
     dark: dark_,
     theme: spec.id,
     tint: (t: Tint) => ring[t],
-    bank: (b: string) => (BANK[b] ?? BANK.hsa)[dark_ ? 1 : 0],
+    bank: (b: string) => (BANK[b.toLowerCase()] ?? BANK.hsa)[dark_ ? 1 : 0],
   }
 }
 export type Theme = ReturnType<typeof useTheme>

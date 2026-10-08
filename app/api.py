@@ -11,7 +11,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from . import db, recurring, search, service
 from .engine import validate
-from .entries import META_COLS, _client_id, _full, _landed, _parse, _remove, _sent, _txn, _write
+from .entries import META_COLS, _client_id, _full, _in_range, _landed, _parse, _remove, _sent, _txn, _write
 from .inputs import body, day, ids as id_list, money, opt_id, whole, words
 
 router = APIRouter(prefix="/api")
@@ -124,6 +124,7 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
     for t in items:
         ty = st.cat[t.category_id].type
         by_type[ty] = by_type.get(ty, 0) + t.amount
+    offset, limit = max(0, offset), max(0, limit)  # a negative one sliced from the end
     return {"total": len(items), "sum": sum(t.amount for t in items), "by_type": by_type,
             "items": [_txn(t, meta.get(t.id)) for t in items[offset:offset + limit]]}
 
@@ -168,6 +169,8 @@ async def create_split(request: Request, con: Con):
     errs = [e for t, _ in lines for e in validate(t, st.cat[t.category_id].type, st.acct)]
     if errs:
         raise HTTPException(422, {"errors": sorted(set(errs))})
+    for t, _ in lines:
+        _in_range(st, t.date)
     ids = [_write(st, t, {**m, "split_group": group, "client_id": f"{cid}:{i}" if cid else None})
            for i, (t, m) in enumerate(lines)]
     con.commit()
@@ -216,6 +219,7 @@ async def restore(request: Request, con: Con):
     ids = []
     for b in rows:
         t, meta = _parse(b, whole(b.get("id"), "id"))
+        _in_range(st, t.date, restoring=True)
         if con.execute("SELECT 1 FROM transactions WHERE id=?", (t.id,)).fetchone():
             raise HTTPException(409, {"errors": ["That entry is already back."]})
         if t.category_id not in st.cat or any(a and a not in st.acct for a in (t.from_id, t.to_id)):

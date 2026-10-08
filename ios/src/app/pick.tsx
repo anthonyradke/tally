@@ -128,9 +128,10 @@ function Accounts({ side }: { side: 'from' | 'to' }) {
 
 function DateSheet() {
   const { d, set } = useDraft()
+  const { b } = useTally()
   return (
     <View style={{ gap: space.l }}>
-      <DatePick value={d.date} onChange={(date) => set({ date })} />
+      <DatePick value={d.date} min={b?.start} onChange={(date) => set({ date })} />
       <Button label="Done" onPress={done} />
     </View>
   )
