@@ -13,6 +13,8 @@ Added
 - A loan's page has a Payoff section: when it will be paid off at the rate you're paying it (your recurring payment,
   or your average over the last few months), how much interest is still to come, and what $25 to $100 more a month
   would save.
+- Little moments on Home, each once: "Payday!" when money in of $200 or more lands today, and a milestone when net
+  worth passes a round $5,000 on the way up ("out of the red" at zero). Confetti, the till's ring, tap to put away.
 - Lock with Face ID (Settings, off unless you turn it on): Tally asks when it opens and when you come back after a
   minute away. Whether it's on or not, Tally is blurred in the app switcher. (Needs the rebuild.)
 - Two new themes: Forest (deep green) and Midnight (navy and gold in the dark, warm gold on paper in the light), each

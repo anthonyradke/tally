@@ -10,6 +10,7 @@ import { Chip } from '@/components/Chip'
 import { EASE } from '@/components/ease'
 import { Forecast } from '@/components/Forecast'
 import { Glow } from '@/components/Glow'
+import { Moments } from '@/components/Moments'
 import { StoryButton } from '@/components/StoryButton'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
@@ -80,7 +81,7 @@ export default function Home() {
 
 function Widgets({ b }: { b: Bootstrap }) {
   const ids = layout(b)
-  const out: ReactNode[] = []
+  const out: ReactNode[] = [<Moments key="moments" b={b} />]
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i]
     // Emergency fund and Roth are small; when they sit next to each other they share a row.
