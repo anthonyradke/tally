@@ -19,6 +19,11 @@ Added
   subscription, rent, a paycheck). Tapping one opens the editor filled in; the X hides it.
 - Month end: empty a loan or investment balance and save to take it back out, so a loan goes back to Tally's own
   figure.
+- Month stories: a full-screen recap of a month, one page at a time like stories in a social app. What came in and
+  went out, how much you kept, where most of it went, your biggest day, your regular place, quiet days on a little
+  calendar, how it compares with the month before, net worth and budgets kept. Tap through, hold to pause, swipe down
+  to close. Play one from the month in review on Home or from any month in Insights (the month in progress plays
+  "so far").
 - Next 30 days on Home: each cash account and card with something scheduled (recurring bills, future-dated entries),
   with a small line of where it's headed and its balance a month out. A cash account that would dip below zero says
   on which day, in red. The account's own chart carries on past today as a dashed line. It can be moved or hidden
