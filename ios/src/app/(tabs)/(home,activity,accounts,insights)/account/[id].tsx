@@ -17,7 +17,8 @@ import { Txt } from '@/components/Txt'
 import type { SFSymbol } from 'expo-symbols'
 import { api } from '@/lib/api'
 import { dailyBalances, useAllTxns } from '@/lib/balances'
-import { dayLabel, fromISO, monthLabel, monthOf } from '@/lib/dates'
+import { AHEAD, outlook } from '@/lib/forecast'
+import { addDays as addDaysISO, dayLabel, fromISO, monthLabel, monthOf } from '@/lib/dates'
 import { formatCents } from '@/lib/money'
 import { useTally } from '@/lib/tally'
 import { font as ramp, radius, space, useTheme } from '@/theme'
@@ -47,6 +48,9 @@ export default function AccountDetail() {
     const months = b.months.filter((m) => m.month <= b.today && (!a.opened || m.month >= a.opened)) // not the empty months before it opened
     return { values: months.map((m) => m.balances[String(a.id)] ?? a.start_balance), labels: months.map((m) => `End of ${monthLabel(m.month, 'long')}`) }
   }, [a, b, all.data, daily])
+
+  // What's already scheduled, carried on past today as a dashed line.
+  const ahead = useMemo(() => (a && b && daily && all.data ? outlook(a, all.data.items, b.start, b.today) : null), [a, b, daily, all.data])
 
   if (!a || !b) return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}><StateView q={t.q} /></ScrollView>
 
@@ -83,8 +87,16 @@ export default function AccountDetail() {
               ) : <Txt variant="callout" tone="label2">{a.kind === 'investment' || a.kind === 'loan' ? 'As of the last month end' : 'As of today'}</Txt>} />
           </View>
           {series && series.values.length > 1 ? (
-            <ScrubChart scrub={scrub} slots={series.values.length} series={[{ values: series.values, color: c.ink }]} height={160} />
+            <ScrubChart scrub={scrub} slots={series.values.length + (ahead?.count ? AHEAD : 0)} height={160}
+              series={[{ values: series.values, color: c.ink }, ...(ahead?.count ? [{ values: [...series.values, ...ahead.days.slice(1)], color: ahead.belowZero ? c.neg : c.chartPrev, dashed: true }] : [])]} />
           ) : daily && !all.data ? <View style={{ height: 160 }} /> : null}
+          {!!ahead?.count && (
+            <Txt variant="foot" tone={ahead.belowZero ? 'neg' : 'label2'} num style={{ paddingHorizontal: space.xs, marginTop: -space.xs }}>
+              {ahead.belowZero
+                ? `With what's scheduled, it goes below zero on ${short(ahead.belowZero)}.`
+                : `Dashed: ${formatCents(ahead.end)} by ${short(ahead.days.length ? addDaysISO(b.today, AHEAD) : b.today)} with the ${ahead.count === 1 ? 'entry' : `${ahead.count} entries`} already scheduled.`}
+            </Txt>
+          )}
           <View style={{ flexDirection: 'row', gap: space.s }}>
             {(a.kind === 'cash' || a.kind === 'card') && (
               <Action sf="checkmark.seal" md="verified" label="Reconcile" onPress={() => router.push({ pathname: '/reconcile/[id]', params: { id: String(a.id) } })} />

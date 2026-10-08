@@ -19,6 +19,10 @@ Added
   subscription, rent, a paycheck). Tapping one opens the editor filled in; the X hides it.
 - Month end: empty a loan or investment balance and save to take it back out, so a loan goes back to Tally's own
   figure.
+- Next 30 days on Home: each cash account and card with something scheduled (recurring bills, future-dated entries),
+  with a small line of where it's headed and its balance a month out. A cash account that would dip below zero says
+  on which day, in red. The account's own chart carries on past today as a dashed line. It can be moved or hidden
+  in Settings → Home screen.
 - Sounds, quiet ones under the haptics: a soft tock on the keypad, two rising marimba notes when an entry is added, a
   till's "cha-ching" for money in, a breath for a delete and its reverse for Undo, glass bells for a reconcile that
   matches or a month under budget, and a low double knock when something's refused. They follow the silent switch,

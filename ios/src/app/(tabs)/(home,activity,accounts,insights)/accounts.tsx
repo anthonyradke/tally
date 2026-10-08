@@ -1,15 +1,15 @@
 import { useState } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
 import { Glow } from '@/components/Glow'
+import { AccountMark } from '@/components/AccountMark'
 import { Icon } from '@/components/Icon'
-import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
 import { Hairline, Panel } from '@/components/Panel'
 import { RollingMoney } from '@/components/Rolling'
 import { Arrive, StateView } from '@/components/StateView'
 import { Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
-import { KIND_LABEL, KIND_SYMBOL } from '@/icons/categories'
+import { KIND_LABEL } from '@/icons/categories'
 import type { Account, Bootstrap, Kind } from '@/lib/api'
 import { groupTotal, split, useBalancesToday } from '@/lib/balances'
 import { formatCents } from '@/lib/money'
@@ -19,8 +19,6 @@ import { useTally } from '@/lib/tally'
 import { font as ramp, radius, space, useTheme } from '@/theme'
 
 const ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
-
-export const bankKey = (a: Pick<Account, 'bank' | 'kind'>) => a.bank ?? (a.kind === 'investment' ? 'roth' : 'hsa')
 
 export default function Accounts() {
   const { q, b } = useTally()
@@ -101,7 +99,7 @@ function Body({ b, bal }: { b: Bootstrap; bal: Map<number, number> }) {
 
 /** `padTop`/`padBottom` pad the first and last rows inside the row, so the press highlight fills the panel's corners. */
 function AccountRow({ a, bal, prev, padTop, padBottom }: { a: Account; bal: number; prev?: number; ef: Bootstrap['ef']; padTop: number; padBottom: number }) {
-  const { c, bank } = useTheme()
+  const { c } = useTheme()
   const owed = a.kind === 'card' || a.kind === 'loan'
   const delta = prev != null ? bal - prev : null
   // For debts, going down is good.
@@ -110,7 +108,7 @@ function AccountRow({ a, bal, prev, padTop, padBottom }: { a: Account; bal: numb
   return (
     <Tap feedback="highlight" href={{ pathname: '/account/[id]', params: { id: String(a.id) } }}
       style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingTop: space.m + padTop, paddingBottom: space.m + padBottom }}>
-      <Mark kind="glyph" sf={KIND_SYMBOL[a.kind][0]} md={KIND_SYMBOL[a.kind][1]} tint={bank(bankKey(a))} />
+      <AccountMark a={a} />
       <View style={{ flex: 1, gap: 2 }}>
         <Txt variant="row" numberOfLines={1}>{a.name}</Txt>
         {(sub || a.ef) && (
