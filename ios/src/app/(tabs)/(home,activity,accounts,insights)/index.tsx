@@ -27,6 +27,7 @@ import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import type { Bootstrap, MonthRow } from '@/lib/api'
 import { budgetFor, elapsed, paceOver } from '@/lib/budgets'
+import { efPace } from '@/lib/goals'
 import { useTransactions } from '@/lib/data'
 import { addDays, fromISO, monthLabel } from '@/lib/dates'
 import { compactCents, formatCents, pct } from '@/lib/money'
@@ -379,6 +380,7 @@ function Goal({ b, kind, wide }: { b: Bootstrap; kind: 'ef' | 'roth'; wide?: boo
   const goal = ef ? b.ef.goal : b.roth.limit
   if (!goal) return null
   const color = ef ? tint('teal') : tint('violet')
+  const pace = ef ? efPace(b) : null // when the fund gets there at its recent pace
   // The emergency fund opens Accounts; the Roth opens its contributions category.
   const href = ef ? '/accounts' as const : b.roth.category_id ? { pathname: '/category/[id]' as const, params: { id: String(b.roth.category_id) } } : undefined
   return (
@@ -389,6 +391,11 @@ function Goal({ b, kind, wide }: { b: Bootstrap; kind: 'ef' | 'roth'; wide?: boo
         <Txt variant="sub" tone="label2">{ef ? 'Emergency fund' : `Roth IRA ${fromISO(b.today).getFullYear()}`}</Txt>
         <Money cents={have} whole variant="headline" />
         <Txt variant="foot" tone="label2" num>of {formatCents(goal, { cents: false })}{ef ? `, ${b.settings.ef_months ?? 6} months of spending` : ' limit'}</Txt>
+        {pace && (
+          <Txt variant="foot" tone="pos" num style={{ fontWeight: '600' }}>
+            {wide ? `At ${formatCents(pace.perMonth, { cents: false, sign: 'always' })} a month, there by ${monthLabel(pace.eta, 'long')}` : `There by ${monthLabel(pace.eta)}`}
+          </Txt>
+        )}
       </View>
       {wide && href && <Icon sf="chevron.right" md="chevron_right" size={13} color={c.label3} />}
     </Panel>
