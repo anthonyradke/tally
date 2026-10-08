@@ -34,8 +34,9 @@ export function Moments({ b }: { b: Bootstrap }) {
     ;(async () => {
       const seen: number[] = JSON.parse((await AsyncStorage.getItem(PAID)) ?? '[]')
       const last = await AsyncStorage.getItem(WORTH)
-      await AsyncStorage.setItem(WORTH, String(worth))
       const paid = paydays(b, today.data.items, seen)
+      // One moment at a time: a payday that pushes net worth past a milestone leaves the milestone for next time.
+      if (!paid.length) await AsyncStorage.setItem(WORTH, String(worth))
       const passed = milestone(last == null ? null : Number(last), worth)
       let say: string | null = null
       if (paid.length) {

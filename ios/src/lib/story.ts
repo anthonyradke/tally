@@ -23,6 +23,8 @@ export interface Story {
   movers: { up?: { c: Category; by: number }; down?: { c: Category; by: number } }
   worth: { change: number; values: number[] } | null
   budgets: { kept: number; of: number } | null
+  /** Spending against the month before: whole months, or for a month still going, both up to the same day. */
+  vs: { now: number; before: number } | null
 }
 
 const isSpend = (b: Bootstrap) => {
@@ -30,12 +32,14 @@ const isSpend = (b: Bootstrap) => {
   return (t: Txn) => types.get(t.category_id) === 'Spending'
 }
 
+/** `rows`: the month's entries, and the month before's for comparing a month still going. */
 export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | null {
   const i = b.months.findIndex((r) => r.month === month)
   if (i < 0) return null
   const m = b.months[i], prev = b.months[i - 1]
   const end = lastOfMonth(month)
-  const inMonth = rows.filter((t) => t.date >= month && t.date <= end)
+  // What has happened: a month still going leaves out its scheduled entries (rent due on the 31st isn't a big day yet).
+  const inMonth = rows.filter((t) => t.date >= month && t.date <= end && t.date <= b.today)
   const spendRow = isSpend(b)
   const spending = inMonth.filter(spendRow)
   const cats = new Map(b.categories.map((c) => [c.id, c]))
@@ -87,6 +91,16 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
   const worthMonths = b.months.slice(0, i + 1)
   const worth = prev ? { change: m.net_worth - prev.net_worth, values: worthMonths.map((r) => r.net_worth) } : null
 
+  let vs: Story['vs'] = null
+  if (prev) {
+    if (b.today >= end) vs = { now: m.spent, before: prev.spent }
+    else {
+      const day = Number(b.today.slice(8))
+      const before = rows.filter((t) => t.date >= prev.month && t.date < month && Number(t.date.slice(8)) <= day && spendRow(t))
+      vs = { now: spending.reduce((n, t) => n + t.amount, 0), before: before.reduce((n, t) => n + t.amount, 0) }
+    }
+  }
+
   let kept = 0, of2 = 0
   for (const c of b.categories) {
     if (c.type !== 'Spending' || !c.active) continue
@@ -100,7 +114,7 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
     m, prev, entries: inMonth.length,
     kept: m.money_in > 0 ? m.left_over / m.money_in : null,
     top, biggestDay, biggest, quiet: { days: quietDays, of, streak }, spentDays, favorite, movers, worth,
-    budgets: of2 ? { kept, of: of2 } : null,
+    budgets: of2 ? { kept, of: of2 } : null, vs,
   }
 }
 

@@ -75,12 +75,17 @@ async def update_recurring(id: int, request: Request, con: Con):
     # Rows it already posted for dates still ahead are replaced: they're posted again with the new amount, category and
     # accounts (or not at all while paused). Leaving them made an edit post a second row next to an old one, and a
     # new amount only showed up after the rows already scheduled.
-    ahead = con.execute("SELECT date FROM transactions WHERE recurring_id=? AND date > ? ORDER BY date",
-                        (id, date.today().isoformat())).fetchall()
+    # Only rows still exactly as it posted them: one you changed by hand (an amount, a note, a receipt) stays, and
+    # generate() won't post a second row on its date.
+    same = ("recurring_id=? AND date > ? AND amount=? AND category_id=? AND from_account_id IS ? AND to_account_id IS ?"
+            " AND what=? AND note='' AND tags='' AND receipt IS NULL AND split_group IS NULL")
+    args = (id, date.today().isoformat(), old["amount"], old["category_id"], old["from_account_id"],
+            old["to_account_id"], old["what"] or old["label"])
+    ahead = con.execute(f"SELECT date FROM transactions WHERE {same} ORDER BY date", args).fetchall()
     if ahead:
-        con.execute("DELETE FROM transactions WHERE recurring_id=? AND date > ?", (id, date.today().isoformat()))
+        con.execute(f"DELETE FROM transactions WHERE {same}", args)
         if f["next_date"] == old["next_date"]:  # date untouched: start again from the first one that hadn't happened
-            f["next_date"] = ahead[0]["date"]
+            f["next_date"] = min(ahead[0]["date"], f["next_date"])
     if f["active"] and not old["active"]:
         f["next_date"] = first_on_or_after(date.fromisoformat(f["next_date"]), f["freq"], f["anchor_day"],
                                            date.today()).isoformat()

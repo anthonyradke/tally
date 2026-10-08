@@ -80,3 +80,26 @@ def test_pausing_takes_out_rows_ahead_and_resuming_brings_them_back(client, worl
     client.put(f"/api/recurring/{t['id']}", json={**base, "next_date": "2026-10-01"})
     client.get("/api/bootstrap")
     assert [x["date"] for x in client.get("/api/transactions?q=Gym&sort=date&dir=asc").json()["items"]] == ["2026-10-01", "2026-11-01"]
+
+
+def test_a_scheduled_row_changed_by_hand_survives_a_template_edit(client, world, monkeypatch):
+    from .conftest import freeze
+    freeze(monkeypatch, date(2026, 9, 24))
+    base = {"label": "Rent", "category_id": world["food"], "from_account_id": world["chk"], "amount": 1400,
+            "freq": "monthly", "next_date": "2026-10-01", "horizon_days": 45}
+    t = client.post("/api/recurring", json=base).json()
+    client.get("/api/bootstrap")
+    first = client.get("/api/transactions?q=Rent&sort=date&dir=asc").json()["items"][0]
+    client.put(f"/api/transactions/{first['id']}", json={**first, "amount": 1450, "note": "late fee"})
+    nxt = client.get("/api/admin").json()["recurring"][0]["next_date"]
+    client.put(f"/api/recurring/{t['id']}", json={**base, "next_date": nxt, "amount": 1500})
+    client.get("/api/bootstrap")
+    got = [(x["date"], x["amount"]) for x in client.get("/api/transactions?q=Rent&sort=date&dir=asc").json()["items"]]
+    assert got == [("2026-10-01", 145000), ("2026-11-01", 150000)]
+
+
+def test_an_entry_from_before_the_start_month_can_still_be_edited(client, world):
+    tid = client.post("/api/transactions", json=txn(world, date="2026-08-05")).json()["id"]
+    client.put("/api/settings", json={"start_month": "2026-09-01"})
+    assert client.put(f"/api/transactions/{tid}", json=txn(world, date="2026-08-05", note="kept")).status_code == 200
+    assert client.put(f"/api/transactions/{tid}", json=txn(world, date="2026-08-06")).status_code == 422

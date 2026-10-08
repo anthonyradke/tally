@@ -132,14 +132,14 @@ export function storyPages(s: Story, opts: { markFor: (what: string) => MarkSpec
     pages.push({ key: 'quiet', colors: ['#14213D', '#3D5A80'], node: <Quiet s={s} going={going} /> })
   }
 
-  if (prev && prev.spent > 0) {
-    const change = (m.spent - prev.spent) / prev.spent
+  if (prev && s.vs && s.vs.before > 0) {
+    const change = (s.vs.now - s.vs.before) / s.vs.before
     const less = change <= 0
     pages.push({ key: 'compare', colors: less ? ['#1D3B0F', '#5A9E2F'] : ['#3D1E00', '#C77800'], node: (
       <View style={{ gap: space.l }}>
         <Rise><Kicker>{`Against ${name(prev.month)}`}</Kicker></Rise>
         <Rise at={150}><Txt style={{ fontSize: 64, fontWeight: '800', letterSpacing: -2, color: WHITE }}>{less ? '−' : '+'}{pct(Math.abs(change))}</Txt></Rise>
-        <Rise at={300}><Line strong>{less ? 'less spending' : 'more spending'}{going ? ', so far' : ''}.</Line></Rise>
+        <Rise at={300}><Line strong>{less ? 'less spending' : 'more spending'}{going ? ` than ${name(prev.month)} 1–${Number(opts.today.slice(8))}` : ''}.</Line></Rise>
         <View style={{ gap: space.m, marginTop: space.s }}>
           {s.movers.up && <Rise at={500}><Mover c={s.movers.up.c} by={s.movers.up.by} /></Rise>}
           {s.movers.down && <Rise at={650}><Mover c={s.movers.down.c} by={s.movers.down.by} /></Rise>}

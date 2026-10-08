@@ -49,7 +49,12 @@ def generate(con: sqlite3.Connection, today: date) -> int:
         for r in con.execute("SELECT * FROM recurring WHERE active=1").fetchall():
             nxt = date.fromisoformat(r["next_date"])
             limit = today + timedelta(days=r["horizon_days"])
+            # A date that already has its row (one kept through an edit of the template) isn't posted twice.
+            have = {x[0] for x in con.execute("SELECT date FROM transactions WHERE recurring_id=?", (r["id"],))}
             while nxt <= limit:
+                if nxt.isoformat() in have:
+                    nxt = step(nxt, r["freq"], r["anchor_day"])
+                    continue
                 con.execute(
                     "INSERT INTO transactions(date,what,category_id,from_account_id,to_account_id,amount,recurring_id)"
                     " VALUES(?,?,?,?,?,?,?)",
