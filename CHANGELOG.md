@@ -13,6 +13,8 @@ Added
 - A loan's page has a Payoff section: when it will be paid off at the rate you're paying it (your recurring payment,
   or your average over the last few months), how much interest is still to come, and what $25 to $100 more a month
   would save.
+- Recurring costs in Insights: what every bill and subscription adds up to a month and a year, and roughly what share
+  of your usual income that is, with one bar split by bill. Settings → Recurring shows the same total under its list.
 - An account can have its own symbol and color (Settings → Accounts → the account), like a car for a car loan. The
   bank's color stays the default.
 - The emergency fund card on Home says when it reaches the goal at the pace it has grown over the last few months
