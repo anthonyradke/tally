@@ -38,6 +38,7 @@ import { monthsNow } from '@/lib/months'
 import { QUEUED, sendOrQueue } from '@/lib/outbox'
 import { Reveal } from '@/lib/privacy'
 import { play } from '@/lib/sound'
+import { expression, operate, total, type Calc } from '@/lib/calc'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
 import { nextStep, stepsFor, type Step } from '@/lib/steps'
 import { useTally } from '@/lib/tally'
@@ -99,6 +100,7 @@ export default function New() {
   }
   const go = (s: Step) => {
     if (s === step) return
+    if (step === 'amount' && !settleRef.current()) return // a sum in progress becomes the amount
     Haptics.selectionAsync().catch(() => {})
     Keyboard.dismiss() // a focused field slides away with its page; the keyboard goes with it
     setDir(stepsFor(d.kind).indexOf(s) >= at ? 1 : -1)
@@ -107,8 +109,26 @@ export default function New() {
     setStep(s)
   }
   // Next from a step, given the draft as it is after that step's answer (a pick updates the store and moves on at once).
+  // + and − on the amount page add things up; Next (or =) takes the total.
+  const [calc, setCalc] = useState<Calc | null>(null)
+  function settle() {
+    if (!calc) return true
+    const sum = total(calc, d.amount)
+    if (sum <= 0) { refuse(); return false }
+    set({ amount: fromCents(sum) })
+    setCalc(null)
+    return true
+  }
+  const settleRef = useRef(settle)
+  settleRef.current = settle
+  const op = (sign: 1 | -1) => {
+    Haptics.selectionAsync().catch(() => {}); play('tick', 0.6)
+    setCalc(operate(calc, d.amount, sign))
+    set({ amount: '' })
+  }
   const next = () => {
-    if (step === 'amount' && !cents) { refuse(); return }
+    if (step === 'amount' && !settle()) return
+    if (step === 'amount' && !toCents(useDraft.getState().d.amount)) { refuse(); return }
     go(nextStep(step, useDraft.getState().d, seen))
   }
   const back = () => (at > 0 ? go(steps[at - 1]) : close())
@@ -239,9 +259,15 @@ export default function New() {
                 )}
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xs }}>
                   <Animated.View style={shakeStyle}>
-                    <RollingText text={formatCents(cents)} style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
+                    <RollingText text={formatCents(calc ? total(calc, d.amount) : cents)} style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: d.amount || calc ? c.label : c.label3 }} />
                   </Animated.View>
-                  {d.what ? <Txt variant="callout" tone="label2">{d.what}</Txt> : null}
+                  {calc ? <Txt variant="callout" tone="label2" num numberOfLines={1}>{expression(calc, d.amount)}</Txt>
+                    : d.what ? <Txt variant="callout" tone="label2">{d.what}</Txt> : null}
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space.s, marginBottom: -space.s }}>
+                  {calc && <OpKey label="=" hint="Total" onPress={() => { Haptics.selectionAsync().catch(() => {}); settle() }} />}
+                  <OpKey label="−" hint="Subtract the next amount" onPress={() => op(-1)} on={calc?.sign === -1} />
+                  <OpKey label="+" hint="Add another amount" onPress={() => op(1)} on={calc?.sign === 1} />
                 </View>
                 <Keypad onKey={(k) => {
                   const n = press(d.amount, k)
@@ -325,6 +351,16 @@ export default function New() {
         <Pages page={form ? 'form' : 'steps'} dir={1} render={(k) => (k === 'form' ? <Entry embedded /> : flow)} />
       </View>
     </Reveal.Provider>
+  )
+}
+
+/** + − = on the amount page: small round keys above the keypad. */
+function OpKey({ label, hint, onPress, on }: { label: string; hint: string; onPress: () => void; on?: boolean }) {
+  const { c } = useTheme()
+  return (
+    <Tap onPress={onPress} accessibilityLabel={hint} style={{ width: 44, height: 36, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.ink : c.fill }}>
+      <Txt style={{ fontSize: 22, fontWeight: '600', color: on ? c.onInk : c.label, marginTop: -2 }}>{label}</Txt>
+    </Tap>
   )
 }
 

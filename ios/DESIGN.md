@@ -22,7 +22,7 @@ Changes to anything below get written here first.
   on pace to go over, and says by how much.
 - **A keypad for money.** Entering an amount is a full-width keypad with the figure rolling as you type (Cash App),
   never the system number pad. Digits shift in from the right like a till (1 5 0 reads $1.50); 00 replaces the
-  decimal point. In a new entry the keypad is the whole first screen; editing an entry, it springs up as its own
+  decimal point. Small + − keys above it add amounts up, with the sum written under the figure. In a new entry the keypad is the whole first screen; editing an entry, it springs up as its own
   raised panel with Done and slides back down over the save button.
 - **A new entry is a few questions, one at a time.** Amount and type, what it was, category, the accounts the type
   uses, then a review with the date and Add. Tapping an answer moves on; Back and Next are always there, and dots at
