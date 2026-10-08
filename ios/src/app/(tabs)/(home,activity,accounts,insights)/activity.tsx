@@ -7,6 +7,8 @@ import * as Haptics from 'expo-haptics'
 import Animated, { Easing, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
 import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
+import { Mark } from '@/components/Mark'
+import { merchantKey } from '@/icons/merchants'
 import { Money } from '@/components/Money'
 import { Glow } from '@/components/Glow'
 import { StateView } from '@/components/StateView'
@@ -90,6 +92,18 @@ export default function Activity() {
   }, [rows, f.sort, t, fold, showSched])
 
   const filtered = !!(f.q || f.type || extraCount(f))
+  // Searching for a place: its page is one tap away (the name most of the matches share).
+  const place = useMemo(() => {
+    const want = merchantKey(f.q)
+    if (want.length < 3) return null
+    const n = new Map<string, { name: string; count: number }>()
+    for (const r of rows) {
+      const k = merchantKey(r.what)
+      if (k.includes(want)) n.set(k, { name: n.get(k)?.name ?? r.what, count: (n.get(k)?.count ?? 0) + 1 })
+    }
+    const top = [...n.entries()].sort((a, z) => z[1].count - a[1].count)[0]
+    return top ? { key: top[0], ...top[1] } : null
+  }, [f.q, rows])
   const extra = extraCount(f)
   const toggle = useCallback((id: number) => {
     Haptics.selectionAsync().catch(() => {})
@@ -129,6 +143,15 @@ export default function Activity() {
           <Icon sf="icloud.and.arrow.up" md="cloud_upload" size={16} color={c.warn} />
           <Txt variant="sub" style={{ flex: 1 }}>{queued.length === 1 ? '1 entry is' : `${queued.length} entries are`} {"waiting to reach Tally. They'll send when you're back on Tailscale."}</Txt>
         </View>
+      )}
+      {place && (
+        <Tap feedback="opacity" href={{ pathname: '/merchant/[key]', params: { key: place.key } }}
+          style={{ marginHorizontal: space.l, paddingHorizontal: space.l, height: 52, borderRadius: radius.panel, backgroundColor: c.panel, flexDirection: 'row', alignItems: 'center', gap: space.m }}>
+          {t.markFor(place.name) ? <Mark kind="spec" spec={t.markFor(place.name)!} size={30} /> : <Icon sf="storefront" md="storefront" size={18} color={c.label2} />}
+          <Txt variant="row" style={{ flex: 1 }} numberOfLines={1}>{place.name}</Txt>
+          <Txt variant="sub" tone="label2">See the place</Txt>
+          <Icon sf="chevron.right" md="chevron_right" size={13} color={c.label3} weight="bold" />
+        </Tap>
       )}
       {filtered && first && (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: space.l + space.xs }}>

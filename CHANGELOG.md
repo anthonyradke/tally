@@ -41,6 +41,7 @@ Added
   changed there too: a brand, a letter on a color, or the category's symbol.
 - Trends in Insights: your biggest spending categories as small cards, each with its line over the last months and
   how the month compares with its usual (scaled to the day for the month in progress).
+- Searching Activity for a place shows a card that opens its page, and each category's page lists its top places.
 - Top places in Insights: the five places that took the most that month.
 - Day by day in Insights: the month as a calendar, each day shaded by how much went out (scheduled days get a dot).
   Tap a day for its total, tap again for its entries in Activity. Under it: how many days went by without spending,
