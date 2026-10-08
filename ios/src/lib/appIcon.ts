@@ -10,9 +10,9 @@ let native: Native | null = null
 try { native = require('expo-alternate-app-icons') as Native } catch { native = null }
 
 const isDev = Constants.expoConfig?.ios?.bundleIdentifier?.endsWith('.dev') ?? false
-const THEMES = ['classic', 'aurora', 'sunset', 'ocean', 'citrus', 'blossom'] as const
+const THEMES = ['classic', 'aurora', 'sunset', 'ocean', 'citrus', 'blossom', 'forest', 'midnight'] as const
 const LABEL: Record<(typeof THEMES)[number] | 'dev', string> = {
-  classic: 'Classic', aurora: 'Aurora', sunset: 'Sunset', ocean: 'Ocean', citrus: 'Citrus', blossom: 'Blossom', dev: 'Dev',
+  classic: 'Classic', aurora: 'Aurora', sunset: 'Sunset', ocean: 'Ocean', citrus: 'Citrus', blossom: 'Blossom', forest: 'Forest', midnight: 'Midnight', dev: 'Dev',
 }
 const SOURCES: Record<string, number> = {
   'classic-black': require('../../assets/app-icons/classic-black.png'), 'classic-white': require('../../assets/app-icons/classic-white.png'),
@@ -21,6 +21,8 @@ const SOURCES: Record<string, number> = {
   'ocean-black': require('../../assets/app-icons/ocean-black.png'), 'ocean-white': require('../../assets/app-icons/ocean-white.png'),
   'citrus-black': require('../../assets/app-icons/citrus-black.png'), 'citrus-white': require('../../assets/app-icons/citrus-white.png'),
   'blossom-black': require('../../assets/app-icons/blossom-black.png'), 'blossom-white': require('../../assets/app-icons/blossom-white.png'),
+  'forest-black': require('../../assets/app-icons/forest-black.png'), 'forest-white': require('../../assets/app-icons/forest-white.png'),
+  'midnight-black': require('../../assets/app-icons/midnight-black.png'), 'midnight-white': require('../../assets/app-icons/midnight-white.png'),
   'dev-black': require('../../assets/app-icons/dev-black.png'), 'dev-white': require('../../assets/app-icons/dev-white.png'),
 }
 const ORIGINAL = require('../../assets/icon.png')

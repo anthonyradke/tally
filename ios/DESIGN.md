@@ -58,7 +58,7 @@ Changes to anything below get written here first.
 ## Color
 - Themes (Settings → Theme, stored on the phone; palettes in `src/theme/themes.ts`). **Classic** is the original:
   Apple's system grouped palette (`#F2F2F7` / true black; panels white / `#1C1C1E`) with black/white ink.
-  **Aurora, Sunset, Ocean, Citrus, Blossom** each wash the background in their hue, put two soft pools of color
+  **Aurora, Sunset, Ocean, Citrus, Blossom, Forest, Midnight** each wash the background in their hue, put two soft pools of color
   (the glow) behind the top of each tab, and use one vivid accent.
 - **Ink is the only accent**: the theme's accent (black/white in Classic). Primary buttons, selected chips, the tab
   bar's +, checkmarks and the chart line. The tab bar tints with it too. The + images are drawn per theme by

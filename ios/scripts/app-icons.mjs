@@ -12,6 +12,8 @@ const THEMES = {
   ocean: ['#35D0EA', '#2F6BFF'],
   citrus: ['#FFD04D', '#FF7A1A'],
   blossom: ['#FF6FB5', '#9D5CFF'],
+  forest: ['#2FD47A', '#13A6A0'],
+  midnight: ['#F2D38A', '#C9A24A'],
 }
 const DEV = ['#FFB340', '#FF6A00']
 const BGS = { black: { fill: '#05060B', glow: 0.75 }, white: { fill: '#FFFFFF', glow: 0.5 } }

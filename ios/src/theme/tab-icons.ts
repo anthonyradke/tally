@@ -8,4 +8,6 @@ export const ADD_ICON: Record<string, { light: ImageSourcePropType; dark: ImageS
   ocean: { light: require('../../assets/tab/add-ocean-light.png'), dark: require('../../assets/tab/add-ocean-dark.png') },
   citrus: { light: require('../../assets/tab/add-citrus-light.png'), dark: require('../../assets/tab/add-citrus-dark.png') },
   blossom: { light: require('../../assets/tab/add-blossom-light.png'), dark: require('../../assets/tab/add-blossom-dark.png') },
+  forest: { light: require('../../assets/tab/add-forest-light.png'), dark: require('../../assets/tab/add-forest-dark.png') },
+  midnight: { light: require('../../assets/tab/add-midnight-light.png'), dark: require('../../assets/tab/add-midnight-dark.png') },
 }
