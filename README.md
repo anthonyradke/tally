@@ -45,6 +45,8 @@ the cent.
 - Adding an entry has a big keypad, merchant memory (type a name and it fills in the category and account from last
   time), date shortcuts, refunds, splits, notes, tags and receipt photos. If the phone can't reach the server, the
   entry waits on the phone and sends itself later, never twice.
+- A new entry can also start from a link, `tally://new?amount=6.50&what=Starbucks&card=Amex`. I have an iOS Shortcuts
+  automation open it after every tap to pay, so most entries are one tap on Add.
 - Accounts shows balances, what I own against what I owe, and for each account a balance chart and reconciling
   against the bank with a diagnosis when they don't match. A loan's page works out when it'll be paid off at the
   current payment, and what paying a bit more each month would save.

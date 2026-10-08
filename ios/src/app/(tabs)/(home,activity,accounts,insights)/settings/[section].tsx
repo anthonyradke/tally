@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ScrollView, Switch, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
+import Constants from 'expo-constants'
 import * as Haptics from 'expo-haptics'
 import { AccountMark } from '@/components/AccountMark'
 import { Icon } from '@/components/Icon'
@@ -31,7 +32,7 @@ import { radius, space, useTheme } from '@/theme'
 
 const TITLES: Record<string, string> = {
   accounts: 'Accounts', categories: 'Categories', quick: 'Quick actions', recurring: 'Recurring', views: 'Saved views',
-  budgets: 'Budgets', general: 'Goals', home: 'Home screen', server: 'Server', theme: 'Theme', icon: 'App icon',
+  budgets: 'Budgets', general: 'Goals', home: 'Home screen', server: 'Server', theme: 'Theme', icon: 'App icon', capture: 'Add from Wallet',
 }
 
 export default function SettingsSection() {
@@ -53,7 +54,7 @@ export default function SettingsSection() {
       )}
       <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 100 }}>
-        {section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
+        {section === 'capture' ? <Capture /> : section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
           <>
             {section === 'accounts' && <Accounts a={admin.data} reorder={reorder} />}
             {section === 'categories' && <Categories a={admin.data} reorder={reorder} />}
@@ -407,6 +408,29 @@ function Server() {
           })} />
         </Group>
       )}
+    </>
+  )
+}
+
+/** How to have Wallet open a new entry after each tap to pay, through an iOS Shortcuts automation and Tally's link. */
+function Capture() {
+  const scheme = Constants.expoConfig?.scheme ?? 'tally'
+  const steps = [
+    'Open the Shortcuts app, go to Automation and tap +.',
+    'Choose Transaction (Wallet), pick your cards, and set it to Run Immediately.',
+    `Add the action Open URLs with ${scheme}://new?amount=[Amount]&what=[Merchant]&card=[Card], inserting Amount, Merchant and Card from the Shortcut Input.`,
+    'Next time you tap to pay, Tally opens the new entry filled in, with the category and account from your last visit there. Check it and tap Add.',
+  ]
+  return (
+    <>
+      <Group header="Add from Wallet" footer="Any link like this works, from anywhere: amount, what, card and category are each optional.">
+        {steps.map((s, i) => (
+          <View key={i} style={{ flexDirection: 'row', gap: space.m, padding: space.l }}>
+            <Txt variant="headline" num style={{ width: 18 }}>{i + 1}</Txt>
+            <Txt variant="callout" style={{ flex: 1 }} selectable>{s}</Txt>
+          </View>
+        ))}
+      </Group>
     </>
   )
 }

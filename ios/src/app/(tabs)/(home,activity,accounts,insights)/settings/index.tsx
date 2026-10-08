@@ -44,6 +44,7 @@ export default function Settings() {
           <Row label="Quick actions" value={b ? String(b.favorites.length) : ''} sf="bolt" md="bolt" href="/settings/quick" />
           <Row label="Recurring" value={b ? String(b.recurring.length) : ''} sf="repeat" md="repeat" href="/settings/recurring" />
           <Row label="Saved views" value={b ? String(b.saved_views.length) : ''} sf="bookmark" md="bookmark" href="/settings/views" />
+          <Row label="Add from Wallet" sub="A Shortcuts automation that opens Tally after you tap to pay" sf="wallet.pass" md="wallet" href="/settings/capture" />
         </Group>
         <Group header="Money">
           <Row label="Accounts" value={b ? String(b.accounts.filter((a) => a.active).length) : ''} sf="building.columns" md="account_balance" href="/settings/accounts" />
