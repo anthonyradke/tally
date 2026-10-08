@@ -16,6 +16,10 @@ import { useTransactions } from '@/lib/data'
 import { dayLabel, fromISO, monthLabel, monthOf } from '@/lib/dates'
 import { formatCents, pct } from '@/lib/money'
 import { useTally } from '@/lib/tally'
+import { useAllTxns } from '@/lib/balances'
+import { placesIn } from '@/lib/merchant'
+import { Money } from '@/components/Money'
+import { Tap } from '@/components/Tap'
 import { font as ramp, space, useTheme } from '@/theme'
 
 const monthName = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'long' })
@@ -28,6 +32,7 @@ export default function CategoryDetail() {
   const x = t.cat.get(Number(id))
   const b = t.b
   const rows = useTransactions({ category: Number(id), limit: 40 }, !!x)
+  const all = useAllTxns(!!x)
   if (!x || !b) return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}><StateView q={t.q} /></ScrollView>
   const v = categoryVisual(x)
   const color = tint(v.tint)
@@ -38,6 +43,7 @@ export default function CategoryDetail() {
   const budget = cur && x.type === 'Spending' ? budgetFor(b, x, cur.month) : null
   const avg = values.length > 1 ? Math.round(values.slice(0, -1).reduce((n, v2) => n + v2, 0) / (values.length - 1)) : null
   const warn = budget && cur ? paceOver(spent, budget, cur.month, b.today) : null
+  const places = all.data ? placesIn(b, x.id, all.data.items) : []
   const verb = x.type === 'Money in' ? 'Received' : x.type === 'Spending' ? 'Spent' : 'Moved'
 
   return (
@@ -77,6 +83,30 @@ export default function CategoryDetail() {
             </Panel>
           )}
         </View>
+        {places.length > 1 && (
+          <Section title="Places">
+            <Panel pad={false}>
+              {places.map((p, i) => {
+                const mark = t.markFor(p.name)
+                return (
+                  <View key={p.key}>
+                    {i > 0 && <Hairline inset={space.l + 32 + space.m} />}
+                    <Tap feedback="highlight" href={{ pathname: '/merchant/[key]', params: { key: p.key } }}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l,
+                        paddingTop: space.m + (i === 0 ? space.xs : 0), paddingBottom: space.m + (i === places.length - 1 ? space.xs : 0) }}>
+                      {mark ? <Mark kind="spec" spec={mark} size={32} /> : <Mark kind="glyph" sf={v.sf} md={v.md} tint={color} size={32} />}
+                      <View style={{ flex: 1 }}>
+                        <Txt variant="row" numberOfLines={1}>{p.name}</Txt>
+                        <Txt variant="foot" tone="label2">{p.visits === 1 ? 'Once' : `${p.visits} times`}</Txt>
+                      </View>
+                      <Money cents={p.cents} variant="callout" />
+                    </Tap>
+                  </View>
+                )
+              })}
+            </Panel>
+          </Section>
+        )}
         <Section title="Entries" href={{ pathname: '/activity', params: { category: String(x.id) } }}>
           <Panel pad={false}>
             {(rows.data?.items ?? []).length === 0 && <Txt variant="callout" tone="label2" style={{ padding: space.l }}>{rows.isLoading ? ' ' : `Nothing in ${x.name} yet.`}</Txt>}

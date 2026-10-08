@@ -62,3 +62,16 @@ export function topPlaces(b: Bootstrap, month: string, end: string, rows: Txn[],
   }
   return [...by.values()].filter((x) => x.cents >= 100).sort((a, z) => z.cents - a.cents).slice(0, n)
 }
+
+/** The places in one category that took the most, all time (up to today). */
+export function placesIn(b: Bootstrap, categoryId: number, rows: Txn[], n = 4) {
+  const by = new Map<string, { key: string; name: string; cents: number; visits: number }>()
+  for (const t of rows) {
+    if (t.category_id !== categoryId || t.date > b.today) continue
+    const k = merchantKey(t.what)
+    if (!k) continue
+    const x = by.get(k) ?? { key: k, name: t.what, cents: 0, visits: 0 }
+    by.set(k, { ...x, cents: x.cents + t.amount, visits: x.visits + 1 })
+  }
+  return [...by.values()].sort((a, z) => z.cents - a.cents).slice(0, n)
+}
