@@ -66,12 +66,21 @@ async def create_recurring(request: Request, con: Con):
     return _get(con, "recurring", id)
 
 
-@router.put("/recurring/{id}")
+@router.put("/recurring/{id}")  # rows already posted for today and before stay as they are
 async def update_recurring(id: int, request: Request, con: Con):
     old = _get(con, "recurring", id)
     f = _fields(con, await body(request))
     if f["next_date"] == old["next_date"] and old["anchor_day"]:
         f["anchor_day"] = old["anchor_day"]  # unchanged date: keep aiming for the 31st even if next is Feb 28
+    # Rows it already posted for dates still ahead are replaced: they're posted again with the new amount, category and
+    # accounts (or not at all while paused). Leaving them made an edit post a second row next to an old one, and a
+    # new amount only showed up after the rows already scheduled.
+    ahead = con.execute("SELECT date FROM transactions WHERE recurring_id=? AND date > ? ORDER BY date",
+                        (id, date.today().isoformat())).fetchall()
+    if ahead:
+        con.execute("DELETE FROM transactions WHERE recurring_id=? AND date > ?", (id, date.today().isoformat()))
+        if f["next_date"] == old["next_date"]:  # date untouched: start again from the first one that hadn't happened
+            f["next_date"] = ahead[0]["date"]
     if f["active"] and not old["active"]:
         f["next_date"] = first_on_or_after(date.fromisoformat(f["next_date"]), f["freq"], f["anchor_day"],
                                            date.today()).isoformat()
