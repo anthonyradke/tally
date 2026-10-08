@@ -1,9 +1,9 @@
 // When a loan is paid off at the rate it's being paid: the engine's own monthly rule (add rate / 12, rounded, then take
 // off the month's payments) run forward from this month's balance. Nothing here is saved; it's a projection.
-import type { Account, Bootstrap, Recurring, Txn } from './api'
+import type { Account, Bootstrap, Txn } from './api'
+import { PER_MONTH } from './commitments'
 import { fromISO, monthOf, toISO } from './dates'
 
-const PER_MONTH: Record<Recurring['freq'], number> = { weekly: 52 / 12, biweekly: 26 / 12, monthly: 1, yearly: 1 / 12 }
 
 export interface Payment { cents: number; from: 'recurring' | 'average' | 'month'; months?: number }
 

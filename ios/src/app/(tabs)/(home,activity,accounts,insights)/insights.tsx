@@ -7,6 +7,7 @@ import { scheduleOnRN } from 'react-native-worklets'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
 import { Bar } from '@/components/Bar'
+import { Commitments } from '@/components/Commitments'
 import { Confetti } from '@/components/Confetti'
 import { Donut } from '@/components/Donut'
 import { EASE } from '@/components/ease'
@@ -233,6 +234,7 @@ function Body({ b }: { b: Bootstrap }) {
       {/* The month above changes height; everything under it glides to its new place. */}
       <Animated.View layout={LinearTransition.duration(340).easing(EASE)}>
       <CashFlow b={b} months={months} at={i} onPick={show} />
+      <Commitments b={b} />
       <NetWorth b={b} />
 
       <Section title="Month end">

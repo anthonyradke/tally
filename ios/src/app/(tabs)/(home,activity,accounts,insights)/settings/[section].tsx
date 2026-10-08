@@ -18,6 +18,7 @@ import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
 import { api, type AdminData, type CatType, type Kind } from '@/lib/api'
 import { suggestBudgets } from '@/lib/budgets'
+import { commitments } from '@/lib/commitments'
 import { budgetAmount } from '@/lib/forms'
 import { dayLabel, toISO } from '@/lib/dates'
 import { fromCents, toCents } from '@/lib/draft'
@@ -173,10 +174,11 @@ function RecurringList({ a }: { a: AdminData }) {
   const cats = new Map(a.categories.map((x) => [x.id, x]))
   const ideas = b ? <RepeatSuggestions b={b} /> : null
   if (!a.recurring.length) return <>{ideas}<Empty sf="repeat" md="repeat" title="Nothing recurring yet" body="Add a paycheck, rent or a subscription and Tally posts it ahead of time, about 45 days out." /></>
+  const k = b ? commitments(b) : null
   return (
     <>
     {ideas}
-    <Group>
+    <Group footer={k && k.outMonthly ? `Bills and subscriptions add up to ${formatCents(k.outMonthly, { cents: false })} a month, ${formatCents(k.outMonthly * 12, { cents: false })} a year.` : undefined}>
       {a.recurring.map((r) => {
         const cat = cats.get(r.category_id)
         const v = cat ? categoryVisual(cat) : null
