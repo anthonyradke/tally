@@ -7,6 +7,7 @@ import { memo, useEffect, useRef, useState } from 'react'
 import { Text, View, type TextStyle } from 'react-native'
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
 import { formatCents, type Sign } from '@/lib/money'
+import { mask, useHidden } from '@/lib/privacy'
 
 const EASE = Easing.bezier(0.23, 1, 0.32, 1)
 const DIGITS = '0123456789'.split('')
@@ -52,6 +53,10 @@ export function RollingText({ text, style, rollIn }: { text: string; style: Text
   const [fromZero] = useState(() => !!rollIn && !launched)
   useEffect(() => { if (rollIn) launched = true }, [rollIn])
   const h = Math.round((style.fontSize ?? 17) * 1.2)
+  const hidden = useHidden()
+  if (hidden && text.includes('$')) {
+    return <Text style={[style, { height: h, lineHeight: h }]} accessibilityLabel="Amount hidden">{mask(text)}</Text>
+  }
   const chars = text.split('')
   // Key columns from the right so "$999" → "$1,000" keeps the ones column where it was.
   return (

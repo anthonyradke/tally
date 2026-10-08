@@ -19,6 +19,8 @@ Added
   subscription, rent, a paycheck). Tapping one opens the editor filled in; the X hides it.
 - Month end: empty a loan or investment balance and save to take it back out, so a loan goes back to Tally's own
   figure.
+- Hide amounts: the eye next to Settings on Home (or Settings → Hide amounts) turns every figure into $•••, charts
+  and scrubbing included, until you switch it back. The keypad screens still show what you type.
 
 Changed
 - A category's type can't be changed while entries or recurring templates in it don't fit the new type (spending

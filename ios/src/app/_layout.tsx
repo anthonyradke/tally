@@ -11,6 +11,7 @@ import { ThemeWash } from '@/components/ThemeWash'
 import { Toaster } from '@/components/Toaster'
 import { queryClient } from '@/lib/data'
 import { flush, loadOutbox } from '@/lib/outbox'
+import { loadPrivacy } from '@/lib/privacy'
 import { loadServer } from '@/lib/server'
 import { loadTheme, useTheme } from '@/theme'
 
@@ -61,7 +62,7 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false)
   const [launching, setLaunching] = useState(true)
   useEffect(() => {
-    Promise.all([loadServer(), loadOutbox(), loadTheme()]).finally(() => setReady(true))
+    Promise.all([loadServer(), loadOutbox(), loadTheme(), loadPrivacy()]).finally(() => setReady(true))
   }, [])
   if (!ready) return null
   return (
