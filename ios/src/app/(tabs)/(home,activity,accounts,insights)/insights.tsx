@@ -13,6 +13,7 @@ import { EASE } from '@/components/ease'
 import { Glow } from '@/components/Glow'
 import { SpendCalendar } from '@/components/SpendCalendar'
 import { StoryButton } from '@/components/StoryButton'
+import { TopPlaces } from '@/components/TopPlaces'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
@@ -225,6 +226,7 @@ function Body({ b }: { b: Bootstrap }) {
           })}
         </Panel>
       </Section>
+      <TopPlaces b={b} month={m.month} />
       <SpendCalendar key={m.month} b={b} month={m.month} />
       </Animated.View>
 

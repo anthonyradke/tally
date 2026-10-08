@@ -35,7 +35,7 @@ export default function Activity() {
   const { c } = useTheme()
   const t = useTally()
   const { f, set } = useFilters()
-  const params = useLocalSearchParams<{ when?: string; day?: string; category?: string; account?: string; tag?: string; group?: string }>()
+  const params = useLocalSearchParams<{ q?: string; when?: string; day?: string; category?: string; account?: string; tag?: string; group?: string }>()
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const queued = useOutbox((s) => s.items)
@@ -45,12 +45,13 @@ export default function Activity() {
     const p: Partial<typeof f> = {}
     if (params.when === 'upcoming' && t.b) { p.start = addDays(t.b.today, 1); p.end = undefined; p.sort = 'date'; p.dir = 'asc' }
     if (params.day) { p.start = params.day; p.end = params.day; p.sort = 'date'; p.dir = 'desc' } // a day from Insights' calendar
+    if (params.q) p.q = params.q // a place's page: everything with its name
     if (params.category) p.category = Number(params.category)
     if (params.account) p.account = Number(params.account)
     if (params.tag) p.tag = params.tag
     if (params.group) p.group = params.group
     if (Object.keys(p).length) set(p)
-  }, [params.when, params.day, params.category, params.account, params.tag, params.group, t.b?.today]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [params.q, params.when, params.day, params.category, params.account, params.tag, params.group, t.b?.today]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const query = toQuery(f)
   const q = useInfiniteQuery({

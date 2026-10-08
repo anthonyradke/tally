@@ -19,6 +19,10 @@ Added
   subscription, rent, a paycheck). Tapping one opens the editor filled in; the X hides it.
 - Month end: empty a loan or investment balance and save to take it back out, so a loan goes back to Tally's own
   figure.
+- Pages for places: long-press an entry and pick "All at Chipotle", or tap one under Top places in Insights, to see
+  everything spent there, how many times, the average, the month-by-month line and its entries. Its logo can be
+  changed there too: a brand, a letter on a color, or the category's symbol.
+- Top places in Insights: the five places that took the most that month.
 - Day by day in Insights: the month as a calendar, each day shaded by how much went out (scheduled days get a dot).
   Tap a day for its total, tap again for its entries in Activity. Under it: how many days went by without spending,
   and which day of the week tends to cost the most.
