@@ -104,6 +104,14 @@ export const THEMES: ThemeSpec[] = [
     { ink: '#DC2A7E', bg: '#FFF3F8', fill: '#F8E3EC', fillStrong: '#F0D2DF', label2: '#7A6470', chartPrev: 'rgba(190,60,120,0.28)', glow: ['#FF6FB5', '#A77BFF'] },
     { ink: '#FF6BAE', onInk: '#2B0616', bg: '#0F050A', panel: '#21121A', panelRaised: '#2D1924', fill: '#2D1924', fillStrong: '#3C2230',
       label2: '#BA9DAC', label3: '#70566A', sep: 'rgba(200,120,160,0.28)', chartPrev: 'rgba(255,200,225,0.30)', glow: ['#FF4FA0', '#9D5CFF'] }),
+  theme('forest', 'Forest',
+    { ink: '#1F7A4D', bg: '#F2F7F3', fill: '#E2EDE5', fillStrong: '#D3E3D8', label2: '#5F6E64', chartPrev: 'rgba(40,120,80,0.28)', glow: ['#4CD98A', '#1FA3A0'] },
+    { ink: '#4BD38A', onInk: '#00240F', bg: '#030A06', panel: '#0F1A13', panelRaised: '#17261C', fill: '#17261C', fillStrong: '#21342A',
+      label2: '#93A89A', label3: '#546A5B', sep: 'rgba(110,180,140,0.28)', chartPrev: 'rgba(200,250,220,0.30)', glow: ['#2FD47A', '#13A6A0'] }),
+  theme('midnight', 'Midnight',
+    { ink: '#8F6418', bg: '#F7F5F0', fill: '#ECE7DC', fillStrong: '#E0D8C8', label2: '#6E6758', chartPrev: 'rgba(150,110,40,0.28)', glow: ['#E8C26A', '#7C6CF0'] },
+    { ink: '#E8C26A', onInk: '#1A1200', bg: '#05060D', panel: '#11131F', panelRaised: '#1A1D2C', fill: '#1A1D2C', fillStrong: '#252939',
+      label2: '#A3A3B5', label3: '#5E6072', sep: 'rgba(140,140,180,0.28)', chartPrev: 'rgba(232,194,106,0.30)', glow: ['#3B3F8F', '#C9A24A'] }),
 ]
 
 export type ThemeId = string
