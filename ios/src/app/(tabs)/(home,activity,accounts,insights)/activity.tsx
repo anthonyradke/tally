@@ -28,6 +28,7 @@ const PAGE = 100
 const TYPES: [CatType | '', string][] = [['', 'All'], ['Spending', 'Spending'], ['Money in', 'Money in'], ['Transfer', 'Transfers'], ['Saving', 'Saving'], ['Loan', 'Loans']]
 
 type Item =
+  | { kind: 'sched'; key: string; count: number; cents: number; open: boolean }
   | { kind: 'head'; key: string; date: string; spent: number }
   | { kind: 'row'; key: string; t: Txn; first: boolean; last: boolean }
 
@@ -66,18 +67,27 @@ export default function Activity() {
   const rows = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data])
   const first = q.data?.pages[0]
 
+  // Newest first, the scheduled entries (recurring bills a month out) used to fill the top of the list before anything
+  // that had happened. They fold into one row until you open it; a date filter or the Upcoming chip shows them as usual.
+  const [showSched, setShowSched] = useState(false)
+  const fold = f.sort === 'date' && f.dir === 'desc' && !f.start && !f.end
   const items = useMemo<Item[]>(() => {
     if (f.sort === 'amount') return rows.map((r, i) => ({ kind: 'row', key: `r${r.id}`, t: r, first: i === 0, last: i === rows.length - 1 }))
     const out: Item[] = []
+    const ahead = fold && t.b ? rows.filter((r) => r.date > t.b!.today) : []
+    if (ahead.length) {
+      out.push({ kind: 'sched', key: 'sched', count: ahead.length, cents: ahead.reduce((n, x) => n + (t.typeOf(x) === 'Spending' ? x.amount : 0), 0), open: showSched })
+    }
+    const list = ahead.length && !showSched ? rows.slice(ahead.length) : rows
     const spent = new Map<string, number>() // one pass: filtering every row for each day header was quadratic
-    for (const x of rows) if (t.typeOf(x) === 'Spending') spent.set(x.date, (spent.get(x.date) ?? 0) + x.amount)
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i]
-      if (i === 0 || rows[i - 1].date !== r.date) out.push({ kind: 'head', key: `h${r.date}`, date: r.date, spent: spent.get(r.date) ?? 0 })
-      out.push({ kind: 'row', key: `r${r.id}`, t: r, first: i === 0 || rows[i - 1].date !== r.date, last: i === rows.length - 1 || rows[i + 1].date !== r.date })
+    for (const x of list) if (t.typeOf(x) === 'Spending') spent.set(x.date, (spent.get(x.date) ?? 0) + x.amount)
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i]
+      if (i === 0 || list[i - 1].date !== r.date) out.push({ kind: 'head', key: `h${r.date}`, date: r.date, spent: spent.get(r.date) ?? 0 })
+      out.push({ kind: 'row', key: `r${r.id}`, t: r, first: i === 0 || list[i - 1].date !== r.date, last: i === list.length - 1 || list[i + 1].date !== r.date })
     }
     return out
-  }, [rows, f.sort, t])
+  }, [rows, f.sort, t, fold, showSched])
 
   const filtered = !!(f.q || f.type || extraCount(f))
   const extra = extraCount(f)
@@ -173,6 +183,19 @@ export default function Activity() {
             <Empty filtered={filtered} />
           }
           renderItem={({ item }) => {
+            if (item.kind === 'sched') {
+              return (
+                <Tap feedback="opacity" onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowSched(!item.open) }}
+                  accessibilityLabel={`${item.count} scheduled. ${item.open ? 'Hide' : 'Show'}`}
+                  style={{ marginHorizontal: space.l, marginTop: space.s, paddingHorizontal: space.l, height: 48, borderRadius: radius.panel, backgroundColor: c.panel,
+                    flexDirection: 'row', alignItems: 'center', gap: space.m }}>
+                  <Icon sf="calendar.badge.clock" md="event_upcoming" size={18} color={c.label2} />
+                  <Txt variant="row" style={{ flex: 1 }}>{item.count} scheduled</Txt>
+                  {item.cents > 0 && <Txt variant="sub" tone="label2" num>{formatCents(item.cents)}</Txt>}
+                  <Icon sf={item.open ? 'chevron.up' : 'chevron.down'} md={item.open ? 'expand_less' : 'expand_more'} size={13} color={c.label3} weight="bold" />
+                </Tap>
+              )
+            }
             if (item.kind === 'head') {
               return (
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: space.l + space.xs, paddingTop: space.l, paddingBottom: space.s }}>
