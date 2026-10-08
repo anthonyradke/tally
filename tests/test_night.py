@@ -45,3 +45,38 @@ def test_negative_limit_and_offset_are_ignored(client, world):
         client.post("/api/transactions", json=txn(world))
     assert client.get("/api/transactions?limit=-1").json()["items"] == []
     assert len(client.get("/api/transactions?offset=-2").json()["items"]) == 3
+
+
+def test_editing_a_template_replaces_its_rows_still_ahead(client, world, monkeypatch):
+    from .conftest import freeze
+    freeze(monkeypatch, date(2026, 9, 24))
+    base = {"label": "Rent", "category_id": world["food"], "from_account_id": world["chk"], "amount": 1400,
+            "freq": "monthly", "next_date": "2026-09-24", "horizon_days": 45}
+    t = client.post("/api/recurring", json=base).json()
+    client.get("/api/bootstrap")
+    rows = lambda: [(x["date"], x["amount"]) for x in client.get("/api/transactions?q=Rent&sort=date&dir=asc").json()["items"]]
+    assert rows() == [("2026-09-24", 140000), ("2026-10-24", 140000)]
+    cur = client.get("/api/admin").json()["recurring"][0]
+    client.put(f"/api/recurring/{t['id']}", json={**base, "next_date": cur["next_date"], "amount": 1500})
+    client.get("/api/bootstrap")
+    assert rows() == [("2026-09-24", 140000), ("2026-10-24", 150000)]  # today's stays; the one ahead takes the new amount
+    # Moving the date earlier no longer doubles a month.
+    client.put(f"/api/recurring/{t['id']}", json={**base, "next_date": "2026-10-20", "amount": 1500})
+    client.get("/api/bootstrap")
+    assert rows() == [("2026-09-24", 140000), ("2026-10-20", 150000)]
+
+
+def test_pausing_takes_out_rows_ahead_and_resuming_brings_them_back(client, world, monkeypatch):
+    from .conftest import freeze
+    freeze(monkeypatch, date(2026, 9, 24))
+    base = {"label": "Gym", "category_id": world["food"], "from_account_id": world["chk"], "amount": 20,
+            "freq": "monthly", "next_date": "2026-10-01", "horizon_days": 45}
+    t = client.post("/api/recurring", json=base).json()
+    client.get("/api/bootstrap")
+    nxt = client.get("/api/admin").json()["recurring"][0]["next_date"]
+    client.put(f"/api/recurring/{t['id']}", json={**base, "next_date": nxt, "active": False})
+    assert client.get("/api/transactions?q=Gym").json()["items"] == []
+    assert client.get("/api/admin").json()["recurring"][0]["next_date"] == "2026-10-01"
+    client.put(f"/api/recurring/{t['id']}", json={**base, "next_date": "2026-10-01"})
+    client.get("/api/bootstrap")
+    assert [x["date"] for x in client.get("/api/transactions?q=Gym&sort=date&dir=asc").json()["items"]] == ["2026-10-01", "2026-11-01"]
