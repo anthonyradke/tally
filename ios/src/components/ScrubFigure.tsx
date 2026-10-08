@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { StyleSheet, TextInput, View, type TextStyle } from 'react-native'
 import Animated, { useAnimatedProps, useAnimatedStyle, type SharedValue } from 'react-native-reanimated'
 import { formatCentsW, type Sign } from '@/lib/money'
+import { mask, useHidden } from '@/lib/privacy'
 import { tabular, useTheme } from '@/theme'
 import { RollingMoney } from './Rolling'
 
@@ -21,17 +22,19 @@ export function ScrubFigure({ cents, values, labels, scrub, style, sign = 'auto'
   whole?: boolean
 }) {
   const { c } = useTheme()
+  const hidden = useHidden()
+  const shown = hidden ? labels.map(mask) : labels
   const rest = useAnimatedStyle(() => ({ opacity: scrub.get() < 0 ? 1 : 0 }))
   const live = useAnimatedStyle(() => ({ opacity: scrub.get() < 0 ? 0 : 1 }))
   const figure = useAnimatedProps(() => {
     const i = scrub.get()
     const v = i >= 0 && i < values.length ? values[i] : cents
-    const text = formatCentsW(v, !whole, sign)
+    const text = hidden ? (v < 0 ? '−$•••' : '$•••') : formatCentsW(v, !whole, sign)
     return { text, defaultValue: text } as never
   })
   const cap = useAnimatedProps(() => {
     const i = scrub.get()
-    const text = i >= 0 && i < labels.length ? labels[i] : ''
+    const text = i >= 0 && i < shown.length ? shown[i] : ''
     return { text, defaultValue: text } as never
   })
   const h = Math.round((style.fontSize ?? 17) * 1.2)

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ScrollView, View } from 'react-native'
+import { ScrollView, Switch, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import Constants from 'expo-constants'
@@ -9,6 +9,7 @@ import { Txt } from '@/components/Txt'
 import { api } from '@/lib/api'
 import { iconLabel, useAppIcon } from '@/lib/appIcon'
 import { useOutbox } from '@/lib/outbox'
+import { usePrivacy } from '@/lib/privacy'
 import { useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
 import { space, themeById, useTheme } from '@/theme'
@@ -24,6 +25,7 @@ export default function Settings() {
   const url = useServer((s) => s.url)
   const queued = useOutbox((s) => s.items)
   const icon = useAppIcon((s) => s.name)
+  const hidden = usePrivacy((s) => s.hidden)
   const backups = useQuery({ queryKey: ['backups'], queryFn: api.backups })
   const last = backups.data?.latest
   const [now] = useState(() => Date.now())
@@ -48,6 +50,8 @@ export default function Settings() {
           <Row label="Theme" value={themeById(theme).name} sf="paintpalette" md="palette" href="/settings/theme" />
           <Row label="App icon" value={iconLabel(icon)} sf="app.badge" md="apps" href="/settings/icon" />
           <Row label="Home screen" sub="Choose and order what Home shows" sf="square.stack" md="dashboard" href="/settings/home" />
+          <Row label="Hide amounts" sub="Every figure reads $••• until you switch it off. The eye on Home does the same." sf="eye.slash" md="visibility_off" chevron={false}
+            trailing={<Switch value={hidden} onValueChange={(v) => usePrivacy.getState().set(v)} />} />
           <Row label="Server" value={url ? url.replace(/^https?:\/\//, '').split('.')[0] : process.env.EXPO_OS === 'web' ? 'This site' : 'Not set'} sf="server.rack" md="dns" href="/settings/server" />
           {queued.length > 0 && <Row label="Waiting to send" value={String(queued.length)} sf="icloud.and.arrow.up" md="cloud_upload" href="/settings/server" />}
         </Group>

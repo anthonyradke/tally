@@ -22,6 +22,7 @@ import { api, ApiError, type Diagnosis, type Txn } from '@/lib/api'
 import { close } from '@/lib/nav'
 import { fromCents, press, toCents } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
+import { Reveal } from '@/lib/privacy'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
@@ -61,6 +62,7 @@ export default function Reconcile() {
   }
 
   return (
+    <Reveal.Provider value>
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView onScrollBeginDrag={closeSwipes} contentContainerStyle={{ padding: space.l, paddingTop: space.xl, gap: space.l }}>
         <View style={{ gap: 4 }}>
@@ -104,6 +106,7 @@ export default function Reconcile() {
       </LayoutAnimationConfig>
       <Confetti fire={party} origin={{ x: 0.5, y: 0.32 }} />
     </View>
+    </Reveal.Provider>
   )
 }
 

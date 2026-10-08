@@ -31,6 +31,7 @@ import { blank, fromCents, fromTxn, press, toCents, toInputs, useDraft, type Dra
 import { formatCents } from '@/lib/money'
 import { markFresh, useQuickFloat } from '@/lib/motion'
 import { QUEUED, sendOrQueue } from '@/lib/outbox'
+import { Reveal } from '@/lib/privacy'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
@@ -39,7 +40,7 @@ import { radius, space, useTheme } from '@/theme'
 const KINDS: [CatType, string][] = [['Spending', 'Spent'], ['Money in', 'Income'], ['Transfer', 'Transfer'], ['Saving', 'Saving'], ['Loan', 'Loan']]
 
 export default function EntryRoute() {
-  return <Entry />
+  return <Reveal.Provider value><Entry /></Reveal.Provider> // you're typing amounts here: they always show
 }
 
 /** The form. `embedded`: shown inside the new-entry steps (to split the draft they hand over), which keep their own

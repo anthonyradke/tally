@@ -35,6 +35,7 @@ import { formatCents } from '@/lib/money'
 import { markFresh, useQuickFloat } from '@/lib/motion'
 import { monthsNow } from '@/lib/months'
 import { QUEUED, sendOrQueue } from '@/lib/outbox'
+import { Reveal } from '@/lib/privacy'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
 import { nextStep, stepsFor, type Step } from '@/lib/steps'
 import { useTally } from '@/lib/tally'
@@ -310,7 +311,7 @@ export default function New() {
   )
 
   return (
-    <>
+    <Reveal.Provider value>
       <Stack.Screen options={{ title: 'New entry' }} />
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => close()} />
@@ -318,7 +319,7 @@ export default function New() {
       <View style={{ flex: 1 }}>
         <Pages page={form ? 'form' : 'steps'} dir={1} render={(k) => (k === 'form' ? <Entry embedded /> : flow)} />
       </View>
-    </>
+    </Reveal.Provider>
   )
 }
 

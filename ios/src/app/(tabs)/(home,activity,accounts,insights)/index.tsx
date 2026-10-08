@@ -31,6 +31,7 @@ import { compactCents, formatCents, pct } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
 import { useQuickFloat } from '@/lib/motion'
 import { usePace } from '@/lib/pace'
+import { usePrivacy } from '@/lib/privacy'
 import { usePullRefresh } from '@/lib/refresh'
 import { useTally } from '@/lib/tally'
 import { radius, space, font as ramp, useTheme } from '@/theme'
@@ -55,9 +56,12 @@ export default function Home() {
   const pull = usePullRefresh(q.refetch)
   const { c } = useTheme()
   const [waited] = useState(!b) // the skeleton showed first
+  const hidden = usePrivacy((s) => s.hidden)
   return (
     <>
       <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button icon={hidden ? 'eye.slash' : 'eye'} accessibilityLabel={hidden ? 'Show amounts' : 'Hide amounts'}
+          onPress={() => { Haptics.selectionAsync().catch(() => {}); usePrivacy.getState().set(!hidden) }} />
         <Stack.Toolbar.Button icon="gearshape" accessibilityLabel="Settings" onPress={() => router.push('/settings')} />
       </Stack.Toolbar>
       <ScrollView onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}

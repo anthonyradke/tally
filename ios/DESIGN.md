@@ -41,6 +41,8 @@ Changes to anything below get written here first.
   minimizes on scroll). The + in the middle opens the composer from anywhere; it's the only way in, so tab headers carry
   no + of their own. Tabs are peers; re-tapping one pops to its root. Settings is a gear on Home.
 - Each tab is a native stack with a large title. Detail screens (account, category, month end, settings) push.
+- Hide amounts (the eye on Home, or Settings) masks every figure as "$•••" where text is drawn (`Txt`, the rolling
+  figures, the scrub figure), keeping its sign. Screens where you type an amount wrap themselves in `Reveal`.
 - Adding an entry is a modal of short steps; editing one is a modal form with its own close and save. Short choices (category, account, date, bulk
   actions, filters, reconcile) are form sheets with a grabber. Nothing uses a confirm dialog: deletes happen and
   offer Undo.
