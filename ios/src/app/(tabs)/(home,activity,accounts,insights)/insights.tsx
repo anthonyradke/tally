@@ -11,6 +11,7 @@ import { Confetti } from '@/components/Confetti'
 import { Donut } from '@/components/Donut'
 import { EASE } from '@/components/ease'
 import { Glow } from '@/components/Glow'
+import { SpendCalendar } from '@/components/SpendCalendar'
 import { StoryButton } from '@/components/StoryButton'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
@@ -224,6 +225,7 @@ function Body({ b }: { b: Bootstrap }) {
           })}
         </Panel>
       </Section>
+      <SpendCalendar key={m.month} b={b} month={m.month} />
       </Animated.View>
 
       {/* The month above changes height; everything under it glides to its new place. */}
