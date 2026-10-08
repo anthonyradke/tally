@@ -15,6 +15,7 @@ import { Glow } from '@/components/Glow'
 import { SpendCalendar } from '@/components/SpendCalendar'
 import { StoryButton } from '@/components/StoryButton'
 import { TopPlaces } from '@/components/TopPlaces'
+import { Trends } from '@/components/Trends'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
@@ -234,6 +235,7 @@ function Body({ b }: { b: Bootstrap }) {
       {/* The month above changes height; everything under it glides to its new place. */}
       <Animated.View layout={LinearTransition.duration(340).easing(EASE)}>
       <CashFlow b={b} months={months} at={i} onPick={show} />
+      <Trends b={b} months={months} at={i} />
       <Commitments b={b} />
       <NetWorth b={b} />
 
