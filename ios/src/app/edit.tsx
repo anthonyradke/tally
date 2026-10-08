@@ -306,7 +306,7 @@ function RecurringForm({ f, set, a }: { f: Form; set: (p: Form) => void; a: Admi
         <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Next date</Txt>
         <DatePick value={String(f.next_date)} onChange={(v) => set({ next_date: v })} />
       </View>
-      <Group footer="Saving updates its entries still ahead (ones dated today or earlier stay as they are). Pausing takes them out; resuming skips the dates you missed.">
+      <Group footer="Saving updates its entries still ahead (ones dated today or earlier, or changed by hand, stay as they are). Pausing takes them out; resuming skips the dates you missed.">
         <Toggle label="Active" value={!!f.active} onChange={(v) => set({ active: v })} />
       </Group>
     </>

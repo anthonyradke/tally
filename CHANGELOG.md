@@ -64,7 +64,7 @@ Added
 Changed
 - Saving a recurring template updates the entries it already scheduled ahead: a new amount, category or account
   reaches them, and moving its date no longer posts a second entry next to the old one. Pausing takes its scheduled
-  entries out; entries dated today or earlier never change.
+  entries out. Entries dated today or earlier, and scheduled ones you changed by hand, stay as they are.
 - Activity folds entries scheduled for later into one "5 scheduled" row at the top, so the list opens on what has
   happened. Tap it to show them; a date filter or Upcoming lists them as before.
 - A category's type can't be changed while entries or recurring templates in it don't fit the new type (spending
