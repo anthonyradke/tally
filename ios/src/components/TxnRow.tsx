@@ -8,7 +8,7 @@ import { deleteTxns, openEntry } from '@/lib/actions'
 import { isFuture } from '@/lib/dates'
 import { useFresh } from '@/lib/motion'
 import { rowAmount } from '@/lib/txn'
-import type { MarkSpec } from '@/icons/merchants'
+import { merchantKey, type MarkSpec } from '@/icons/merchants'
 import { categoryVisual } from '@/icons/categories'
 import { space, useTheme } from '@/theme'
 import { EASE } from './ease'
@@ -52,6 +52,8 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
   const remove = () => fold.close(async () => { const ok = await deleteTxns([t]); if (!ok) setAttempt((n) => n + 1); return ok })
   const recategorize = () => router.push({ pathname: '/pick', params: { kind: 'bulk-category', ids: String(t.id), current: String(t.category_id) } })
   const duplicate = () => openEntry(t.id, 'duplicate')
+  const place = merchantKey(t.what)
+  const visit = () => router.push({ pathname: '/merchant/[key]', params: { key: place } })
   const left: SwipeAction[] = [{ label: 'Duplicate', sf: 'plus.square.on.square', md: 'content_copy', color: '#0A84FF', run: duplicate }]
   const right: SwipeAction[] = [
     { label: 'Category', sf: 'square.grid.2x2', md: 'category', color: '#8E8E93', run: recategorize },
@@ -104,20 +106,24 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
         accessible accessibilityRole="button"
         accessibilityLabel={`${t.what || c.name}, ${c.name}, ${amt.sign === 'always' ? '+' : ''}${(amt.cents / 100).toFixed(2)} dollars${where ? `, ${where}` : ''}${future ? ', scheduled' : ''}`}
         accessibilityState={selecting ? { selected: !!selected } : undefined}
-        accessibilityActions={[{ name: 'activate' }, ...(selecting ? [] : [{ name: 'edit', label: 'Edit' }, { name: 'duplicate', label: 'Duplicate to today' }, { name: 'category', label: 'Change category' }, { name: 'delete', label: 'Delete' }])]}
+        accessibilityActions={[{ name: 'activate' }, ...(selecting ? [] : [{ name: 'edit', label: 'Edit' }, { name: 'duplicate', label: 'Duplicate to today' }, { name: 'category', label: 'Change category' }, ...(place ? [{ name: 'place', label: `All at ${t.what}` }] : []), { name: 'delete', label: 'Delete' }])]}
         onAccessibilityAction={(e) => {
           const n = e.nativeEvent.actionName
-          if (n === 'activate') press(); else if (n === 'edit') openEntry(t.id); else if (n === 'duplicate') duplicate(); else if (n === 'category') recategorize(); else if (n === 'delete') remove()
+          if (n === 'activate') press(); else if (n === 'edit') openEntry(t.id); else if (n === 'duplicate') duplicate(); else if (n === 'category') recategorize(); else if (n === 'place') visit(); else if (n === 'delete') remove()
         }}>
         <SwipeRow left={left} right={right} enabled={!selecting} resetKey={`${t.id}:${attempt}`}>
           {web ? row : (
             <Link href={{ pathname: '/entry', params: { id: String(t.id) } }} asChild onPress={(e) => { e.preventDefault(); press() }}>
               <Link.Trigger>{row}</Link.Trigger>
+              {/* Actions as one array: a conditional child (null) in a native menu is the kind of thing Release builds drop. */}
               <Link.Menu>
-                <Link.MenuAction title="Edit" icon="pencil" onPress={() => openEntry(t.id)} />
-                <Link.MenuAction title="Duplicate to today" icon="plus.square.on.square" onPress={duplicate} />
-                <Link.MenuAction title="Change category" icon="square.grid.2x2" onPress={recategorize} />
-                <Link.MenuAction title="Delete" icon="trash" destructive onPress={remove} />
+                {[
+                  <Link.MenuAction key="edit" title="Edit" icon="pencil" onPress={() => openEntry(t.id)} />,
+                  <Link.MenuAction key="dup" title="Duplicate to today" icon="plus.square.on.square" onPress={duplicate} />,
+                  <Link.MenuAction key="cat" title="Change category" icon="square.grid.2x2" onPress={recategorize} />,
+                  ...(place ? [<Link.MenuAction key="place" title={`All at ${t.what}`} icon="storefront" onPress={visit} />] : []),
+                  <Link.MenuAction key="del" title="Delete" icon="trash" destructive onPress={remove} />,
+                ]}
               </Link.Menu>
             </Link>
           )}
