@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { blank } from '@/lib/draft'
-import { nextStep, stepsFor, type Step } from '@/lib/steps'
+import { needed, nextStep, stepsFor, type Step } from '@/lib/steps'
 
 const none = new Set<Step>()
 
@@ -31,4 +31,15 @@ test('steps: a step already shown is not asked again', () => {
   assert.equal(nextStep('from', d, none), 'to')
   assert.equal(nextStep('from', d, new Set<Step>(['to'])), 'review')
   assert.equal(nextStep('amount', { ...d, what: '' }, new Set<Step>(['what'])), 'to')
+})
+
+test('steps: a required step shown but left empty is asked again', () => {
+  const d = { ...blank('2026-09-25'), amount: '40', what: 'Shell' }
+  const seen = new Set<Step>(['what', 'category', 'from'])
+  assert.equal(nextStep('what', d, seen), 'category')
+  assert.equal(nextStep('what', { ...d, category_id: 4 }, seen), 'from')
+  assert.equal(nextStep('what', { ...d, category_id: 4, from_id: 2 }, seen), 'review')
+  assert.equal(needed('category', d), true)
+  assert.equal(needed('to', { ...d, kind: 'Saving' }), false)
+  assert.equal(needed('to', { ...d, kind: 'Transfer' }), true)
 })
