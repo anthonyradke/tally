@@ -11,6 +11,7 @@ import { Mark } from '@/components/Mark'
 import { merchantKey } from '@/icons/merchants'
 import { Money } from '@/components/Money'
 import { Glow } from '@/components/Glow'
+import { HAIRLINE } from '@/components/Panel'
 import { StateView } from '@/components/StateView'
 import { closeSwipes } from '@/components/SwipeRow'
 import { Tap } from '@/components/Tap'
@@ -253,7 +254,7 @@ export default function Activity() {
 function Divider({ sel }: { sel: SharedValue<number> }) {
   const { c } = useTheme()
   const style = useAnimatedStyle(() => ({ marginLeft: space.l + 40 + space.m + sel.get() * 34 }))
-  return <Animated.View style={[{ height: 0.5, backgroundColor: c.sep }, style]} />
+  return <Animated.View style={[{ height: HAIRLINE, backgroundColor: c.sep }, style]} />
 }
 
 function Sum({ label, cents, pos }: { label: string; cents: number; pos?: boolean }) {
