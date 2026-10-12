@@ -78,6 +78,8 @@ Changed
   entries.
 
 Fixed
+- Dividers were drawn 1.5 pixels tall and rounded to 1 or 2 depending on where they landed, so some all but vanished
+  (under Account in Activity's filters) and came back when something above moved. They're a steady 2 pixels now.
 - A credit card's page had Paid off and Charged the wrong way round.
 - Coming up on Home could be empty on a busy day: today's entries took its places.
 - Activity opened from Coming up didn't light the Upcoming chip and also listed today's entries.

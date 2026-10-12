@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { View, type StyleProp, type ViewStyle } from 'react-native'
+import { PixelRatio, View, type StyleProp, type ViewStyle } from 'react-native'
 import type { Href } from 'expo-router'
 import { radius, space, useTheme } from '@/theme'
 import { Icon } from './Icon'
@@ -38,8 +38,12 @@ export function Section({ title, href, action = 'See all', children, style }: {
   )
 }
 
+/** Half a point, snapped to whole pixels: at 1.5px a line rounded to 1px or 2px depending on where it landed, so some
+ *  dividers all but vanished (Activity's filters, under Account) and came back when something above moved. */
+export const HAIRLINE = PixelRatio.roundToNearestPixel(0.5)
+
 /** Hairline between rows, inset to the text column. */
 export function Hairline({ inset = 0 }: { inset?: number }) {
   const { c } = useTheme()
-  return <View style={{ height: 0.5, backgroundColor: c.sep, marginLeft: inset }} />
+  return <View style={{ height: HAIRLINE, backgroundColor: c.sep, marginLeft: inset }} />
 }
