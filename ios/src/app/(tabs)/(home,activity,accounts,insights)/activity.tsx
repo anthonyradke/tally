@@ -5,6 +5,7 @@ import { FlashList } from '@shopify/flash-list'
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import * as Haptics from 'expo-haptics'
 import Animated, { Easing, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
+import { AccountMark } from '@/components/AccountMark'
 import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
@@ -138,6 +139,12 @@ export default function Activity() {
       )}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
         {TYPES.map(([ty, label]) => <Chip key={label} label={label} selected={f.type === ty} onPress={() => set({ type: ty })} />)}
+        {/* Then one per account, in Settings' order; tapping the picked one again lets it go. */}
+        <View style={{ width: HAIRLINE * 2, marginVertical: space.s, backgroundColor: c.sep }} />
+        {t.b?.accounts.filter((a) => a.active || a.id === f.account).map((a) => (
+          <Chip key={`a${a.id}`} label={a.name} selected={f.account === a.id} leading={<AccountMark a={a} size={28} />}
+            onPress={() => set({ account: f.account === a.id ? undefined : a.id })} />
+        ))}
       </ScrollView>
       {queued.length > 0 && (
         <View style={{ marginHorizontal: space.l, padding: space.m, borderRadius: radius.input, backgroundColor: c.panel, flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
