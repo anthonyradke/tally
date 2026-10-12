@@ -8,6 +8,11 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## Unreleased
+Changed
+- The account chips in Activity have their own row under the types, starting with "All accounts", instead of
+  hiding at the far end of the type row.
+
 ## 3.5.0 (2026-10-12)
 Added
 - A loan's page has a Payoff section: when it will be paid off at the rate you're paying it (your recurring payment,
