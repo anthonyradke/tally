@@ -41,7 +41,7 @@ import { play } from '@/lib/sound'
 import { expression, operate, total, type Calc } from '@/lib/calc'
 import { fromLink } from '@/lib/capture'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
-import { nextStep, stepsFor, type Step } from '@/lib/steps'
+import { needed, nextStep, stepsFor, type Step } from '@/lib/steps'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
@@ -143,6 +143,7 @@ export default function New() {
   const next = () => {
     if (step === 'amount' && !settle()) return
     if (step === 'amount' && !toCents(useDraft.getState().d.amount)) { refuse(); return }
+    if (needed(step, useDraft.getState().d)) { refuse(); return } // a second tap on Next can't fly past an unpicked category
     go(nextStep(step, useDraft.getState().d, seen))
   }
   const back = () => (at > 0 ? go(steps[at - 1]) : close())
