@@ -8,7 +8,7 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## Unreleased
+## 3.5.0 (2026-10-12)
 Added
 - A loan's page has a Payoff section: when it will be paid off at the rate you're paying it (your recurring payment,
   or your average over the last few months), how much interest is still to come, and what $25 to $100 more a month
