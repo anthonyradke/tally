@@ -1,7 +1,6 @@
 // The home screen icon: the app's own icon or one of the glowing t's in assets/app-icons/ (app.config.js registers them
 // as alternate icons, named in PascalCase). The native module is loaded lazily so a build made before it existed, or
 // the web build, just reports that icons can't change instead of crashing.
-import Constants from 'expo-constants'
 import { create } from 'zustand'
 
 type Native = { supportsAlternateIcons: boolean; getAppIconName: () => string | null; setAlternateAppIcon: (n: string | null) => Promise<string | null> }
@@ -9,10 +8,9 @@ let native: Native | null = null
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 try { native = require('expo-alternate-app-icons') as Native } catch { native = null }
 
-const isDev = Constants.expoConfig?.ios?.bundleIdentifier?.endsWith('.dev') ?? false
 const THEMES = ['classic', 'aurora', 'sunset', 'ocean', 'citrus', 'blossom', 'forest', 'midnight'] as const
-const LABEL: Record<(typeof THEMES)[number] | 'dev', string> = {
-  classic: 'Classic', aurora: 'Aurora', sunset: 'Sunset', ocean: 'Ocean', citrus: 'Citrus', blossom: 'Blossom', forest: 'Forest', midnight: 'Midnight', dev: 'Dev',
+const LABEL: Record<(typeof THEMES)[number], string> = {
+  classic: 'Classic', aurora: 'Aurora', sunset: 'Sunset', ocean: 'Ocean', citrus: 'Citrus', blossom: 'Blossom', forest: 'Forest', midnight: 'Midnight',
 }
 const SOURCES: Record<string, number> = {
   'classic-black': require('../../assets/app-icons/classic-black.png'), 'classic-white': require('../../assets/app-icons/classic-white.png'),
@@ -23,7 +21,6 @@ const SOURCES: Record<string, number> = {
   'blossom-black': require('../../assets/app-icons/blossom-black.png'), 'blossom-white': require('../../assets/app-icons/blossom-white.png'),
   'forest-black': require('../../assets/app-icons/forest-black.png'), 'forest-white': require('../../assets/app-icons/forest-white.png'),
   'midnight-black': require('../../assets/app-icons/midnight-black.png'), 'midnight-white': require('../../assets/app-icons/midnight-white.png'),
-  'dev-black': require('../../assets/app-icons/dev-black.png'), 'dev-white': require('../../assets/app-icons/dev-white.png'),
 }
 const ORIGINAL = require('../../assets/icon.png')
 
@@ -33,10 +30,10 @@ export type AppIcon = { name: string | null; label: string; source: number }
 const pascal = (s: string) => s.replace(/(^|-)(\w)/g, (_, __, ch: string) => ch.toUpperCase())
 const alt = (file: string, label: string): AppIcon => ({ name: pascal(file), label, source: SOURCES[file] })
 
-export const DEFAULT_ICON: AppIcon = isDev ? { name: null, label: 'Dev', source: SOURCES['dev-black'] } : { name: null, label: 'Original', source: ORIGINAL }
+export const DEFAULT_ICON: AppIcon = { name: null, label: 'Original', source: ORIGINAL }
 export const ICON_GROUPS: { title: string; icons: AppIcon[] }[] = [
   { title: 'On black', icons: THEMES.map((t) => alt(`${t}-black`, LABEL[t])) },
-  { title: 'On white', icons: [...THEMES.map((t) => alt(`${t}-white`, LABEL[t])), ...(isDev ? [alt('dev-white', LABEL.dev)] : [])] },
+  { title: 'On white', icons: THEMES.map((t) => alt(`${t}-white`, LABEL[t])) },
 ]
 
 export const canChangeIcon = !!native?.supportsAlternateIcons
