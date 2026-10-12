@@ -139,10 +139,12 @@ export default function Activity() {
       )}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
         {TYPES.map(([ty, label]) => <Chip key={label} label={label} selected={f.type === ty} onPress={() => set({ type: ty })} />)}
-        {/* Then one per account, in Settings' order; tapping the picked one again lets it go. */}
-        <View style={{ width: HAIRLINE * 2, marginVertical: space.s, backgroundColor: c.sep }} />
+      </ScrollView>
+      {/* A second row, one per account in Settings' order, the same way the types work. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
+        <Chip label="All accounts" selected={!f.account} onPress={() => set({ account: undefined })} />
         {t.b?.accounts.filter((a) => a.active || a.id === f.account).map((a) => (
-          <Chip key={`a${a.id}`} label={a.name} selected={f.account === a.id} leading={<AccountMark a={a} size={28} />}
+          <Chip key={a.id} label={a.name} selected={f.account === a.id} leading={<AccountMark a={a} size={28} />}
             onPress={() => set({ account: f.account === a.id ? undefined : a.id })} />
         ))}
       </ScrollView>
