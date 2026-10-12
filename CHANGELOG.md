@@ -64,6 +64,8 @@ Added
   mix with music, and Settings → Sounds turns them off. (Needs a rebuild of the app; before that it stays silent.)
 - Hide amounts: the eye next to Settings on Home (or Settings → Hide amounts) turns every figure into $•••, charts
   and scrubbing included, until you switch it back. The keypad screens still show what you type.
+- Activity's chips go on past the types with one per account (in Settings' order, with its mark): tap one to see
+  only that account's entries, tap it again to let it go. It works alongside a type, so spending on one card is two taps.
 
 Changed
 - Home's large title says hello for the time of day ("Good morning", "Up late"). The tab is still Home.
