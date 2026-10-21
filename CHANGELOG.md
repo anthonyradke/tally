@@ -10,8 +10,12 @@ release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
 ## Unreleased
 Changed
-- The account chips in Activity have their own row under the types, starting with "All accounts", instead of
-  hiding at the far end of the type row.
+- The account chips in Activity have their own row under the types, starting with "Any account", instead of
+  hiding at the far end of the type row. Both rows scroll to keep the picked chip in view.
+
+Fixed
+- A saved view or link pointing at a deleted account no longer filters Activity to nothing with no chip lit, and
+  an archived account picked that way shows in the Filters sheet too.
 
 ## 3.5.0 (2026-10-12)
 Added
