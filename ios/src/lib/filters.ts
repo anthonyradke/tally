@@ -24,6 +24,9 @@ export const toQuery = (f: Filters): TxnQuery => ({
   tag: f.tag, group: f.group, sort: f.sort, dir: f.dir,
 })
 
+/** An id from a link or a saved view, or undefined when it isn't one (so a bad value can't filter silently). */
+export const toId = (v?: string | null) => (v && Number.isInteger(Number(v)) ? Number(v) : undefined)
+
 /** A saved view stores the filters as a query string. */
 export const viewQuery = (f: Filters): string =>
   new URLSearchParams(Object.entries(f).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])).toString()
@@ -31,7 +34,7 @@ export const viewQuery = (f: Filters): string =>
 /** The filters a saved view's query string stands for. */
 export function fromViewQuery(query: string): Filters {
   const p = new URLSearchParams(query)
-  const n = (k: string) => (p.get(k) ? Number(p.get(k)) : undefined)
+  const n = (k: string) => toId(p.get(k))
   return { q: p.get('q') ?? '', type: (p.get('type') ?? '') as CatType | '', category: n('category'), account: n('account'), start: p.get('start') ?? undefined,
     end: p.get('end') ?? undefined, tag: p.get('tag') ?? undefined, group: p.get('group') ?? undefined, sort: (p.get('sort') as Filters['sort']) ?? 'date', dir: (p.get('dir') as Filters['dir']) ?? 'desc' }
 }

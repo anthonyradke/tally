@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Children, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { RefreshControl, ScrollView, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
@@ -21,7 +21,7 @@ import { Txt } from '@/components/Txt'
 import { api, type CatType, type Txn } from '@/lib/api'
 import { deleteTxns } from '@/lib/actions'
 import { addDays, dayLabel } from '@/lib/dates'
-import { extraCount, toQuery, useFilters } from '@/lib/filters'
+import { extraCount, toId, toQuery, useFilters } from '@/lib/filters'
 import { formatCents } from '@/lib/money'
 import { useOutbox } from '@/lib/outbox'
 import { usePullRefresh } from '@/lib/refresh'
@@ -51,12 +51,17 @@ export default function Activity() {
     if (params.when === 'upcoming' && t.b) { p.start = addDays(t.b.today, 1); p.end = undefined; p.sort = 'date'; p.dir = 'asc' }
     if (params.day) { p.start = params.day; p.end = params.day; p.sort = 'date'; p.dir = 'desc' } // a day from Insights' calendar
     if (params.q) p.q = params.q // a place's page: everything with its name
-    if (params.category) p.category = Number(params.category)
-    if (params.account) p.account = Number(params.account)
+    if (params.category) p.category = toId(params.category)
+    if (params.account) p.account = toId(params.account)
     if (params.tag) p.tag = params.tag
     if (params.group) p.group = params.group
     if (Object.keys(p).length) set(p)
   }, [params.q, params.when, params.day, params.category, params.account, params.tag, params.group, t.b?.today]) // eslint-disable-line react-hooks/exhaustive-deps
+  // An account that's gone (deleted since a saved view, or a stale link) would filter to nothing with no chip lit.
+  useEffect(() => {
+    if (t.b && f.account != null && !t.b.accounts.some((a) => a.id === f.account)) set({ account: undefined })
+  }, [t.b, f.account]) // eslint-disable-line react-hooks/exhaustive-deps
+  const accounts = t.b?.accounts.filter((a) => a.active || a.id === f.account) ?? []
 
   const query = toQuery(f)
   const q = useInfiniteQuery({
@@ -137,17 +142,18 @@ export default function Activity() {
             style={{ flex: 1, fontSize: 17, color: c.label }} />
         </View>
       )}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
+      <ChipRow focus={TYPES.findIndex(([ty]) => ty === f.type)}>
         {TYPES.map(([ty, label]) => <Chip key={label} label={label} selected={f.type === ty} onPress={() => set({ type: ty })} />)}
-      </ScrollView>
-      {/* A second row, one per account in Settings' order, the same way the types work. */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
-        <Chip label="All accounts" selected={!f.account} onPress={() => set({ account: undefined })} />
-        {t.b?.accounts.filter((a) => a.active || a.id === f.account).map((a) => (
-          <Chip key={a.id} label={a.name} selected={f.account === a.id} leading={<AccountMark a={a} size={28} />}
-            onPress={() => set({ account: f.account === a.id ? undefined : a.id })} />
-        ))}
-      </ScrollView>
+      </ChipRow>
+      {/* A second row, one per account in Settings' order. Like the types, tapping a chip picks it; "Any account" lets go. */}
+      {accounts.length > 0 && (
+        <ChipRow focus={f.account == null ? 0 : accounts.findIndex((a) => a.id === f.account) + 1}>
+          <Chip key="any" label="Any account" selected={f.account == null} onPress={() => set({ account: undefined })} />
+          {accounts.map((a) => (
+            <Chip key={a.id} label={a.name} selected={f.account === a.id} leading={<AccountMark a={a} size={28} />} onPress={() => set({ account: a.id })} />
+          ))}
+        </ChipRow>
+      )}
       {queued.length > 0 && (
         <View style={{ marginHorizontal: space.l, padding: space.m, borderRadius: radius.input, backgroundColor: c.panel, flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
           <Icon sf="icloud.and.arrow.up" md="cloud_upload" size={16} color={c.warn} />
@@ -260,6 +266,31 @@ export default function Activity() {
 }
 
 /** The hairline between rows, inset to the text; it follows the text over when select mode slides the checks in. */
+/** A sideways row of chips that scrolls just far enough to keep the picked one (`focus`, a child's index) in view,
+ *  so a filter set from a link or a saved view never sits lit off the edge. */
+function ChipRow({ focus, children }: { focus: number; children: ReactNode }) {
+  const ref = useRef<ScrollView>(null)
+  const frames = useRef<{ x: number; w: number }[]>([])
+  const view = useRef({ x: 0, w: 0 })
+  const reveal = (i: number) => {
+    const fr = frames.current[i]
+    const { x, w } = view.current
+    if (!fr || !w) return
+    if (fr.x - space.l < x) ref.current?.scrollTo({ x: Math.max(0, fr.x - space.l), animated: true })
+    else if (fr.x + fr.w + space.l > x + w) ref.current?.scrollTo({ x: fr.x + fr.w + space.l - w, animated: true })
+  }
+  useEffect(() => reveal(focus), [focus]) // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <ScrollView ref={ref} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}
+      scrollEventThrottle={32} onScroll={(e) => { view.current.x = e.nativeEvent.contentOffset.x }}
+      onLayout={(e) => { view.current.w = e.nativeEvent.layout.width; reveal(focus) }}>
+      {Children.toArray(children).map((chip, i) => (
+        <View key={i} onLayout={(e) => { const { x, width } = e.nativeEvent.layout; frames.current[i] = { x, w: width }; if (i === focus) reveal(i) }}>{chip}</View>
+      ))}
+    </ScrollView>
+  )
+}
+
 function Divider({ sel }: { sel: SharedValue<number> }) {
   const { c } = useTheme()
   const style = useAnimatedStyle(() => ({ marginLeft: space.l + 40 + space.m + sel.get() * 34 }))

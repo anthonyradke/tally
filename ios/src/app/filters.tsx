@@ -85,7 +85,7 @@ export default function FiltersSheet() {
           })]}
         <Row label="Account" value={acct?.name ?? 'Any'} sf="building.columns" md="account_balance" onPress={() => setPickAcct((v) => !v)} />
         {pickAcct && [<Row key="any" label="Any account" chevron={false} onPress={() => { set({ account: undefined }); setPickAcct(false) }} />,
-          ...t.b.accounts.filter((a) => a.active).map((a) => (
+          ...t.b.accounts.filter((a) => a.active || a.id === f.account).map((a) => (
             <Row key={a.id} label={a.name} chevron={false} trailing={a.id === f.account ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : undefined}
               onPress={() => { set({ account: a.id }); setPickAcct(false) }} />
           ))]}
