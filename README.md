@@ -1,24 +1,53 @@
-# Tally
+<h1 align="center">Tally</h1>
 
-I used to track my money in a spreadsheet. Tally is what I built to replace it: an iPhone app backed by a small
-server on my home server. I use it every day.
+<p align="center">A personal finance app for iPhone, backed by a small self-hosted server.</p>
 
-This repo has both halves:
+<p align="center">
+  <img src="https://img.shields.io/badge/iOS-Expo%20SDK%2057-000?logo=apple" alt="iOS, Expo SDK 57">
+  <img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white" alt="Python 3.13">
+  <img src="https://img.shields.io/badge/FastAPI-SQLite-009688?logo=fastapi&logoColor=white" alt="FastAPI and SQLite">
+</p>
 
-- `app/` is the backend: Python 3.13, FastAPI and SQLite. It holds the data and all the money rules.
-- `ios/` is the iPhone app: Expo (React Native), SDK 57. It stores nothing itself and talks to the backend over
-  my private network (Tailscale).
+Tally is a ledger: every entry is one row with a date, a name, a category, an amount and a From and/or To account.
+Account balances are never stored. They are derived from the entries every time they're read, so there is nothing to
+drift out of sync. It replaced a spreadsheet and is in daily use.
 
-Tally started as a web app (a React PWA), and the iPhone app began as a separate project called Tallyho. In 3.0.0
-the iPhone app moved in here with its history and the web app was retired. Both are still in git history.
+The repo has two halves:
+
+- `app/`, the backend: Python 3.13, FastAPI and SQLite. It holds the data and enforces every money rule.
+- `ios/`, the iPhone app: Expo (React Native), SDK 57. It stores nothing of its own and talks to the backend over a
+  private network (Tailscale).
+
+<p align="center">
+  <img src="docs/screens.png" width="860" alt="Home, Activity and Accounts screens">
+</p>
+
+## Features
+
+- Home shows the month's net change, spending drawn against last month's pace (drag across the chart to read any
+  day), quick actions, budgets, goals, upcoming entries and recent activity.
+- Activity lists every entry by day, with search shortcuts (`>50`, `aug`, `#trip`), filters, saved views, a
+  long-press menu (edit, duplicate, delete with undo) and multi-select for recategorizing, tagging or deleting.
+- Adding an entry uses a large keypad, merchant memory (a known name fills in its category and account), date
+  shortcuts, refunds, splits, notes, tags and receipt photos.
+- Entries made without a connection wait on the phone and send themselves later, exactly once.
+- Entries can start from a link, `tally://new?amount=6.50&what=Starbucks&card=Amex`, so an iOS Shortcuts automation
+  can open a prefilled entry after every tap to pay.
+- Accounts shows assets against debts, a balance chart per account, and reconciliation against the bank with a
+  diagnosis when the numbers don't match. Loans show a payoff date and what extra monthly payments would save.
+- Insights has a month-by-month spending donut, budgets, cash flow, net worth, a month-end checklist and CSV export.
+- Recurring entries (with suggestions from repeating ones), budgets suggested from past spending, goals, a
+  configurable Home layout, and eight color themes in light and dark.
+
+<p align="center">
+  <img src="docs/themes.png" width="860" alt="Insights, New entry and Home in three other themes">
+</p>
 
 ## How it works
 
-Every entry is a single row with a date, a name, a category, an amount, and a From and/or To account.
-Balances are never stored. They're calculated from the rows every time, in `app/engine.py`. That file has no
-database access, which makes it easy to test.
+### The ledger
 
-The category decides which accounts an entry needs:
+The category type decides which accounts an entry needs, and the API rejects anything that breaks the rule:
 
 | Category type | From | To |
 |---|---|---|
@@ -27,84 +56,63 @@ The category decides which accounts an entry needs:
 | Transfer | yes | yes |
 | Saving, Loan | yes | optional |
 
-The API rejects anything that breaks these rules.
+Balances are computed in `app/engine.py`, which has no database access and is tested on its own. Money is stored
+as integer cents everywhere. Dollars only appear in request bodies and are converted once, on the way in.
 
-Money is stored as whole cents everywhere to avoid floating point errors. The only place dollars show up is in
-request bodies, and they get converted once when they come in.
-
-When I switched over, `app/importer.py` pulled in the old spreadsheet and checked that every balance matched to
+When the spreadsheet was retired, `app/importer.py` imported it and checked that every account balance matched to
 the cent.
 
-## What the app does
+### The app
 
-- Home shows net worth, this month's spending drawn against last month's pace (drag across the chart to read any
-  day), quick actions, budgets, where the money went, goals, what's coming up and recent entries.
-- Activity lists every entry grouped by day, with search (which also takes shortcuts like `>50`, `aug` and
-  `#trip`), filters, saved views, a long-press menu (edit, duplicate,
-  delete with undo) and multi-select for recategorizing, tagging or deleting.
-- Adding an entry has a big keypad, merchant memory (type a name and it fills in the category and account from last
-  time), date shortcuts, refunds, splits, notes, tags and receipt photos. If the phone can't reach the server, the
-  entry waits on the phone and sends itself later, never twice.
-- A new entry can also start from a link, `tally://new?amount=6.50&what=Starbucks&card=Amex`. I have an iOS Shortcuts
-  automation open it after every tap to pay, so most entries are one tap on Add.
-- Accounts shows balances, what I own against what I owe, and for each account a balance chart and reconciling
-  against the bank with a diagnosis when they don't match. A loan's page works out when it'll be paid off at the
-  current payment, and what paying a bit more each month would save.
-- Insights has a month-by-month spending donut, categories against budgets, cash flow, net worth, the month-end
-  checklist and CSV export.
-- Settings covers quick actions, recurring entries (with suggestions for entries that repeat), saved views, accounts, categories, budgets (with suggestions
-  from past spending), goals, the Home layout and the server address.
+The app is built with Expo Router, one file per screen. Pending entries live in a persisted outbox keyed by a client-generated id, which the server
+treats as idempotent, so a retry after a dropped response never creates a duplicate.
+
+Tally started as a React PWA. The iPhone app began as a separate repo and moved in here with its history in 3.0.0,
+when the web app was retired. Both are still in git history.
 
 ## Running the backend
 
-You'll need [uv](https://docs.astral.sh/uv/).
+Requires [uv](https://docs.astral.sh/uv/).
 
 ```sh
 uv sync
-uv run python scripts/seed_demo.py data/demo.db
+uv run python scripts/seed_demo.py data/demo.db       # optional: made-up data
 TALLY_DB=data/demo.db uv run uvicorn app.main:app --port 8000
+uv run pytest
 ```
 
-The seed step is optional. Skip it and set no `TALLY_DB` to start with an empty database.
-
-Tests: `uv run pytest`
-
-There's no login. Mine is only reachable over my private network, so don't put it on the open internet as is.
+Without `TALLY_DB` it starts with an empty database. There is no login: the server is meant to be reachable only
+on a private network.
 
 ## Running the app
 
-Inside `ios/`:
+From `ios/`:
 
 ```sh
 npm install
-echo 'EXPO_PUBLIC_TALLY_URL=https://<tally-host>:8443' > .env.local   # never committed
+echo 'EXPO_PUBLIC_TALLY_URL=https://<tally-host>:8443' > .env.local   # not committed
 npx expo start
+npm test
 ```
 
-To try it on my iPhone with Expo Go, I open Expo Go and enter `exp://<server's Tailscale IP>:8082` (or scan the
-QR code `expo start` prints). The phone needs Tailscale on.
+On a phone with Expo Go and Tailscale on, open `exp://<server's Tailscale IP>:8082` or scan the QR code.
 
-To install it as a real app with a free Apple ID, I run `npx expo run:ios --device --configuration Release` on the
-Mac with the iPhone plugged in and `.env.local` in place. The first time, I run `npx expo prebuild --platform ios`,
-pick my Personal Team under Signing & Capabilities in `ios/ios/Tally.xcworkspace`, and trust the profile on the
-phone under Settings › General › VPN & Device Management. With a paid Apple Developer account this would be
-`eas build` and TestFlight instead.
+To install a standalone build with a free Apple ID, run `npx expo prebuild --platform ios` once, pick a Personal Team
+under Signing & Capabilities in `ios/ios/Tally.xcworkspace`, then run
+`npx expo run:ios --device --configuration Release` with the phone connected. Trust the profile on the phone under
+Settings › General › VPN & Device Management. Re-running the same command reinstalls over the old copy and keeps
+cached data and queued entries.
 
-A free Apple ID only signs apps for 7 days, and after that Tally won't open. I plug the phone in, unlock it and run
-the same command again. It installs over the old copy, so cached data and any
-entries still waiting to send stay on the phone. If signing fails, I check that my Apple ID is still signed in
-under Xcode › Settings › Apple Accounts.
+For layout work without a phone, `npx expo start --web --port 8082` plus `node scripts/preview.mjs` serves the web
+build and the API from one origin on `http://127.0.0.1:8090`. `API_PORT=8001` points it at a backend running on a
+copy of the database.
 
-To check layouts on the server without a phone, run `npx expo start --web --port 8082` plus
-`node scripts/preview.mjs`, then open `http://127.0.0.1:8090`. Set `API_PORT=8001` to point it at a backend
-running on a copy of the database, so testing never writes to the real one.
-
-## Where things are
+## Layout
 
 ```
-app/engine.py        balance calculations
-app/db.py            database schema and connections
-app/migrate.py       schema changes
+app/engine.py        balance calculations (no database access)
+app/db.py            schema and connections
+app/migrate.py       schema migrations
 app/api*.py          the JSON API
 app/recurring.py     recurring entries
 app/search.py        search shortcuts (>50, aug, #trip)
@@ -112,10 +120,22 @@ app/importer.py      spreadsheet import
 app/main.py          app setup and CSV export
 tests/               backend tests, each against a throwaway database
 scripts/             demo data and backups
-ios/src/app          the app's screens, one file per route (Expo Router)
+ios/src/app          screens, one file per route (Expo Router)
 ios/src/components   rolling digits, the scrub chart, rows, panels, the keypad
-ios/src/lib          the API client and the money rules the screens need
-ios/src/theme        colors, type and spacing
+ios/src/lib          API client, outbox and the money rules the screens need
+ios/src/theme        colors, type, spacing and the eight themes
 ```
 
-Design notes are in `ios/DESIGN.md`. Release notes are in `CHANGELOG.md`.
+Design notes are in `ios/DESIGN.md` and release notes in `CHANGELOG.md`.
+
+## Known limitations
+
+- No authentication. Access control is the private network; don't expose the backend to the internet as is.
+- Single user and single currency (USD).
+- Apps signed with a free Apple ID expire after 7 days and have to be reinstalled from Xcode. A paid developer
+  account would allow `eas build` and TestFlight instead.
+- No bank sync. Entries are added by hand, by link or by Shortcuts automation, and balances are reconciled manually.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
