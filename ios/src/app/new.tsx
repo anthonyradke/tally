@@ -150,11 +150,18 @@ export default function New() {
   const back = () => (at > 0 ? go(steps[at - 1]) : close())
   const refuse = () => { shake(); play('error', 0.6); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
 
-  // Changing the kind drops a category and accounts that no longer fit it. Nothing is picked for you.
+  // Changing the kind drops a category and accounts that no longer fit it. Nothing is picked for you, except that the
+  // account it was opened from (an account's page, or Activity filtered to it) moves to whichever side still fits.
   const setKind = (kind: CatType) => {
     const s = SHAPES[kind]
-    set({ kind, category_id: cat?.type === kind ? d.category_id : null, refund: kind === 'Spending' ? d.refund : false,
-      from_id: s.from === 'blank' ? null : d.from_id, to_id: s.to === 'blank' ? null : d.to_id })
+    let from_id = s.from === 'blank' ? null : d.from_id
+    let to_id = s.to === 'blank' ? null : d.to_id
+    const home = from ? Number(from) : null
+    if (home && t.acct.has(home) && from_id !== home && to_id !== home) {
+      if (s.from === 'blank' && !to_id) to_id = home
+      else if (s.to === 'blank' && !from_id) from_id = home
+    }
+    set({ kind, category_id: cat?.type === kind ? d.category_id : null, refund: kind === 'Spending' ? d.refund : false, from_id, to_id })
   }
   // A quick action fills the draft (and moves on if it has an amount too); tapping it again takes it back out.
   const pickQuick = (id: number) => {

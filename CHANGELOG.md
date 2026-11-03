@@ -12,6 +12,8 @@ release gets a git tag (`v3.0.0`) and an entry here, newest first.
 Changed
 - The account chips in Activity have their own row under the types, starting with "Any account", instead of
   hiding at the far end of the type row. Both rows scroll to keep the picked chip in view.
+- Tapping + while Activity is filtered to one account starts the new entry on that account, as an account's own
+  page already did. Switching the entry to Income moves that account to the To side instead of dropping it.
 
 Fixed
 - Next in a new entry always goes to the next page. It used to jump past steps that already had an answer, so after a
