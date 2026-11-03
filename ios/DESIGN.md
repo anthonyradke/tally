@@ -34,6 +34,13 @@ Changes to anything below get written here first.
   the last, Back slides it away again, each question sits at the top of its page, and the header stays "New entry".
   The dots stretch and fill as you go, Back grows in beside Next, and the full form for a split slides in as one
   more page.
+- **Catching up, one account at a time.** For a week's entries at once there's Catch up (Activity's toolbar, an
+  account's page, or the top of a new entry). Its first page is the account picked from a row of chips and its newest
+  entries under "Where you left off", which is where to resume in the bank's app. Each entry is then two pages: the
+  day strip and "What was it?" with this account's usual places, then the keypad with the account's usual categories
+  as chips (and the other account for a transfer, with a button to turn it around). The account and day carry over,
+  Add saves at once and slides the next entry in, and a line at the top says what was added, with Undo. A same-amount
+  entry on the account within three days shows as a gentle "Already in Tally?" under the figure, never a refusal.
 - **Swipe rows like Mail (iOS 26).** Right: Duplicate. Left: Category, Edit, Delete. The actions come up as circles
   that grow with the swipe; keep going and the edge one (Duplicate, Delete) stretches into a capsule with a tick, and
   letting go runs it (Delete slides the row away, then it folds shut). A half swipe rests open; tapping the row,

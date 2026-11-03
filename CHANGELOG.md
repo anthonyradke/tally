@@ -17,6 +17,13 @@ Added
   MOHELA. Accounts set to the Chase, Amex, SoFi or Wells Fargo bank color show it on their own; the rest are picked
   under Logo in the account's settings. A small badge marks cards and interest-earning savings, so two accounts at
   one bank tell apart.
+- Catch up, for adding a week's entries at once. It opens from the button next to Activity's filters, from an
+  account's page, or from the top of a new entry. Pick an account and it shows that account's newest entries in
+  Tally, which is where to resume in the bank's app. Each entry asks only for the name and the amount: the account
+  stays the same, the day carries over to the next entry, and the account's usual places and categories come first.
+  Add saves straight away and starts the next one, with Undo for the last. An entry for the same amount on the
+  account within three days is pointed out in case it's already in Tally (a card payment entered from the checking
+  side, a scheduled bill).
 
 Changed
 - Accounts, categories and quick actions in Settings reorder by dragging: hold a row (or grab its handle in reorder

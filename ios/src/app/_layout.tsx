@@ -43,6 +43,7 @@ function RootStack() {
           remounts the screen (and threw away the keypad's animation state). */}
       <Stack.Screen name="entry" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
       <Stack.Screen name="new" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
+      <Stack.Screen name="catchup" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
       <Stack.Screen name="pick" options={{
         presentation: 'formSheet', sheetAllowedDetents: [0.6, 1], sheetGrabberVisible: true, headerShown: false,
         contentStyle: { backgroundColor: c.bg },

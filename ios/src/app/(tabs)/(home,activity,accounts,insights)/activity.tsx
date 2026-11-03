@@ -186,6 +186,8 @@ export default function Activity() {
           <Stack.Toolbar.Button key="filters" icon={extra ? 'line.3.horizontal.decrease.circle.fill' : 'line.3.horizontal.decrease.circle'}
             accessibilityLabel={extra ? `Filters, ${extra} on` : 'Filters'} onPress={() => router.push('/filters')} />,
           <Stack.Toolbar.Button key="select" icon="checkmark.circle" accessibilityLabel="Select entries" onPress={startSelect} />,
+          <Stack.Toolbar.Button key="catchup" icon="text.badge.plus" accessibilityLabel="Catch up an account"
+            onPress={() => router.push({ pathname: '/catchup', params: f.account != null ? { account: String(f.account) } : {} })} />,
         ]}
       </Stack.Toolbar>
       <View style={{ flex: 1, backgroundColor: c.bg }} collapsable={false}>

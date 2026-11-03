@@ -30,6 +30,8 @@ The repo has two halves:
   long-press menu (edit, duplicate, delete with undo) and multi-select for recategorizing, tagging or deleting.
 - Adding an entry uses a large keypad, merchant memory (a known name fills in its category and account), date
   shortcuts, refunds, splits, notes, tags and receipt photos.
+- Catch up adds a backlog for one account at a time: it shows the account's newest entries as the place to resume,
+  keeps the account and day from one entry to the next, and flags a same-amount entry already in Tally.
 - Entries made without a connection wait on the phone and send themselves later, exactly once.
 - Entries can start from a link, `tally://new?amount=6.50&what=Starbucks&card=Amex`, so an iOS Shortcuts automation
   can open a prefilled entry after every tap to pay.
