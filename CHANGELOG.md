@@ -9,6 +9,11 @@ The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/packa
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
 ## Unreleased
+Added
+- Settings > Activity filters (also reachable from the Filters sheet) picks which chip rows sit above Activity's
+  list (type, accounts, dates, categories, sort), their order, and which chips each row offers. Type, date and sort
+  chips can be reordered; account and category chips follow their Settings order and can be switched off.
+
 Changed
 - The account chips in Activity have their own row under the types, starting with "Any account", instead of
   hiding at the far end of the type row. Both rows scroll to keep the picked chip in view.

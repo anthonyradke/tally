@@ -1,6 +1,8 @@
-// Activity's filters, as a sheet over the list: dates, sort, category, account, tag, and saved views.
+// Activity's filters, as a sheet over the list: dates, sort, category, account, tag, saved views, and a way into
+// Settings to choose the chip rows Activity shows.
 import { useState } from 'react'
 import { ScrollView, TextInput, View } from 'react-native'
+import { router } from 'expo-router'
 import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
@@ -11,13 +13,11 @@ import { categoryVisual } from '@/icons/categories'
 import { api } from '@/lib/api'
 import { close } from '@/lib/nav'
 import { invalidateAll } from '@/lib/data'
-import { addDays, lastOfMonth, monthBefore, monthOf } from '@/lib/dates'
-import { extraCount, fromViewQuery, useFilters, viewQuery, type Filters } from '@/lib/filters'
+import { activeRange, ranges, SORTS } from '@/lib/filterBar'
+import { extraCount, fromViewQuery, useFilters, viewQuery } from '@/lib/filters'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
-
-type Range = 'all' | 'month' | 'last' | '90' | 'year' | 'upcoming'
 
 export default function FiltersSheet() {
   const { c, tint } = useTheme()
@@ -27,20 +27,9 @@ export default function FiltersSheet() {
   const [pickAcct, setPickAcct] = useState(false)
   const [viewName, setViewName] = useState('')
   if (!t.b) return null
-  const today = t.b.today
-  const lastStart = monthBefore(today)
-  const ranges: Record<Range, [string, Partial<Filters>]> = {
-    all: ['All time', { start: undefined, end: undefined }],
-    month: ['This month', { start: monthOf(today), end: lastOfMonth(today) }], // not next month's scheduled entries
-    last: ['Last month', { start: lastStart, end: addDays(monthOf(today), -1) }],
-    '90': ['90 days', { start: addDays(today, -90), end: undefined }],
-    year: ['This year', { start: `${today.slice(0, 4)}-01-01`, end: undefined }],
-    upcoming: ['Upcoming', { start: addDays(today, 1), end: undefined }],
-  }
-  const active = (Object.keys(ranges) as Range[]).find((k) => ranges[k][1].start === f.start && ranges[k][1].end === f.end) ?? null
+  const active = activeRange(f, t.b.today)
   const cat = f.category ? t.cat.get(f.category) : undefined
   const acct = f.account ? t.acct.get(f.account) : undefined
-  const sorts: [string, Partial<Filters>][] = [['Newest', { sort: 'date', dir: 'desc' }], ['Oldest', { sort: 'date', dir: 'asc' }], ['Largest', { sort: 'amount', dir: 'desc' }], ['Smallest', { sort: 'amount', dir: 'asc' }]]
 
   const saveView = async () => {
     try { await api.saveView({ name: viewName.trim(), query: viewQuery(f) }); await invalidateAll(); setViewName(''); toast({ text: `Saved "${viewName.trim()}"` }) }
@@ -62,14 +51,14 @@ export default function FiltersSheet() {
       <View style={{ gap: space.s }}>
         <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.xs }}>When</Txt>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-          {(Object.keys(ranges) as Range[]).map((k) => <Chip key={k} label={ranges[k][0]} selected={active === k} onPress={() => set({ ...ranges[k][1], ...(k === 'upcoming' ? { sort: 'date', dir: 'asc' } : {}) })} />)}
+          {ranges(t.b.today).map(([k, label, p]) => <Chip key={k} label={label} selected={active === k} onPress={() => set(p)} />)}
         </View>
       </View>
 
       <View style={{ gap: space.s }}>
         <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.xs }}>Sort</Txt>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-          {sorts.map(([label, s]) => <Chip key={label} label={label} selected={f.sort === s.sort && f.dir === s.dir} onPress={() => set(s)} />)}
+          {SORTS.map(([k, label, s]) => <Chip key={k} label={label} selected={f.sort === s.sort && f.dir === s.dir} onPress={() => set(s)} />)}
         </View>
       </View>
 
@@ -109,6 +98,10 @@ export default function FiltersSheet() {
           <Button label="Save" onPress={saveView} disabled={!viewName.trim()} />
         </View>
       </View>
+
+      <Group footer="Pick which chip rows sit above the list on Activity, and their order.">
+        <Row label="Customize filter bar" sf="slider.horizontal.3" md="tune" onPress={() => { close(); router.push('/settings/activity') }} />
+      </Group>
 
       <Button label="Show results" onPress={() => close()} style={{ height: 52 }} />
     </ScrollView>

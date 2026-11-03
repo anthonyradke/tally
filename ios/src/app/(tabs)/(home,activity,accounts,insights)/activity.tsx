@@ -1,12 +1,11 @@
-import { Children, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { RefreshControl, ScrollView, TextInput, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { RefreshControl, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import * as Haptics from 'expo-haptics'
 import Animated, { Easing, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
-import { AccountMark } from '@/components/AccountMark'
-import { Chip } from '@/components/Chip'
+import { FilterBar } from '@/components/FilterBar'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { merchantKey } from '@/icons/merchants'
@@ -18,7 +17,7 @@ import { closeSwipes } from '@/components/SwipeRow'
 import { Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
-import { api, type CatType, type Txn } from '@/lib/api'
+import { api, type Txn } from '@/lib/api'
 import { deleteTxns } from '@/lib/actions'
 import { addDays, dayLabel } from '@/lib/dates'
 import { extraCount, toId, toQuery, useFilters } from '@/lib/filters'
@@ -29,7 +28,6 @@ import { useTally } from '@/lib/tally'
 import { radius, space, useTheme } from '@/theme'
 
 const PAGE = 100
-const TYPES: [CatType | '', string][] = [['', 'All'], ['Spending', 'Spending'], ['Money in', 'Money in'], ['Transfer', 'Transfers'], ['Saving', 'Saving'], ['Loan', 'Loans']]
 
 type Item =
   | { kind: 'sched'; key: string; count: number; cents: number; open: boolean }
@@ -61,7 +59,6 @@ export default function Activity() {
   useEffect(() => {
     if (t.b && f.account != null && !t.b.accounts.some((a) => a.id === f.account)) set({ account: undefined })
   }, [t.b, f.account]) // eslint-disable-line react-hooks/exhaustive-deps
-  const accounts = t.b?.accounts.filter((a) => a.active || a.id === f.account) ?? []
 
   const query = toQuery(f)
   const q = useInfiniteQuery({
@@ -142,18 +139,7 @@ export default function Activity() {
             style={{ flex: 1, fontSize: 17, color: c.label }} />
         </View>
       )}
-      <ChipRow focus={TYPES.findIndex(([ty]) => ty === f.type)}>
-        {TYPES.map(([ty, label]) => <Chip key={label} label={label} selected={f.type === ty} onPress={() => set({ type: ty })} />)}
-      </ChipRow>
-      {/* A second row, one per account in Settings' order. Like the types, tapping a chip picks it; "Any account" lets go. */}
-      {accounts.length > 0 && (
-        <ChipRow focus={f.account == null ? 0 : accounts.findIndex((a) => a.id === f.account) + 1}>
-          <Chip key="any" label="Any account" selected={f.account == null} onPress={() => set({ account: undefined })} />
-          {accounts.map((a) => (
-            <Chip key={a.id} label={a.name} selected={f.account === a.id} leading={<AccountMark a={a} size={28} />} onPress={() => set({ account: a.id })} />
-          ))}
-        </ChipRow>
-      )}
+      <FilterBar />
       {queued.length > 0 && (
         <View style={{ marginHorizontal: space.l, padding: space.m, borderRadius: radius.input, backgroundColor: c.panel, flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
           <Icon sf="icloud.and.arrow.up" md="cloud_upload" size={16} color={c.warn} />
@@ -266,31 +252,6 @@ export default function Activity() {
 }
 
 /** The hairline between rows, inset to the text; it follows the text over when select mode slides the checks in. */
-/** A sideways row of chips that scrolls just far enough to keep the picked one (`focus`, a child's index) in view,
- *  so a filter set from a link or a saved view never sits lit off the edge. */
-function ChipRow({ focus, children }: { focus: number; children: ReactNode }) {
-  const ref = useRef<ScrollView>(null)
-  const frames = useRef<{ x: number; w: number }[]>([])
-  const view = useRef({ x: 0, w: 0 })
-  const reveal = (i: number) => {
-    const fr = frames.current[i]
-    const { x, w } = view.current
-    if (!fr || !w) return
-    if (fr.x - space.l < x) ref.current?.scrollTo({ x: Math.max(0, fr.x - space.l), animated: true })
-    else if (fr.x + fr.w + space.l > x + w) ref.current?.scrollTo({ x: fr.x + fr.w + space.l - w, animated: true })
-  }
-  useEffect(() => reveal(focus), [focus]) // eslint-disable-line react-hooks/exhaustive-deps
-  return (
-    <ScrollView ref={ref} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}
-      scrollEventThrottle={32} onScroll={(e) => { view.current.x = e.nativeEvent.contentOffset.x }}
-      onLayout={(e) => { view.current.w = e.nativeEvent.layout.width; reveal(focus) }}>
-      {Children.toArray(children).map((chip, i) => (
-        <View key={i} onLayout={(e) => { const { x, width } = e.nativeEvent.layout; frames.current[i] = { x, w: width }; if (i === focus) reveal(i) }}>{chip}</View>
-      ))}
-    </ScrollView>
-  )
-}
-
 function Divider({ sel }: { sel: SharedValue<number> }) {
   const { c } = useTheme()
   const style = useAnimatedStyle(() => ({ marginLeft: space.l + 40 + space.m + sel.get() * 34 }))

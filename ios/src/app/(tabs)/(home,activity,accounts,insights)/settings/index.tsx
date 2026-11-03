@@ -56,6 +56,7 @@ export default function Settings() {
           <Row label="Theme" value={themeById(theme).name} sf="paintpalette" md="palette" href="/settings/theme" />
           <Row label="App icon" value={iconLabel(icon)} sf="app.badge" md="apps" href="/settings/icon" />
           <Row label="Home screen" sub="Choose and order what Home shows" sf="square.stack" md="dashboard" href="/settings/home" />
+          <Row label="Activity filters" sub="Choose and order the chip rows above Activity" sf="line.3.horizontal.decrease.circle" md="filter_list" href="/settings/activity" />
           <Row label="Hide amounts" sub="Every figure reads $••• until you switch it off. The eye on Home does the same." sf="eye.slash" md="visibility_off" chevron={false}
             trailing={<Switch value={hidden} onValueChange={(v) => usePrivacy.getState().set(v)} />} />
           <Row label="Sounds" sub="Soft clicks and chimes under the haptics. The silent switch mutes them." sf="speaker.wave.2" md="volume_up" chevron={false}

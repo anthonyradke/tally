@@ -13,8 +13,8 @@ from .engine import KINDS, SHAPE_HINT, TYPES, Txn, month_of, validate
 from .inputs import bad, body, day, flag, ids, money, month, number, opt_id, opt_text, text, whole
 
 router = APIRouter(prefix="/api")
-SETTING_KEYS = {"start_month", "ef_months", "roth_limit", "home_layout", "theme", "merchant_marks", "roth_category",
-                "interest_category"}
+SETTING_KEYS = {"start_month", "ef_months", "roth_limit", "home_layout", "activity_filters", "theme", "merchant_marks",
+                "roth_category", "interest_category"}
 
 
 def _pct(v, what: str):
@@ -285,7 +285,8 @@ def delete_view(id: int, con: Con):
 # ---------- settings ----------
 @router.put("/settings")
 async def put_settings(request: Request, con: Con):
-    """Body: {key: value}. roth_limit arrives in dollars; home_layout and merchant_marks may be objects (stored as JSON)."""
+    """Body: {key: value}. roth_limit arrives in dollars; home_layout, activity_filters and merchant_marks may be
+    objects (stored as JSON)."""
     for k, v in (await body(request)).items():
         if k not in SETTING_KEYS:
             raise HTTPException(422, {"errors": [f"Unknown setting {k}."]})
@@ -307,7 +308,7 @@ async def put_settings(request: Request, con: Con):
             v = str(whole(v, "Category")) if v else ""
             if v and not con.execute("SELECT 1 FROM categories WHERE id=?", (int(v),)).fetchone():
                 raise HTTPException(422, {"errors": ["That category doesn't exist."]})
-        elif k in ("home_layout", "merchant_marks") and not isinstance(v, str):
+        elif k in ("home_layout", "activity_filters", "merchant_marks") and not isinstance(v, str):
             v = json.dumps(v)
         elif not isinstance(v, str):
             raise HTTPException(422, {"errors": [f"{k} must be text."]})
