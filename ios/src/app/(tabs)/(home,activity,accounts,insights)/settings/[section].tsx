@@ -1,12 +1,12 @@
 // Every Settings list in one route: accounts, categories, quick actions, recurring, saved views, budgets, goals,
 // the Home layout, Activity's filter rows, the theme, the app icon and the server. Item editors open as the `edit` modal.
 import { useEffect, useRef, useState } from 'react'
-import { ScrollView, Switch, TextInput, View } from 'react-native'
+import { Switch, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import Constants from 'expo-constants'
 import * as Haptics from 'expo-haptics'
 import { AccountMark } from '@/components/AccountMark'
-import { DragGroup, DragLock } from '@/components/DragGroup'
+import { DragGroup, DragScrollView } from '@/components/DragGroup'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Group, Row } from '@/components/Row'
@@ -42,7 +42,6 @@ export default function SettingsSection() {
   const { c } = useTheme()
   const admin = useAdmin()
   const [reorder, setReorder] = useState(false)
-  const [dragging, setDragging] = useState(false)
   const canAdd = ['accounts', 'categories', 'quick', 'recurring'].includes(section)
   const canOrder = ['accounts', 'categories', 'quick'].includes(section)
   const editKind = { accounts: 'account', categories: 'category', quick: 'quick', recurring: 'recurring' }[section]
@@ -55,23 +54,21 @@ export default function SettingsSection() {
           {canAdd && !reorder && <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add" onPress={() => router.push({ pathname: '/edit', params: { kind: editKind! } })} />}
         </Stack.Toolbar>
       )}
-      <DragLock value={setDragging}>
-        <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" scrollEnabled={!dragging} style={{ backgroundColor: c.bg }}
-          contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 100 }}>
-          {section === 'activity' ? <FilterBarSettings /> : section === 'capture' ? <Capture /> : section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
-            <>
-              {section === 'accounts' && <Accounts a={admin.data} reorder={reorder} />}
-              {section === 'categories' && <Categories a={admin.data} reorder={reorder} />}
-              {section === 'quick' && <Quick a={admin.data} reorder={reorder} />}
-              {section === 'recurring' && <RecurringList a={admin.data} />}
-              {section === 'views' && <Views a={admin.data} />}
-              {section === 'budgets' && <Budgets a={admin.data} />}
-              {section === 'general' && <General a={admin.data} />}
-              {section === 'home' && <HomeLayout a={admin.data} />}
-            </>
-          )}
-        </ScrollView>
-      </DragLock>
+      <DragScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" style={{ backgroundColor: c.bg }}
+        contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 100 }}>
+        {section === 'activity' ? <FilterBarSettings /> : section === 'capture' ? <Capture /> : section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
+          <>
+            {section === 'accounts' && <Accounts a={admin.data} reorder={reorder} />}
+            {section === 'categories' && <Categories a={admin.data} reorder={reorder} />}
+            {section === 'quick' && <Quick a={admin.data} reorder={reorder} />}
+            {section === 'recurring' && <RecurringList a={admin.data} />}
+            {section === 'views' && <Views a={admin.data} />}
+            {section === 'budgets' && <Budgets a={admin.data} />}
+            {section === 'general' && <General a={admin.data} />}
+            {section === 'home' && <HomeLayout a={admin.data} />}
+          </>
+        )}
+      </DragScrollView>
     </>
   )
 }

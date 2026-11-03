@@ -1,10 +1,15 @@
 // A grouped panel whose rows reorder by dragging, the way Reminders and Settings lists do it: press and hold a row
 // (or grab its handle in reorder mode) and it lifts with a shadow, the rows it passes slide out of its way with a
-// tick, and letting go drops it into the gap. Everything moves on the UI thread; the new order is saved on release.
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
-import { View } from 'react-native'
+// tick, and letting go drops it into the gap. Held near the top or bottom of the screen, the page scrolls along.
+// Everything moves on the UI thread; the new order is saved on release.
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { View, useWindowDimensions, type ScrollViewProps } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import Animated, { useAnimatedReaction, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated'
+import Animated, {
+  measure, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedStyle, useFrameCallback, useReducedMotion,
+  useScrollViewOffset, useSharedValue, withSpring, withTiming, type AnimatedRef, type SharedValue,
+} from 'react-native-reanimated'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { scheduleOnRN } from 'react-native-worklets'
 import * as Haptics from 'expo-haptics'
 import { radius, space, useTheme } from '@/theme'
@@ -12,12 +17,35 @@ import { Icon } from './Icon'
 import { HAIRLINE } from './Panel'
 import { Txt } from './Txt'
 
-/** Told when a drag starts and ends, so the screen can hold its scroll still meanwhile. */
-export const DragLock = createContext<(dragging: boolean) => void>(() => {})
+interface Scroll {
+  /** Told when a drag starts and ends, so the screen can hold its own scrolling still meanwhile. */
+  lock: (dragging: boolean) => void
+  ref: AnimatedRef<Animated.ScrollView> | null
+  offset: SharedValue<number> | null
+}
+/** Provided by the screen's scroll view (see `useDragScroll`), so a dragged row can scroll it. */
+const DragScroll = createContext<Scroll>({ lock: () => {}, ref: null, offset: null })
+
+/** The scroll view for a screen holding drag groups: it holds still while a row is dragged, and a row held near
+ *  its top or bottom edge scrolls it along. */
+export function DragScrollView({ children, ...props }: Omit<ScrollViewProps, 'scrollEnabled'>) {
+  const ref = useAnimatedRef<Animated.ScrollView>()
+  const offset = useScrollViewOffset(ref)
+  const [dragging, setDragging] = useState(false)
+  const value = useMemo(() => ({ lock: setDragging, ref, offset }), [ref, offset])
+  return (
+    <DragScroll value={value}>
+      <Animated.ScrollView ref={ref} {...props} scrollEnabled={!dragging}>{children}</Animated.ScrollView>
+    </DragScroll>
+  )
+}
 
 const EST = 50 // a row's height until it has been measured
 const SPRING = { damping: 30, stiffness: 340, mass: 0.8 }
 const HOLD = 260 // ms of press before a row lifts
+const EDGE = 80 // how close to the top or bottom of the visible page a held row starts it scrolling
+const NAV = 44, TABS = 49 // the header and tab bar the page scrolls under
+const SPEED = 14 // most points a frame the page scrolls, at the very edge
 
 interface Shared {
   order: SharedValue<string[]>
@@ -49,7 +77,7 @@ export function DragGroup<T>({ items, keyOf, render, onReorder, header, footer, 
   header?: string; footer?: string; handles?: boolean
 }) {
   const { c } = useTheme()
-  const lock = useContext(DragLock)
+  const { lock } = useContext(DragScroll)
   const keys = items.map((x) => String(keyOf(x)))
   const sig = keys.join('\n')
   const s: Shared = {
@@ -58,6 +86,7 @@ export function DragGroup<T>({ items, keyOf, render, onReorder, header, footer, 
     active: useSharedValue<string | null>(null),
     lift: useSharedValue(0),
   }
+  const box = useAnimatedRef<Animated.View>()
   const latest = useRef({ items, keys })
   useEffect(() => { latest.current = { items, keys } })
 
@@ -74,7 +103,7 @@ export function DragGroup<T>({ items, keyOf, render, onReorder, header, footer, 
     onReorder(list).then((ok) => { if (!ok) order.set(latest.current.keys) })
   }
 
-  const box = useAnimatedStyle(() => {
+  const boxStyle = useAnimatedStyle(() => {
     const ord = s.order.get(), h = s.heights.get()
     return { height: totalOf(ord, h), opacity: ord.every((k) => h[k] !== undefined) ? 1 : 0 }
   })
@@ -82,10 +111,10 @@ export function DragGroup<T>({ items, keyOf, render, onReorder, header, footer, 
   return (
     <View style={{ gap: 6 }}>
       {header && <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>{header}</Txt>}
-      <Animated.View style={[{ backgroundColor: c.panel, borderRadius: radius.panel, borderCurve: 'continuous' }, box]}>
+      <Animated.View ref={box} style={[{ backgroundColor: c.panel, borderRadius: radius.panel, borderCurve: 'continuous' }, boxStyle]}>
         {items.map((x, i) => {
           const k = keys[i]
-          return <Item key={k} k={k} s={s} start={i * EST} handles={handles} lock={lock} dropped={dropped}>{(handle) => render(x, handle)}</Item>
+          return <Item key={k} k={k} s={s} box={box} start={i * EST} handles={handles} lock={lock} dropped={dropped}>{(handle) => render(x, handle)}</Item>
         })}
       </Animated.View>
       {footer && <Txt variant="foot" tone="label2" style={{ paddingHorizontal: space.l, lineHeight: 16 }}>{footer}</Txt>}
@@ -93,8 +122,8 @@ export function DragGroup<T>({ items, keyOf, render, onReorder, header, footer, 
   )
 }
 
-function Item({ k, s, start, handles, lock, dropped, children }: {
-  k: string; s: Shared; start: number; handles: boolean
+function Item({ k, s, box, start, handles, lock, dropped, children }: {
+  k: string; s: Shared; box: AnimatedRef<Animated.View>; start: number; handles: boolean
   lock: (on: boolean) => void; dropped: (order: string[]) => void; children: (handle: ReactNode) => ReactNode
 }) {
   const { c } = useTheme()
@@ -102,6 +131,15 @@ function Item({ k, s, start, handles, lock, dropped, children }: {
   const y = useSharedValue(start)
   const from = useSharedValue(0)
   const mine = useSharedValue(false)
+  const dy = useSharedValue(0)       // the finger's travel
+  const finger = useSharedValue(0)   // the finger's height on screen
+  const scrolled = useSharedValue(0) // how far the page has scrolled along since the lift
+  const startOffset = useSharedValue(0)
+  const groupTop = useSharedValue(0) // the group's top on screen at the lift
+  const scroll = useContext(DragScroll)
+  const insets = useSafeAreaInsets()
+  const { height: screenH } = useWindowDimensions()
+  const vTop = insets.top + NAV, vBot = screenH - insets.bottom - TABS
 
   // Slide to this row's slot whenever the order or a height changes; only while something is being dragged does
   // it glide (a fresh list or a measurement just lands).
@@ -110,32 +148,37 @@ function Item({ k, s, start, handles, lock, dropped, children }: {
     y.set(s.active.get() !== null && !reduce ? withSpring(t, SPRING) : t)
   })
 
-  const lifted = () => { lock(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}) }
+  const lifted = () => { lock(true); frame.setActive(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}) }
   const tick = () => { Haptics.selectionAsync().catch(() => {}) }
 
-  const begin = () => {
+  const begin = (fy: number) => {
     'worklet'
     if (s.active.get() !== null && s.active.get() !== k) return
     mine.set(true)
     s.active.set(k)
     from.set(y.get())
+    dy.set(0)
+    finger.set(fy)
+    scrolled.set(0)
+    startOffset.set(scroll.offset?.get() ?? 0)
+    groupTop.set(measure(box)?.pageY ?? 0)
     s.lift.set(reduce ? 1 : withTiming(1, { duration: 160 }))
     scheduleOnRN(lifted)
   }
-  const move = (dy: number) => {
+  // Puts the row under the finger (allowing for the page scrolled along) and works out the slot it's over.
+  const place = () => {
     'worklet'
-    if (!mine.get()) return
     const ord = s.order.get(), h = s.heights.get()
     const tall = h[k] ?? EST
-    const ny = Math.min(Math.max(from.get() + dy, 0), totalOf(ord, h) - tall)
+    const ny = Math.min(Math.max(from.get() + dy.get() + scrolled.get(), 0), totalOf(ord, h) - tall)
     y.set(ny)
-    // The slot whose middle the row's middle has passed.
+    // The slot whose middle the row's middle has passed (pressed against the top, it takes the first slot).
     const mid = ny + tall / 2
     const rest = ord.filter((x) => x !== k)
     let at = rest.length, acc = 0
     for (let i = 0; i < rest.length; i++) {
       const hh = h[rest[i]] ?? EST
-      if (mid < acc + hh / 2) { at = i; break }
+      if (mid <= acc + hh / 2) { at = i; break }
       acc += hh
     }
     if (at !== ord.indexOf(k)) {
@@ -144,10 +187,38 @@ function Item({ k, s, start, handles, lock, dropped, children }: {
       scheduleOnRN(tick)
     }
   }
+  const move = (ty: number, fy: number) => {
+    'worklet'
+    if (!mine.get()) return
+    dy.set(ty)
+    finger.set(fy)
+    place()
+  }
+  // Each frame while held: near an edge, scroll the page toward the part of the group out of sight, faster the
+  // closer the finger, and never past the group's own ends.
+  const frame = useFrameCallback((f) => {
+    'worklet'
+    if (!mine.get() || !scroll.ref) return
+    const fy = finger.get()
+    const top = groupTop.get() - scrolled.get()
+    const bottom = top + totalOf(s.order.get(), s.heights.get())
+    const pace = Math.min((f.timeSincePreviousFrame ?? 16) / 16.7, 3)
+    const speed = (d: number) => (1 + Math.min(d, 1) ** 2 * (SPEED - 1)) * pace
+    let step = 0
+    if (fy < vTop + EDGE && top < vTop) step = -Math.min(speed((vTop + EDGE - fy) / EDGE), vTop - top)
+    else if (fy > vBot - EDGE && bottom > vBot) step = Math.min(speed((fy - vBot + EDGE) / EDGE), bottom - vBot)
+    if (step === 0) return
+    scrolled.set(scrolled.get() + step)
+    scrollTo(scroll.ref, 0, startOffset.get() + scrolled.get(), false)
+    place()
+  }, false)
+  const stop = () => frame.setActive(false)
+
   const end = () => {
     'worklet'
     if (!mine.get()) return
     mine.set(false)
+    scheduleOnRN(stop)
     const t = topOf(s.order.get(), s.heights.get(), k)
     s.lift.set(reduce ? 0 : withTiming(0, { duration: 220 }))
     const settle = () => { 'worklet'; if (s.active.get() === k) s.active.set(null) }
@@ -156,11 +227,11 @@ function Item({ k, s, start, handles, lock, dropped, children }: {
   }
 
   const hold = Gesture.Pan().activateAfterLongPress(HOLD)
-    .onStart(begin).onUpdate((e) => move(e.translationY)).onFinalize(end)
+    .onStart((e) => begin(e.absoluteY)).onUpdate((e) => move(e.translationY, e.absoluteY)).onFinalize(end)
   // The handle lifts the row at the first touch, before the scroll view can claim the drag.
   const grab = Gesture.Pan().manualActivation(true)
     .onTouchesDown((_e, m) => { m.activate() })
-    .onStart(begin).onUpdate((e) => move(e.translationY)).onFinalize(end)
+    .onStart((e) => begin(e.absoluteY)).onUpdate((e) => move(e.translationY, e.absoluteY)).onFinalize(end)
 
   const row = useAnimatedStyle(() => {
     const on = s.active.get() === k
