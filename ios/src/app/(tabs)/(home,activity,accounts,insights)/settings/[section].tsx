@@ -6,6 +6,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router'
 import Constants from 'expo-constants'
 import * as Haptics from 'expo-haptics'
 import { AccountMark } from '@/components/AccountMark'
+import { DragGroup, DragLock } from '@/components/DragGroup'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Group, Row } from '@/components/Row'
@@ -41,6 +42,7 @@ export default function SettingsSection() {
   const { c } = useTheme()
   const admin = useAdmin()
   const [reorder, setReorder] = useState(false)
+  const [dragging, setDragging] = useState(false)
   const canAdd = ['accounts', 'categories', 'quick', 'recurring'].includes(section)
   const canOrder = ['accounts', 'categories', 'quick'].includes(section)
   const editKind = { accounts: 'account', categories: 'category', quick: 'quick', recurring: 'recurring' }[section]
@@ -53,45 +55,32 @@ export default function SettingsSection() {
           {canAdd && !reorder && <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add" onPress={() => router.push({ pathname: '/edit', params: { kind: editKind! } })} />}
         </Stack.Toolbar>
       )}
-      <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" style={{ backgroundColor: c.bg }}
-        contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 100 }}>
-        {section === 'activity' ? <FilterBarSettings /> : section === 'capture' ? <Capture /> : section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
-          <>
-            {section === 'accounts' && <Accounts a={admin.data} reorder={reorder} />}
-            {section === 'categories' && <Categories a={admin.data} reorder={reorder} />}
-            {section === 'quick' && <Quick a={admin.data} reorder={reorder} />}
-            {section === 'recurring' && <RecurringList a={admin.data} />}
-            {section === 'views' && <Views a={admin.data} />}
-            {section === 'budgets' && <Budgets a={admin.data} />}
-            {section === 'general' && <General a={admin.data} />}
-            {section === 'home' && <HomeLayout a={admin.data} />}
-          </>
-        )}
-      </ScrollView>
+      <DragLock value={setDragging}>
+        <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" scrollEnabled={!dragging} style={{ backgroundColor: c.bg }}
+          contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 100 }}>
+          {section === 'activity' ? <FilterBarSettings /> : section === 'capture' ? <Capture /> : section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
+            <>
+              {section === 'accounts' && <Accounts a={admin.data} reorder={reorder} />}
+              {section === 'categories' && <Categories a={admin.data} reorder={reorder} />}
+              {section === 'quick' && <Quick a={admin.data} reorder={reorder} />}
+              {section === 'recurring' && <RecurringList a={admin.data} />}
+              {section === 'views' && <Views a={admin.data} />}
+              {section === 'budgets' && <Budgets a={admin.data} />}
+              {section === 'general' && <General a={admin.data} />}
+              {section === 'home' && <HomeLayout a={admin.data} />}
+            </>
+          )}
+        </ScrollView>
+      </DragLock>
     </>
   )
 }
 
-/** Up/down buttons shown while reordering; the new order is saved at once. */
-function Mover({ ids, i, save }: { ids: number[]; i: number; save: (ids: number[]) => Promise<unknown> }) {
-  const { c } = useTheme()
-  const move = (d: number) => {
-    const j = i + d
-    if (j < 0 || j >= ids.length) return
-    const next = [...ids]; [next[i], next[j]] = [next[j], next[i]]
-    Haptics.selectionAsync().catch(() => {})
-    write(() => save(next))
-  }
-  return (
-    <View style={{ flexDirection: 'row', gap: space.xs }}>
-      {[-1, 1].map((d) => (
-        <Tap key={d} feedback="opacity" onPress={() => move(d)} disabled={i + d < 0 || i + d >= ids.length} hitSlop={6} accessibilityLabel={d < 0 ? 'Move up' : 'Move down'}
-          style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c.fill, alignItems: 'center', justifyContent: 'center', opacity: i + d < 0 || i + d >= ids.length ? 0.3 : 1 }}>
-          <Icon sf={d < 0 ? 'chevron.up' : 'chevron.down'} md={d < 0 ? 'expand_less' : 'expand_more'} size={13} color={c.label} weight="bold" />
-        </Tap>
-      ))}
-    </View>
-  )
+/** The whole list's ids with one group's rows put in their new order, in the slots that group held. */
+function withGroup<T extends { id: number }>(all: T[], group: T[]): number[] {
+  const inGroup = new Set(group.map((x) => x.id))
+  let i = 0
+  return all.map((x) => (inGroup.has(x.id) ? group[i++] : x).id)
 }
 
 function Hidden() {
@@ -100,21 +89,20 @@ function Hidden() {
 }
 
 function Accounts({ a, reorder }: { a: AdminData; reorder: boolean }) {
-  const ids = a.accounts.map((x) => x.id)
   return (
     <>
       {(['cash', 'card', 'investment', 'loan'] as Kind[]).map((k) => {
         const list = a.accounts.filter((x) => x.kind === k)
         if (!list.length) return null
         return (
-          <Group key={k} header={KIND_LABEL[k]}>
-            {list.map((x) => (
-              <Row key={x.id} label={x.name} chevron={!reorder}
+          <DragGroup key={k} header={KIND_LABEL[k]} items={list} keyOf={(x) => x.id} handles={reorder}
+            onReorder={(next) => write(() => api.orderAccounts(withGroup(a.accounts, next)))}
+            render={(x, handle) => (
+              <Row label={x.name} chevron={!reorder}
                 leading={<AccountMark a={x} size={30} />}
-                trailing={reorder ? <Mover ids={ids} i={ids.indexOf(x.id)} save={api.orderAccounts} /> : !x.active ? <Hidden /> : undefined}
+                trailing={handle ?? (!x.active ? <Hidden /> : undefined)}
                 onPress={reorder ? undefined : () => router.push({ pathname: '/edit', params: { kind: 'account', id: String(x.id) } })} />
-            ))}
-          </Group>
+            )} />
         )
       })}
     </>
@@ -123,24 +111,23 @@ function Accounts({ a, reorder }: { a: AdminData; reorder: boolean }) {
 
 function Categories({ a, reorder }: { a: AdminData; reorder: boolean }) {
   const { tint } = useTheme()
-  const ids = a.categories.map((x) => x.id)
   return (
     <>
       {(['Spending', 'Money in', 'Transfer', 'Saving', 'Loan'] as CatType[]).map((ty) => {
         const list = a.categories.filter((x) => x.type === ty)
         if (!list.length) return null
         return (
-          <Group key={ty} header={ty}>
-            {list.map((x) => {
+          <DragGroup key={ty} header={ty} items={list} keyOf={(x) => x.id} handles={reorder}
+            onReorder={(next) => write(() => api.orderCategories(withGroup(a.categories, next)))}
+            render={(x, handle) => {
               const v = categoryVisual(x)
               return (
-                <Row key={x.id} label={x.name} chevron={!reorder} value={!reorder && x.budget ? `${formatCents(x.budget, { cents: false })}/mo` : undefined}
+                <Row label={x.name} chevron={!reorder} value={!reorder && x.budget ? `${formatCents(x.budget, { cents: false })}/mo` : undefined}
                   leading={<Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={30} />}
-                  trailing={reorder ? <Mover ids={ids} i={ids.indexOf(x.id)} save={api.orderCategories} /> : !x.active ? <Hidden /> : undefined}
+                  trailing={handle ?? (!x.active ? <Hidden /> : undefined)}
                   onPress={reorder ? undefined : () => router.push({ pathname: '/edit', params: { kind: 'category', id: String(x.id) } })} />
               )
-            })}
-          </Group>
+            }} />
         )
       })}
     </>
@@ -149,24 +136,23 @@ function Categories({ a, reorder }: { a: AdminData; reorder: boolean }) {
 
 function Quick({ a, reorder }: { a: AdminData; reorder: boolean }) {
   const { tint } = useTheme()
-  const ids = a.favorites.map((x) => x.id)
   const cats = new Map(a.categories.map((x) => [x.id, x]))
   const accts = new Map(a.accounts.map((x) => [x.id, x]))
   if (!a.favorites.length) return <Empty sf="bolt" md="bolt" title="No quick actions" body="A quick action is a one-tap start for an entry you log often, like Gas on the Amex." />
   return (
-    <Group footer="Quick actions show on Home and at the top of a new entry.">
-      {a.favorites.map((f) => {
+    <DragGroup footer="Quick actions show on Home and at the top of a new entry.." items={a.favorites} keyOf={(f) => f.id} handles={reorder}
+      onReorder={(next) => write(() => api.orderFavorites(next.map((f) => f.id)))}
+      render={(f, handle) => {
         const cat = cats.get(f.category_id)
         const v = cat ? categoryVisual({ ...cat, icon: f.icon ?? cat.icon, color: f.color ?? cat.color }) : null
         const where = [f.from_account_id, f.to_account_id].filter(Boolean).map((id) => accts.get(id!)?.name).join(' → ')
         return (
-          <Row key={f.id} label={f.label} sub={[cat?.name, where, f.amount ? formatCents(f.amount) : ''].filter(Boolean).join(', ')} chevron={!reorder}
+          <Row label={f.label} sub={[cat?.name, where, f.amount ? formatCents(f.amount) : ''].filter(Boolean).join(', ')} chevron={!reorder}
             leading={v ? <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={30} /> : undefined}
-            trailing={reorder ? <Mover ids={ids} i={ids.indexOf(f.id)} save={api.orderFavorites} /> : undefined}
+            trailing={handle ?? undefined}
             onPress={reorder ? undefined : () => router.push({ pathname: '/edit', params: { kind: 'quick', id: String(f.id) } })} />
         )
-      })}
-    </Group>
+      }} />
   )
 }
 

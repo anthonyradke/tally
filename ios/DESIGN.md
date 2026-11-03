@@ -39,6 +39,11 @@ Changes to anything below get written here first.
   letting go runs it (Delete slides the row away, then it folds shut). A half swipe rests open; tapping the row,
   swiping another or scrolling closes it. Long press has the same actions in a menu, lifted as a rounded rectangle.
 
+- **Drag to reorder.** Accounts, categories and quick actions in Settings reorder the way Reminders does: hold a row
+  and it lifts with a shadow, the rows it passes slide aside with a tick, and letting go drops it and saves the
+  order. The reorder button in the header shows grab handles that lift a row at the first touch. Rows move within
+  their own group (a Spending category stays under Spending).
+
 - **A month as a story.** A finished month can be played as full-screen pages (`app/story.tsx`): one fact per page
   in big white type on a full-bleed gradient of its own, bars at the top that fill as it plays, tap sides to move,
   hold to pause, swipe down to close. The only place the app leaves its grouped-panel look, on purpose: it's the

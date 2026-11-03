@@ -15,6 +15,8 @@ Added
   chips can be reordered; account and category chips follow their Settings order and can be switched off.
 
 Changed
+- Accounts, categories and quick actions in Settings reorder by dragging: hold a row (or grab its handle in reorder
+  mode) and drop it where it goes, instead of stepping it with up and down buttons.
 - The account chips in Activity have their own row under the types, starting with "Any account", instead of
   hiding at the far end of the type row. Both rows scroll to keep the picked chip in view.
 - Tapping + while Activity is filtered to one account starts the new entry on that account, as an account's own
