@@ -1,6 +1,7 @@
 // Adding an entry, one question at a time: amount and type, what it was, category, accounts, then a review with the
 // date and Add. Tapping an answer moves on by itself, and Back and Next are always there. Picking a past entry or a
-// quick action fills in what it knows, and Next skips those steps. Editing an entry uses the form (entry.tsx).
+// quick action fills in what it knows and starts past those steps; Next goes one page at a time. Editing an entry
+// uses the form (entry.tsx).
 // A new entry starts empty: no category or account is guessed for you.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, ScrollView, Switch, TextInput, View } from 'react-native'
@@ -41,7 +42,7 @@ import { play } from '@/lib/sound'
 import { expression, operate, total, type Calc } from '@/lib/calc'
 import { fromLink } from '@/lib/capture'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
-import { needed, nextStep, stepsFor, type Step } from '@/lib/steps'
+import { needed, nextStep, stepAfter, stepsFor, type Step } from '@/lib/steps'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
@@ -144,7 +145,7 @@ export default function New() {
     if (step === 'amount' && !settle()) return
     if (step === 'amount' && !toCents(useDraft.getState().d.amount)) { refuse(); return }
     if (needed(step, useDraft.getState().d)) { refuse(); return } // a second tap on Next can't fly past an unpicked category
-    go(nextStep(step, useDraft.getState().d, seen))
+    go(stepAfter(step, useDraft.getState().d)) // one page at a time: jumping past filled-in steps felt like skipping
   }
   const back = () => (at > 0 ? go(steps[at - 1]) : close())
   const refuse = () => { shake(); play('error', 0.6); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }

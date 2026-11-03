@@ -14,6 +14,8 @@ Changed
   hiding at the far end of the type row. Both rows scroll to keep the picked chip in view.
 
 Fixed
+- Next in a new entry always goes to the next page. It used to jump past steps that already had an answer, so after a
+  quick action or going back it could leap from the amount straight to the accounts.
 - A saved view or link pointing at a deleted account no longer filters Activity to nothing with no chip lit, and
   an archived account picked that way shows in the Filters sheet too.
 

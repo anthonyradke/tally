@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { blank } from '@/lib/draft'
-import { needed, nextStep, stepsFor, type Step } from '@/lib/steps'
+import { needed, nextStep, stepAfter, stepsFor, type Step } from '@/lib/steps'
 
 const none = new Set<Step>()
 
@@ -42,4 +42,13 @@ test('steps: a required step shown but left empty is asked again', () => {
   assert.equal(needed('category', d), true)
   assert.equal(needed('to', { ...d, kind: 'Saving' }), false)
   assert.equal(needed('to', { ...d, kind: 'Transfer' }), true)
+})
+
+test('steps: Next goes one page on, even past steps already filled', () => {
+  const d = { ...blank('2026-09-25'), amount: '40', what: 'Shell', category_id: 4, from_id: 2 }
+  assert.equal(stepAfter('amount', d), 'what')
+  assert.equal(stepAfter('what', d), 'category')
+  assert.equal(stepAfter('category', d), 'from')
+  assert.equal(stepAfter('from', d), 'review')
+  assert.equal(stepAfter('from', { ...d, kind: 'Transfer' }), 'to')
 })
