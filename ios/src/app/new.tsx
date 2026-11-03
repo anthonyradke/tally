@@ -426,6 +426,10 @@ function What({ history, onPick, onSubmit }: { history: Txn[]; onPick: (x: Txn) 
   // Focus once the page has slid in: focusing it while it's still off to the side can drag its parent along with it.
   const input = useRef<TextInput>(null)
   useEffect(() => { const id = setTimeout(() => input.current?.focus(), PAGE_MS); return () => clearTimeout(id) }, [])
+  // Losing focus can make iOS send one last change with the text it still had ("Mc"), landing after a pick and
+  // overwriting the name. After a pick, nothing the field sends counts until it's focused again.
+  const picked = useRef(false)
+  const pick = (x: Txn) => { picked.current = true; input.current?.blur(); onPick(x) }
   const list = useMemo(() => {
     const k = merchantKey(d.what)
     const seen = new Set<string>()
@@ -441,13 +445,13 @@ function What({ history, onPick, onSubmit }: { history: Txn[]; onPick: (x: Txn) 
   }, [d.what, d.kind, history]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
-      <TextInput ref={input} value={d.what} onChangeText={(what) => set({ what })} placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'}
-        placeholderTextColor={c.label3} returnKeyType="next" onSubmitEditing={onSubmit} submitBehavior="submit" autoCapitalize="words" autoCorrect={false}
+      <TextInput ref={input} value={d.what} onChangeText={(what) => { if (!picked.current) set({ what }) }} onFocus={() => { picked.current = false }}
+        placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'} placeholderTextColor={c.label3} returnKeyType="next" onSubmitEditing={onSubmit} submitBehavior="submit" autoCapitalize="words" autoCorrect={false}
         maxFontSizeMultiplier={1.4} style={{ fontSize: 22, fontWeight: '600', color: c.label, paddingVertical: space.s, paddingHorizontal: space.xs }} />
       {list.length > 0 && (
         <Group header={d.what ? 'Matches' : 'Recent'}>
           {list.map((x) => (
-            <Row key={x.id} label={x.what} sub={t.catOf(x).name} chevron={false} onPress={() => onPick(x)} leading={<CatMark id={x.category_id} />}
+            <Row key={x.id} label={x.what} sub={t.catOf(x).name} chevron={false} onPress={() => pick(x)} leading={<CatMark id={x.category_id} />}
               value={<Money cents={x.amount} tone="neutral" muted variant="callout" />} />
           ))}
         </Group>

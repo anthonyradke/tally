@@ -129,7 +129,13 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     set({ kind, category_id: keepCat ? d.category_id : null, refund: kind === 'Spending' ? d.refund : false,
       from_id: s.from === 'blank' ? null : d.from_id, to_id: s.to === 'blank' ? null : d.to_id, split: kind === 'Spending' ? d.split : null })
   }
+  // Losing focus can make iOS send one last change with the text it still had, overwriting the pick: ignore the field
+  // until it's focused again.
+  const whatInput = useRef<TextInput>(null)
+  const picked = useRef(false)
   const pickSuggestion = (x: Txn) => {
+    picked.current = true
+    whatInput.current?.blur()
     const ty = t.catOf(x).type
     set({ what: x.what, category_id: x.category_id, from_id: x.from_id, to_id: x.to_id, kind: ty })
     setTyping(false)
@@ -283,8 +289,8 @@ export function Entry({ embedded }: { embedded?: boolean }) {
           </Tap>
 
           <View style={{ gap: space.s }}>
-            <TextInput value={d.what} onChangeText={(what) => set({ what })} placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'}
-              placeholderTextColor={c.label3} onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} returnKeyType="done"
+            <TextInput ref={whatInput} value={d.what} onChangeText={(what) => { if (!picked.current) set({ what }) }} placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'}
+              placeholderTextColor={c.label3} onFocus={() => { picked.current = false; setTyping(true) }} onBlur={() => setTyping(false)} returnKeyType="done"
               autoCapitalize="words" autoCorrect={false} maxFontSizeMultiplier={1.4}
               style={{ fontSize: 22, fontWeight: '600', textAlign: 'center', color: c.label, paddingVertical: space.s }} />
             {suggestions.length > 0 && (

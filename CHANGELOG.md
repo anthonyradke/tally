@@ -25,6 +25,8 @@ Fixed
   quick action or going back it could leap from the amount straight to the accounts.
 - A saved view or link pointing at a deleted account no longer filters Activity to nothing with no chip lit, and
   an archived account picked that way shows in the Filters sheet too.
+- Picking a past name while typing "What was it?" keeps the full name. Now and then the text typed so far ("Mc")
+  came back over it on the next page.
 
 ## 3.5.0 (2026-10-12)
 Added
