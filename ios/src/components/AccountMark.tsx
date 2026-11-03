@@ -35,12 +35,15 @@ export function AccountMark({ a, size }: { a: Look; size?: number }) {
 export function LogoMark({ logo, badge, size }: { logo: Logo; badge?: [SFSymbol, string] | null; size: number }) {
   const t = useTheme()
   const i = t.dark ? 1 : 0
-  const [x, y, w, h] = logo.box
-  const k = (size * logo.scale) / Math.max(w, h) // the ink's longer side fills `scale` of the disc
+  const [x0, y0, w0, h0] = logo.box
+  const k = (size * logo.scale) / Math.max(w0, h0) // the ink's longer side fills `scale` of the disc
+  // A margin round the ink, the same on every side: ink that touches the viewBox edge gets cut off when drawn.
+  const m = Math.max(w0, h0) * 0.05
+  const [x, y, w, h] = [x0 - m, y0 - m, w0 + 2 * m, h0 + 2 * m]
   const b = Math.round(size * 0.42)
   return (
     <View accessibilityLabel={logo.title} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: logo.bg[i], alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={w * k} height={h * k} viewBox={`${x} ${y} ${w} ${h}`}><Path d={logo.path} fill={logo.fg[i]} /></Svg>
+      <Svg width={w * k} height={h * k} viewBox={`${x} ${y} ${w} ${h}`}><Path d={logo.path} fill={logo.fg[i]} fillRule={logo.evenodd ? 'evenodd' : 'nonzero'} /></Svg>
       {badge && (
         <View style={{ position: 'absolute', right: -size * 0.07, bottom: -size * 0.07, width: b, height: b, borderRadius: b / 2, backgroundColor: t.c.panel, alignItems: 'center', justifyContent: 'center' }}>
           <View style={{ width: b - 3, height: b - 3, borderRadius: (b - 3) / 2, backgroundColor: t.c.label2, alignItems: 'center', justifyContent: 'center' }}>
