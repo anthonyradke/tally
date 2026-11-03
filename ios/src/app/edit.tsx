@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react'
 import { KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
-import { AccountMark } from '@/components/AccountMark'
+import { AccountMark, LogoMark } from '@/components/AccountMark'
 import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
@@ -15,6 +15,7 @@ import { Group, Row } from '@/components/Row'
 import { StateView } from '@/components/StateView'
 import { Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
+import { LOGO_IDS, LOGOS } from '@/icons/banks'
 import { categoryVisual, GLYPH_NAMES, GLYPHS, KIND_SYMBOL } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
 import { close } from '@/lib/nav'
@@ -158,12 +159,26 @@ function Choice<T extends string | number | null>({ label, value, options, onCha
 function AccountForm({ f, set }: { f: Form; set: (p: Form) => void }) {
   const kind = f.kind as Kind
   const { c, tint } = useTheme()
-  const look = { kind, bank: f.bank as string | null, icon: f.icon as string | null, color: f.color as string | null }
+  const look = { kind, bank: f.bank as string | null, icon: f.icon as string | null, color: f.color as string | null, apy: Number(f.apy) || null }
   return (
     <>
       <View style={{ alignItems: 'center' }}><AccountMark a={look} size={72} /></View>
       <Group><Field label="Name" value={String(f.name)} onChange={(v) => set({ name: v })} auto /></Group>
       <Segmented options={[['cash', 'Cash'], ['card', 'Card'], ['investment', 'Invest'], ['loan', 'Loan']]} value={kind} onChange={(v) => set({ kind: v })} />
+      <View style={{ gap: space.s }}>
+        <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Logo</Txt>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.m, paddingHorizontal: space.xs }}>
+          {LOGO_IDS.map((id) => {
+            const on = f.icon === `logo:${id}`
+            return (
+              <Tap key={id} feedback="scale" onPress={() => set({ icon: on ? null : `logo:${id}`, color: null })} accessibilityLabel={LOGOS[id].title} accessibilityState={{ selected: on }}
+                style={{ borderRadius: 22, borderWidth: 2, borderColor: on ? c.ink : 'transparent', padding: 2 }}>
+                <LogoMark logo={LOGOS[id]} size={36} />
+              </Tap>
+            )
+          })}
+        </View>
+      </View>
       <View style={{ gap: space.s }}>
         <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Bank color</Txt>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
@@ -176,7 +191,7 @@ function AccountForm({ f, set }: { f: Form; set: (p: Form) => void }) {
         <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Or a color of its own</Txt>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.m, paddingHorizontal: space.xs }}>
           {TINTS.map((k) => (
-            <Tap key={k} feedback="scale" onPress={() => set({ color: f.color === k ? null : k })} accessibilityLabel={k} accessibilityState={{ selected: f.color === k }}
+            <Tap key={k} feedback="scale" onPress={() => set({ color: f.color === k ? null : k, icon: String(f.icon ?? '').startsWith('logo:') ? null : f.icon })} accessibilityLabel={k} accessibilityState={{ selected: f.color === k }}
               style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: tint(k as Tint), borderWidth: f.color === k ? 3 : 0, borderColor: c.panel, boxShadow: f.color === k ? `0 0 0 2px ${c.ink}` : undefined }}>
               <View />
             </Tap>

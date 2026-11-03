@@ -13,6 +13,10 @@ Added
 - Settings > Activity filters (also reachable from the Filters sheet) picks which chip rows sit above Activity's
   list (type, accounts, dates, categories, sort), their order, and which chips each row offers. Type, date and sort
   chips can be reordered; account and category chips follow their Settings order and can be switched off.
+- Accounts can show their bank's logo: Chase, Amex, SoFi, Wells Fargo, X Money, Schwab, Empower, Alight and
+  MOHELA. Accounts set to the Chase, Amex, SoFi or Wells Fargo bank color show it on their own; the rest are picked
+  under Logo in the account's settings. A small badge marks cards and interest-earning savings, so two accounts at
+  one bank tell apart.
 
 Changed
 - Accounts, categories and quick actions in Settings reorder by dragging: hold a row (or grab its handle in reorder

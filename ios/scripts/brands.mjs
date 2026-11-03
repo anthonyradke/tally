@@ -1,10 +1,10 @@
-// Writes src/icons/brands.ts: just the simple-icons glyphs the merchant registry uses, so the app bundle doesn't
-// carry all ~3,000. Run after adding a brand to src/icons/merchants.ts: `node scripts/brands.mjs`.
+// Writes src/icons/brands.ts: just the simple-icons glyphs the merchant and account-logo registries use, so the app
+// bundle doesn't carry all ~3,000. Run after adding a brand to src/icons/merchants.ts or banks.ts: `node scripts/brands.mjs`.
 import * as si from 'simple-icons'
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const reg = readFileSync(new URL('../src/icons/merchants.ts', import.meta.url), 'utf8')
-const names = [...new Set([...reg.matchAll(/brand\('(si\w+)'/g)].map((m) => m[1]))].sort()
+const reg = ['merchants', 'banks'].map((f) => readFileSync(new URL(`../src/icons/${f}.ts`, import.meta.url), 'utf8')).join('\n')
+const names = [...new Set([...reg.matchAll(/(?:brand|glyph)\('(si\w+)'/g)].map((m) => m[1]))].sort()
 const rows = names.map((n) => {
   const i = si[n]
   if (!i) throw new Error(`simple-icons has no ${n}`)
