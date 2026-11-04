@@ -8,6 +8,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
+import { Field } from '@/components/Field'
 import { CheckDraw } from '@/components/CheckDraw'
 import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
@@ -289,7 +290,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
           </Tap>
 
           <View style={{ gap: space.s }}>
-            <TextInput ref={whatInput} value={d.what} onChangeText={(what) => { if (!picked.current) set({ what }) }} placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'}
+            <Field ref={whatInput} value={d.what} onChangeText={(what) => { if (!picked.current) set({ what }) }} placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'}
               placeholderTextColor={c.label3} onFocus={() => { picked.current = false; setTyping(true) }} onBlur={() => setTyping(false)} returnKeyType="done"
               autoCapitalize="words" autoCorrect={false} maxFontSizeMultiplier={1.4}
               style={{ fontSize: 22, fontWeight: '600', textAlign: 'center', color: c.label, paddingVertical: space.s }} />
@@ -358,12 +359,12 @@ export function Entry({ embedded }: { embedded?: boolean }) {
           <Group>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
               <Icon sf="text.alignleft" md="notes" size={18} color={c.label2} />
-              <TextInput value={d.note} onChangeText={(note) => set({ note })} placeholder="Note" placeholderTextColor={c.label3} multiline
+              <Field value={d.note} onChangeText={(note) => set({ note })} placeholder="Note" placeholderTextColor={c.label3} multiline
                 onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
               <Icon sf="number" md="tag" size={18} color={c.label2} />
-              <TextInput value={tagText ?? d.tags.join(' ')} placeholder="Tags, separated by spaces" placeholderTextColor={c.label3}
+              <Field value={tagText ?? d.tags.join(' ')} placeholder="Tags, separated by spaces" placeholderTextColor={c.label3}
                 autoCapitalize="none" autoCorrect={false} onFocus={() => setTyping(true)} onBlur={() => { setTyping(false); setTagText(null) }}
                 onChangeText={(v) => { setTagText(v); set({ tags: v.split(/\s+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean) }) }}
                 style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />

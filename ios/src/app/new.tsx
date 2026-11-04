@@ -9,6 +9,7 @@ import Animated, { Easing, interpolateColor, useAnimatedStyle, useReducedMotion,
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
+import { Field } from '@/components/Field'
 import { CheckDraw } from '@/components/CheckDraw'
 import { Chip } from '@/components/Chip'
 import { DateStrip } from '@/components/DateStrip'
@@ -455,7 +456,7 @@ function What({ history, onPick, onSubmit }: { history: Txn[]; onPick: (x: Txn) 
   }, [d.what, d.kind, history]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
-      <TextInput ref={input} value={d.what} onChangeText={(what) => { if (!picked.current) set({ what }) }} onFocus={() => { picked.current = false }}
+      <Field ref={input} value={d.what} onChangeText={(what) => { if (!picked.current) set({ what }) }} onFocus={() => { picked.current = false }}
         placeholder={d.kind === 'Money in' ? 'Where from?' : 'What was it?'} placeholderTextColor={c.label3} returnKeyType="next" onSubmitEditing={onSubmit} submitBehavior="submit" autoCapitalize="words" autoCorrect={false}
         maxFontSizeMultiplier={1.4} style={{ fontSize: 22, fontWeight: '600', color: c.label, paddingVertical: space.s, paddingHorizontal: space.xs }} />
       {list.length > 0 && (
@@ -515,12 +516,12 @@ function Extras({ onSplit }: { onSplit: () => void }) {
       {d.kind === 'Spending' && <Row label="Split across categories" sf="square.split.2x1" md="call_split" onPress={onSplit} />}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
         <Icon sf="text.bubble" md="chat" size={18} color={c.label2} />
-        <TextInput value={d.note} onChangeText={(note) => set({ note })} placeholder="Note" placeholderTextColor={c.label3} multiline
+        <Field value={d.note} onChangeText={(note) => set({ note })} placeholder="Note" placeholderTextColor={c.label3} multiline
           style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
         <Icon sf="number" md="tag" size={18} color={c.label2} />
-        <TextInput value={tagText ?? d.tags.join(' ')} placeholder="Tags, separated by spaces" placeholderTextColor={c.label3}
+        <Field value={tagText ?? d.tags.join(' ')} placeholder="Tags, separated by spaces" placeholderTextColor={c.label3}
           autoCapitalize="none" autoCorrect={false} onBlur={() => setTagText(null)}
           onChangeText={(v) => { setTagText(v); set({ tags: v.split(/\s+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean) }) }}
           style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />

@@ -16,6 +16,7 @@ import { radius, space, useTheme } from '@/theme'
 import { AccountMark } from './AccountMark'
 import { Chip } from './Chip'
 import { DateStrip } from './DateStrip'
+import { Field } from './Field'
 import { Icon } from './Icon'
 import { Keypad } from './Keypad'
 import { Mark } from './Mark'
@@ -130,7 +131,7 @@ export function What({ acct, history, count, last, onUndo, onPick, onSubmit }: {
         </View>
       )}
       <DateStrip />
-      <TextInput ref={input} value={d.what} onChangeText={(what) => { if (!picked.current) set({ what }) }} onFocus={() => { picked.current = false }} placeholder="What was it?"
+      <Field ref={input} value={d.what} onChangeText={(what) => { if (!picked.current) set({ what }) }} onFocus={() => { picked.current = false }} placeholder="What was it?"
         placeholderTextColor={c.label3} returnKeyType="next" onSubmitEditing={onSubmit} submitBehavior="submit" autoCapitalize="words" autoCorrect={false}
         maxFontSizeMultiplier={1.4} style={{ fontSize: 22, fontWeight: '600', color: c.label, paddingVertical: space.s, paddingHorizontal: space.xs }} />
       {list.length > 0 && (

@@ -35,6 +35,8 @@ Changed
   page already did. Switching the entry to Income moves that account to the To side instead of dropping it.
 
 Fixed
+- Typing a name, note or tags no longer sometimes jumps the cursor to the front of the field mid-word ("McD" turning
+  into "onaldsMcD").
 - Next in a new entry always goes to the next page. It used to jump past steps that already had an answer, so after a
   quick action or going back it could leap from the amount straight to the accounts.
 - A saved view or link pointing at a deleted account no longer filters Activity to nothing with no chip lit, and
