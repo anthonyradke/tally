@@ -1,17 +1,17 @@
 // Settings > Activity filters: which chip rows sit above Activity's list, their order, and the chips in each. Rows and
-// the chips whose order is free drag to reorder, like Settings > Accounts.
+// chips drag to reorder, like Settings > Accounts.
 import { useState, type ReactNode } from 'react'
 import { Switch } from 'react-native'
 import { DragGroup } from '@/components/DragGroup'
-import { Group, Row } from '@/components/Row'
+import { Row } from '@/components/Row'
 import { useAdmin, write } from '@/lib/admin'
 import { api } from '@/lib/api'
-import { barChips, barRows, movable, orderChips, orderRows, parseBar, ROW_NAMES, toggleChip, toggleRow, type BarRow, type Saved } from '@/lib/filterBar'
+import { barChips, barRows, orderChips, orderRows, parseBar, ROW_NAMES, toggleChip, toggleRow, type BarRow, type Saved } from '@/lib/filterBar'
 import { useTally } from '@/lib/tally'
 
-const ORDER_FOOT: Partial<Record<BarRow, string>> = {
-  account: 'In the order set in Settings > Accounts. Hidden accounts never show.',
-  category: 'In the order set in Settings > Categories. Hidden categories never show.',
+const FOOT: Partial<Record<BarRow, string>> = {
+  account: 'Starts in the order set in Settings > Accounts. Hidden accounts never show.',
+  category: 'Starts in the order set in Settings > Categories. Hidden categories never show.',
 }
 
 export function FilterBarSettings({ reorder }: { reorder: boolean }) {
@@ -39,14 +39,12 @@ export function FilterBarSettings({ reorder }: { reorder: boolean }) {
         const row = r.id as BarRow
         const chips = barChips(s, row, b)
         if (!chips.length) return null
-        const chip = (x: (typeof chips)[number], handle: ReactNode = null) => (
+        const chip = (x: (typeof chips)[number], handle: ReactNode) => (
           <Row key={x.id} label={x.label} chevron={false}
             trailing={handle ?? <Switch value={x.on} onValueChange={(on) => { save(toggleChip(s, row, x.id, on)) }} />} />
         )
-        return movable(row)
-          ? <DragGroup key={row} header={ROW_NAMES[row]} items={chips} keyOf={(x) => x.id} handles={reorder}
-              onReorder={(next) => save(orderChips(s, row, b, next.map((x) => x.id)))} render={chip} />
-          : <Group key={row} header={ROW_NAMES[row]} footer={ORDER_FOOT[row]}>{chips.map((x) => chip(x))}</Group>
+        return <DragGroup key={row} header={ROW_NAMES[row]} footer={FOOT[row]} items={chips} keyOf={(x) => x.id} handles={reorder}
+          onReorder={(next) => save(orderChips(s, row, b, next.map((x) => x.id)))} render={chip} />
       })}
     </>
   )

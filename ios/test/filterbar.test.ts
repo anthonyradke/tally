@@ -24,7 +24,9 @@ test('filter bar: rows and chips follow the saved order, and new ones join at th
   s = orderChips(s, 'type', b, ['Spending', 'Transfer', 'Money in', 'Saving', 'Loan']) // Transfers above Money in
   assert.deepEqual(barChips(s, 'type', b).map((c) => c.id), ['Spending', 'Transfer', 'Money in', 'Saving', 'Loan'])
   assert.deepEqual(barRows({ order: ['sort', 'type'], hidden: [] }).map((r) => r.id), ['sort', 'type', 'account', 'when', 'category'])
-  assert.equal(orderChips(s, 'account', b, ['2', '1']), s) // accounts keep Settings' order
+  assert.deepEqual(barChips(s, 'account', b).map((c) => c.id), ['1', '2']) // accounts start in Settings' order
+  s = orderChips(s, 'account', b, ['2', '1'])
+  assert.deepEqual(barChips(s, 'account', b).map((c) => c.id), ['2', '1'])
 })
 
 test('filter bar: a chip switched off still shows while it is the one picked', () => {

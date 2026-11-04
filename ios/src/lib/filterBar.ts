@@ -48,9 +48,6 @@ export function barRows(s: Saved): Item[] {
   return ordered(ROWS, s.order).map((id) => ({ id, on: !hidden.has(id) }))
 }
 
-/** Whether a row's chips can be put in any order. Accounts and categories keep the order set for them in Settings. */
-export const movable = (row: BarRow) => row === 'type' || row === 'when' || row === 'sort'
-
 /** Every chip a row can offer (past its "any" chip), with its label. Hidden accounts and categories are left out. */
 export function chipChoices(row: BarRow, b: Bootstrap): [string, string][] {
   switch (row) {
@@ -68,7 +65,7 @@ export function barChips(s: Saved, row: BarRow, b: Bootstrap): (Item & { label: 
   const ids = all.map(([id]) => id)
   const c = s.chips?.[row]
   const hidden = new Set(c?.hidden ?? [])
-  return (movable(row) ? ordered(ids, c?.order) : ids).map((id) => ({ id, label: label.get(id)!, on: !hidden.has(id) }))
+  return ordered(ids, c?.order).map((id) => ({ id, label: label.get(id)!, on: !hidden.has(id) }))
 }
 
 /** The rows and chips Activity shows. A chip turned off still shows while it's the one picked (from a link or a saved
@@ -102,7 +99,6 @@ export function toggleRow(s: Saved, id: string, on: boolean): Saved {
   return { ...s, order: rows.map((r) => r.id), hidden: rows.filter((r) => (r.id === id ? !on : !r.on)).map((r) => r.id) }
 }
 export function orderChips(s: Saved, row: BarRow, b: Bootstrap, ids: string[]): Saved {
-  if (!movable(row)) return s
   const o = ordered(barChips(s, row, b).map((c) => c.id), ids)
   return { ...s, chips: { ...s.chips, [row]: { ...s.chips?.[row], order: o } } }
 }
