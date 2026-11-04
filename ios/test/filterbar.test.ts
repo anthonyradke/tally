@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bar, barChips, barRows, moveChip, moveRow, parseBar, toggleChip, toggleRow } from '@/lib/filterBar'
+import { bar, barChips, barRows, orderChips, orderRows, parseBar, toggleChip, toggleRow } from '@/lib/filterBar'
 import type { Filters } from '@/lib/filters'
 import { acct, boot, cat } from './fixtures.ts'
 
@@ -18,13 +18,13 @@ test('filter bar: nothing saved shows the type and account rows, as before', () 
 
 test('filter bar: rows and chips follow the saved order, and new ones join at their default place', () => {
   let s = toggleRow({}, 'category', true)
-  s = moveRow(s, 3) // category above dates
+  s = orderRows(s, ['type', 'account', 'category', 'when', 'sort']) // category dragged above dates
   assert.deepEqual(barRows(s).map((r) => r.id), ['type', 'account', 'category', 'when', 'sort'])
   assert.deepEqual(bar(withSetting(s), F).map((r) => r.row), ['type', 'account', 'category'])
-  s = moveChip(s, 'type', b, 2) // Transfers up one, above Money in
+  s = orderChips(s, 'type', b, ['Spending', 'Transfer', 'Money in', 'Saving', 'Loan']) // Transfers above Money in
   assert.deepEqual(barChips(s, 'type', b).map((c) => c.id), ['Spending', 'Transfer', 'Money in', 'Saving', 'Loan'])
   assert.deepEqual(barRows({ order: ['sort', 'type'], hidden: [] }).map((r) => r.id), ['sort', 'type', 'account', 'when', 'category'])
-  assert.equal(moveChip(s, 'account', b, 1), s) // accounts keep Settings' order
+  assert.equal(orderChips(s, 'account', b, ['2', '1']), s) // accounts keep Settings' order
 })
 
 test('filter bar: a chip switched off still shows while it is the one picked', () => {

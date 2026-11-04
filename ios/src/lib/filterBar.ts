@@ -92,21 +92,18 @@ export function bar(b: Bootstrap, f: Filters): { row: BarRow; chips: { id: strin
   })
 }
 
-/** The setting after one change: a row or chip moved up one place, or switched on or off. */
-export function moveRow(s: Saved, i: number): Saved {
+/** The setting after one change: the rows or a row's chips put in a new order (as dragged), or one switched on or off. */
+export function orderRows(s: Saved, ids: string[]): Saved {
   const rows = barRows(s)
-  if (i <= 0 || i >= rows.length) return s
-  const o = rows.map((r) => r.id); [o[i - 1], o[i]] = [o[i], o[i - 1]]
-  return { ...s, order: o, hidden: rows.filter((r) => !r.on).map((r) => r.id) }
+  return { ...s, order: ordered(rows.map((r) => r.id), ids), hidden: rows.filter((r) => !r.on).map((r) => r.id) }
 }
 export function toggleRow(s: Saved, id: string, on: boolean): Saved {
   const rows = barRows(s)
   return { ...s, order: rows.map((r) => r.id), hidden: rows.filter((r) => (r.id === id ? !on : !r.on)).map((r) => r.id) }
 }
-export function moveChip(s: Saved, row: BarRow, b: Bootstrap, i: number): Saved {
-  const chips = barChips(s, row, b)
-  if (!movable(row) || i <= 0 || i >= chips.length) return s
-  const o = chips.map((c) => c.id); [o[i - 1], o[i]] = [o[i], o[i - 1]]
+export function orderChips(s: Saved, row: BarRow, b: Bootstrap, ids: string[]): Saved {
+  if (!movable(row)) return s
+  const o = ordered(barChips(s, row, b).map((c) => c.id), ids)
   return { ...s, chips: { ...s.chips, [row]: { ...s.chips?.[row], order: o } } }
 }
 export function toggleChip(s: Saved, row: BarRow, id: string, on: boolean): Saved {

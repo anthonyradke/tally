@@ -10,7 +10,7 @@ import Animated, {
   useScrollViewOffset, useSharedValue, withSpring, withTiming, type AnimatedRef, type SharedValue,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { scheduleOnRN } from 'react-native-worklets'
+import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets'
 import * as Haptics from 'expo-haptics'
 import { radius, space, useTheme } from '@/theme'
 import { Icon } from './Icon'
@@ -59,6 +59,15 @@ function topOf(order: string[], heights: Record<string, number>, key: string) {
   let y = 0
   for (const k of order) { if (k === key) return y; y += heights[k] ?? EST }
   return y
+}
+
+/** Records a row's measured height. It runs on the UI thread because a set from JS lands there later: several rows
+ *  measured in one pass would each read the heights before the others' writes, the last write would win, and the
+ *  group, which waits for every height before it shows, would stay invisible. */
+function measured(heights: SharedValue<Record<string, number>>, k: string, h: number) {
+  'worklet'
+  const cur = heights.get()
+  if (cur[k] !== h) heights.set({ ...cur, [k]: h })
 }
 
 function totalOf(order: string[], heights: Record<string, number>) {
@@ -260,10 +269,7 @@ function Item({ k, s, box, start, handles, lock, dropped, children }: {
   return (
     <GestureDetector gesture={hold}>
       <Animated.View style={[{ position: 'absolute', top: 0, left: 0, right: 0 }, row]}
-        onLayout={(e) => {
-          const h = e.nativeEvent.layout.height
-          if (s.heights.get()[k] !== h) s.heights.set({ ...s.heights.get(), [k]: h })
-        }}>
+        onLayout={(e) => scheduleOnUI(measured, s.heights, k, e.nativeEvent.layout.height)}>
         <Animated.View pointerEvents="none" style={[{
           position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: c.panel, borderRadius: 14, borderCurve: 'continuous',
           shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowRadius: 18,

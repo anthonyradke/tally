@@ -43,7 +43,7 @@ export default function SettingsSection() {
   const admin = useAdmin()
   const [reorder, setReorder] = useState(false)
   const canAdd = ['accounts', 'categories', 'quick', 'recurring'].includes(section)
-  const canOrder = ['accounts', 'categories', 'quick'].includes(section)
+  const canOrder = ['accounts', 'categories', 'quick', 'activity'].includes(section)
   const editKind = { accounts: 'account', categories: 'category', quick: 'quick', recurring: 'recurring' }[section]
   return (
     <>
@@ -56,7 +56,7 @@ export default function SettingsSection() {
       )}
       <DragScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 100 }}>
-        {section === 'activity' ? <FilterBarSettings /> : section === 'capture' ? <Capture /> : section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
+        {section === 'activity' ? <FilterBarSettings reorder={reorder} /> : section === 'capture' ? <Capture /> : section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
           <>
             {section === 'accounts' && <Accounts a={admin.data} reorder={reorder} />}
             {section === 'categories' && <Categories a={admin.data} reorder={reorder} />}
@@ -137,7 +137,7 @@ function Quick({ a, reorder }: { a: AdminData; reorder: boolean }) {
   const accts = new Map(a.accounts.map((x) => [x.id, x]))
   if (!a.favorites.length) return <Empty sf="bolt" md="bolt" title="No quick actions" body="A quick action is a one-tap start for an entry you log often, like Gas on the Amex." />
   return (
-    <DragGroup footer="Quick actions show on Home and at the top of a new entry.." items={a.favorites} keyOf={(f) => f.id} handles={reorder}
+    <DragGroup footer="Quick actions show on Home and at the top of a new entry." items={a.favorites} keyOf={(f) => f.id} handles={reorder}
       onReorder={(next) => write(() => api.orderFavorites(next.map((f) => f.id)))}
       render={(f, handle) => {
         const cat = cats.get(f.category_id)
