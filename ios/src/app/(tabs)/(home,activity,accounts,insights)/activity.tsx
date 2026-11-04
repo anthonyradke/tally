@@ -196,6 +196,9 @@ export default function Activity() {
           keyExtractor={(it) => it.key}
           getItemType={(it) => it.kind}
           contentInsetAdjustmentBehavior="automatic"
+          // FlashList pins the first visible row by default (for chats). A new filter's results that still hold that
+          // row further down would jump the list to it, so the page stays at its scroll position instead.
+          maintainVisibleContentPosition={{ disabled: true }}
           keyboardDismissMode="on-drag"
           contentContainerStyle={{ paddingBottom: selecting ? 200 : 120 }}
           extraData={picked}

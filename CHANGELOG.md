@@ -41,6 +41,8 @@ Fixed
   an archived account picked that way shows in the Filters sheet too.
 - Picking a past name while typing "What was it?" keeps the full name. Now and then the text typed so far ("Mc")
   came back over it on the next page.
+- Changing Activity's filters no longer jumps the list down into the log. When the new results still held the
+  entry at the top of the screen further down, the list scrolled to keep it in view.
 
 ## 3.5.0 (2026-10-12)
 Added
