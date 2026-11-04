@@ -64,16 +64,21 @@ def number(v: Any, what: str) -> float:
     return f
 
 
-def text(v: Any, what: str) -> str:
+def text(v: Any, what: str, limit: int = 200) -> str:
+    """Trimmed text, at most `limit` characters (a 5,000-character description used to go in and stretch every
+    row it showed in)."""
     if v is None:
         return ""
     if not isinstance(v, str):
         bad(f"{what} must be text.")
-    return v.strip()
+    v = v.strip()
+    if len(v) > limit:
+        bad(f"{what} is too long (at most {limit} characters).")
+    return v
 
 
-def opt_text(v: Any, what: str) -> Optional[str]:
-    return text(v, what) or None
+def opt_text(v: Any, what: str, limit: int = 200) -> Optional[str]:
+    return text(v, what, limit) or None
 
 
 def flag(v: Any, what: str) -> int:
@@ -109,6 +114,12 @@ def ids(v: Any, what: str = "ids") -> list[int]:
     if not isinstance(v, list):
         bad(f"{what} must be a list.")
     return [whole(x, what) for x in v]
+
+
+def tag_set(v: Any) -> set[str]:
+    """Tags typed any way ("trip, gift #work" or a list): lowercase, no "#", split on spaces and commas. A comma
+    used to stay on the tag ("trip,")."""
+    return {t.lstrip("#").lower() for x in words(v) for t in re.split(r"[\s,]+", x) if t.lstrip("#")}
 
 
 def words(v: Any, what: str = "Tags") -> list[str]:

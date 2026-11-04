@@ -24,6 +24,7 @@ import { budgetAmount, initial, pctStr, type Form } from '@/lib/forms'
 import { monthOf } from '@/lib/dates'
 import { SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
+import { toast } from '@/lib/toast'
 import { radius, space, TINTS, useTheme, type Tint } from '@/theme'
 
 const TITLE: Record<string, [string, string]> = {
@@ -81,8 +82,29 @@ export default function Edit() {
   }
   const remove = async () => {
     const n = Number(id)
-    const ok = await write(() => ({ account: api.deleteAccount, category: api.deleteCategory, quick: api.deleteFavorite, recurring: api.deleteRecurring, view: api.deleteView } as Record<string, (i: number) => Promise<void>>)[kind](n), 'Deleted')
-    if (ok) close()
+    // Quick actions, views and recurring templates come back with Undo (no confirm dialogs anywhere). Accounts and
+    // categories can only be deleted when nothing uses them, so there's nothing to lose.
+    let back: (() => Promise<unknown>) | undefined
+    const ok = await write(async () => {
+      if (kind === 'recurring') {
+        const gone = await api.deleteRecurring(n) // nothing comes back when it was already gone
+        if (gone) back = async () => { await api.restoreRecurring(gone.template); if (gone.rows.length) await api.restore(gone.rows) }
+      } else if (kind === 'quick') {
+        const x = a!.favorites.find((r) => r.id === n)
+        await api.deleteFavorite(n)
+        // Back in its old place: it comes back with a new id, which sorted it last.
+        const ids = a!.favorites.map((r) => r.id)
+        if (x) back = async () => { const made = await api.saveFavorite({ ...x, amount: x.amount == null ? null : x.amount / 100 }); await api.orderFavorites(ids.map((i) => (i === n ? made.id : i))) }
+      } else if (kind === 'view') {
+        const x = a!.saved_views.find((r) => r.id === n)
+        await api.deleteView(n)
+        const ids = a!.saved_views.map((r) => r.id)
+        if (x) back = async () => { const made = await api.saveView(x); await api.orderViews(ids.map((i) => (i === n ? made.id : i))) }
+      } else await (kind === 'account' ? api.deleteAccount : api.deleteCategory)(n)
+    })
+    if (!ok) return
+    toast({ text: 'Deleted', action: back ? { label: 'Undo', run: async () => { await write(back!) } } : undefined })
+    close()
   }
 
   const [newTitle, editTitle] = TITLE[kind] ?? ['Edit', 'Edit']
@@ -291,6 +313,14 @@ function AcctChoices({ f, set, a, type }: { f: Form; set: (p: Form) => void; a: 
   )
 }
 
+/** Picking a category also clears a From/To its type doesn't use: the row is hidden then, so a leftover account
+ *  made Save fail with a message the screen gave no way to act on. */
+function pickCategory(a: AdminData, v: number | null): Form {
+  const type = a.categories.find((x) => x.id === v)?.type ?? 'Spending'
+  const s = SHAPES[type]
+  return { category_id: v, ...(s.from === 'blank' ? { from_account_id: null } : {}), ...(s.to === 'blank' ? { to_account_id: null } : {}) }
+}
+
 function catOptions(a: AdminData, tint: (t: Tint) => string) {
   return a.categories.filter((x) => x.active).map((x) => {
     const v = categoryVisual(x)
@@ -305,7 +335,7 @@ function QuickForm({ f, set, a }: { f: Form; set: (p: Form) => void; a: AdminDat
     <>
       <Group><Field label="Label" value={String(f.label)} onChange={(v) => set({ label: v })} auto placeholder="Gas" /></Group>
       <Group footer="Leave the amount empty to type it each time.">
-        <Choice label="Category" value={(f.category_id as number | null) ?? null} options={catOptions(a, tint)} onChange={(v) => set({ category_id: v })} />
+        <Choice label="Category" value={(f.category_id as number | null) ?? null} options={catOptions(a, tint)} onChange={(v) => set(pickCategory(a, v))} />
         <AcctChoices f={f} set={set} a={a} type={type} />
         <Field label="Amount" value={String(f.amount ?? '')} onChange={(v) => set({ amount: v })} money placeholder="Optional" />
       </Group>
@@ -319,12 +349,12 @@ function RecurringForm({ f, set, a }: { f: Form; set: (p: Form) => void; a: Admi
   return (
     <>
       <Group>
-        <Field label="Label" value={String(f.label)} onChange={(v) => set({ label: v, what: f.what || v })} auto placeholder="Rent" />
+        <Field label="Label" value={String(f.label)} onChange={(v) => set({ label: v, what: !f.what || f.what === f.label ? v : f.what })} auto placeholder="Rent" />
         <Field label="Shows as" value={String(f.what ?? '')} onChange={(v) => set({ what: v })} auto placeholder="What entries are called" />
         <Field label="Amount" value={String(f.amount ?? '')} onChange={(v) => set({ amount: v })} money />
       </Group>
       <Group>
-        <Choice label="Category" value={(f.category_id as number | null) ?? null} options={catOptions(a, tint)} onChange={(v) => set({ category_id: v })} />
+        <Choice label="Category" value={(f.category_id as number | null) ?? null} options={catOptions(a, tint)} onChange={(v) => set(pickCategory(a, v))} />
         <AcctChoices f={f} set={set} a={a} type={type} />
       </Group>
       <Segmented options={[['weekly', 'Weekly'], ['biweekly', 'Every 2 wk'], ['monthly', 'Monthly'], ['yearly', 'Yearly']]} value={f.freq as Freq} onChange={(v) => set({ freq: v })} />

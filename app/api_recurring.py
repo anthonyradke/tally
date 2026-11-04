@@ -94,10 +94,36 @@ async def update_recurring(id: int, request: Request, con: Con):
     return _get(con, "recurring", id)
 
 
-@router.delete("/recurring/{id}", status_code=204)
+@router.delete("/recurring/{id}")
 def delete_recurring(id: int, con: Con):
-    """Removes the template and any of its rows still in the future; posted rows stay."""
-    con.execute("DELETE FROM transactions WHERE recurring_id=? AND date > ?", (id, date.today().isoformat()))
+    """Removes the template and any of its rows still in the future; posted rows stay. Returns both as they were,
+    for Undo: `restore_recurring` with the template, then /transactions/restore with the rows (hand-edited ones
+    included, which re-posting from the template would lose)."""
+    from .entries import _remove
+    r = con.execute("SELECT * FROM recurring WHERE id=?", (id,)).fetchone()
+    if not r:
+        return Response(status_code=204)  # already gone: deleting again is harmless
+    template = dict(r)
+    ahead = [r[0] for r in con.execute("SELECT id FROM transactions WHERE recurring_id=? AND date > ?",
+                                       (id, date.today().isoformat()))]
+    rows = _remove(con, ahead) if ahead else []
     con.execute("DELETE FROM recurring WHERE id=?", (id,))
     con.commit()
-    return Response(status_code=204)
+    return {"template": template, "rows": rows}
+
+
+@router.post("/recurring/restore", status_code=201)
+async def restore_recurring(request: Request, con: Con):
+    """Undo for a delete. Body: {"template": the row the delete returned}. Puts it back with the same id, so its
+    rows can be restored with their link."""
+    t = (await body(request)).get("template")
+    if not isinstance(t, dict):
+        bad("template must be an object.")
+    id = whole(t.get("id"), "id")
+    if con.execute("SELECT 1 FROM recurring WHERE id=?", (id,)).fetchone():
+        raise HTTPException(409, {"errors": ["It's already back."]})
+    f = _fields(con, {**t, "amount": whole(t.get("amount"), "Amount") / 100})
+    f["anchor_day"] = t.get("anchor_day") if isinstance(t.get("anchor_day"), int) else f["anchor_day"]
+    _upsert(con, "recurring", {"id": id, **f}, None)
+    con.commit()
+    return _get(con, "recurring", id)

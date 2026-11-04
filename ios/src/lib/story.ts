@@ -78,11 +78,20 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
   const favorite = [...visits.values()].filter((v) => v.visits >= 2)
     .sort((a, z) => z.visits - a.visits || z.cents - a.cents)[0] ?? null
 
+  // A month still going is held against the month before up to the same day: against all of it, every category
+  // looked like it had fallen.
+  const going = b.today < end
+  const day = Number(b.today.slice(8))
+  const before = prev && going
+    ? rows.filter((t) => t.date >= prev.month && t.date < month && Number(t.date.slice(8)) <= day && spendRow(t)) : []
+  const prevBy = new Map<number, number>()
+  for (const t of before) prevBy.set(t.category_id, (prevBy.get(t.category_id) ?? 0) + t.amount)
   const movers: Story['movers'] = {}
   if (prev) {
     for (const c of b.categories) {
       if (c.type !== 'Spending') continue
-      const by = (m.by_category[String(c.id)] ?? 0) - (prev.by_category[String(c.id)] ?? 0)
+      const was = going ? prevBy.get(c.id) ?? 0 : prev.by_category[String(c.id)] ?? 0
+      const by = (m.by_category[String(c.id)] ?? 0) - was
       if (by > 0 && by > (movers.up?.by ?? 0)) movers.up = { c, by }
       if (by < 0 && by < (movers.down?.by ?? 0)) movers.down = { c, by }
     }
@@ -93,12 +102,8 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
 
   let vs: Story['vs'] = null
   if (prev) {
-    if (b.today >= end) vs = { now: m.spent, before: prev.spent }
-    else {
-      const day = Number(b.today.slice(8))
-      const before = rows.filter((t) => t.date >= prev.month && t.date < month && Number(t.date.slice(8)) <= day && spendRow(t))
-      vs = { now: spending.reduce((n, t) => n + t.amount, 0), before: before.reduce((n, t) => n + t.amount, 0) }
-    }
+    if (!going) vs = { now: m.spent, before: prev.spent }
+    else vs = { now: spending.reduce((n, t) => n + t.amount, 0), before: before.reduce((n, t) => n + t.amount, 0) }
   }
 
   let kept = 0, of2 = 0

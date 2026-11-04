@@ -33,6 +33,30 @@ Changed
   hiding at the far end of the type row. Both rows scroll to keep the picked chip in view.
 - Tapping + while Activity is filtered to one account starts the new entry on that account, as an account's own
   page already did. Switching the entry to Income moves that account to the To side instead of dropping it.
+- A month's Spent counts what has happened: entries scheduled later in the month (a recurring bill) join it on
+  their day. Home, Insights, the story, budgets and net worth now agree with each other.
+- Left over is money in less spending, everywhere. Home's big figure is the same number ("Up in November" used to
+  take off loan payments, while Left over under it also took off savings).
+- Trends and the budget pace compare a month still going with what the months before had spent by the same day.
+  Rent paid on the 1st no longer reads +650% or "on pace to go $7,000 over". Big jumps show as 4.1× instead of a
+  four-digit percent.
+- Search matches every word anywhere in an entry: "trader groceries" finds Trader Joe's in Groceries. "-5" finds
+  refunds of $5.
+- Links into Activity (See all, a place, an account's entries, a day) start from cleared filters, and the Activity
+  tab gets its own filters back afterward.
+- Bulk moves and swiping to Category only offer categories the entries fit.
+- Transfers show From → To under the name instead of squeezing both. An account's own rows say "To Chase" instead of
+  repeating its name.
+- Categories without a color of their own get one from their name (Rent, Dining out, Utilities were all grey and
+  looked like the empty track in bars and the donut).
+- The Home screen layout in Settings reorders by dragging, like the other lists.
+- "Use suggestions" in Budgets only fills categories with no budget yet, and can be undone.
+- Settings > Server only keeps a new address once Tally answers there ("Use it anyway" for a server that's down).
+- Settings > Goals has a None choice for Roth contributions and month-end interest.
+- Recurring costs' share of income uses a typical month, not an average one big deposit pulls up.
+- Day by day's weekday line covers the 12 weeks up to the month on screen and leaves out recurring bills and each
+  weekday's one biggest day.
+- The month story compares a month still going with the month before up to the same day.
 
 Fixed
 - Typing a name, note or tags no longer sometimes jumps the cursor to the front of the field mid-word ("McD" turning
@@ -48,6 +72,28 @@ Fixed
   came back over it on the next page.
 - Changing Activity's filters no longer jumps the list down into the log. When the new results still held the
   entry at the top of the screen further down, the list scrolled to keep it in view.
+- A new recurring template's "Shows as" follows the label as you type it (it kept the first letter: "N" for Netflix).
+- Changing a recurring template's or quick action's category to another type clears the account it no longer uses,
+  so saving doesn't fail on a row that isn't shown.
+- Reconcile can check a $0.00 balance, and its likely causes show dates like "Tue, Dec 1".
+- An account's type can't change while it has entries or month-end balances (it flipped every balance), and names
+  that only differ in case are refused.
+- Bulk tags split on commas as well as spaces (typing "trip, gift" made a tag "trip,").
+- Bulk move, bulk tag, and deleting a recurring template (its future entries too), a quick action or a saved view
+  can all be undone.
+- A receipt that fails to upload is said in the "Added" toast instead of a toast that disappeared at once.
+- "What was it?" and Catch up suggest from what has happened, not bills scheduled weeks ahead.
+- Add another keeps the account the entry was started from.
+- Month end logs interest once per account and month, its buttons wait for the save, and investments show the
+  balance they carry in grey.
+- A loan's page says its balance includes this month's interest.
+- The recurring list shows when each one is next due (Rent read "next Jan 1" with December already posted), and
+  "tomorrow" instead of "next Tomorrow".
+- The amount on a new entry no longer jumps when a sum starts, and Category lines up with What and From.
+- The Filters sheet's Tag field keeps what's typed (a # couldn't be typed) and lists a hidden category that's being
+  filtered.
+- The API refuses an APY over 100% or below 0, negative budgets and Roth limits, budgets on non-spending
+  categories, and very long text. Deleting entries that are already gone says so.
 
 ## 3.5.0 (2026-10-12)
 Added

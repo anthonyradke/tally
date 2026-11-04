@@ -44,7 +44,7 @@ export function StateView({ q, shape = 'home' }: { q: UseQueryResult<unknown>; s
         </View>
         <Txt variant="title2" style={{ textAlign: 'center' }}>{refused ? 'Tally had a problem' : "Can't reach Tally"}</Txt>
         <Txt variant="callout" tone="label2" style={{ textAlign: 'center' }}>
-          {refused ? String((q.error as Error).message) : url ? 'Tally lives on x1 and is only reachable over Tailscale. Check that Tailscale is on, then try again.' : 'No server set. Add Tally’s address in Settings.'}
+          {refused ? String((q.error as Error).message) : url ? 'Tally lives on your server and is only reachable over Tailscale. Check that Tailscale is on, then try again.' : 'No server set. Add Tally’s address in Settings.'}
         </Txt>
         <Pressable onPress={() => q.refetch()} style={({ pressed }) => ({ marginTop: space.s, height: 44, paddingHorizontal: space.xxl, borderRadius: radius.pill, backgroundColor: c.ink, justifyContent: 'center', transform: [{ scale: pressed ? 0.97 : 1 }] })}>
           <Txt variant="headline" tone="onInk">Try again</Txt>

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from . import db, recurring, search, service
 from .engine import validate
 from .entries import META_COLS, _client_id, _full, _in_range, _landed, _parse, _remove, _sent, _txn, _write
-from .inputs import body, day, ids as id_list, money, opt_id, whole, words
+from .inputs import body, day, ids as id_list, money, opt_id, tag_set, whole
 
 router = APIRouter(prefix="/api")
 Con = Annotated[sqlite3.Connection, Depends(db.session)]
@@ -30,8 +30,10 @@ def _cat(c, x: dict):
 
 
 def _row(r):
+    # Left over is money in less spending. The engine's own left_over (also less saving and loan payments) is the
+    # spreadsheet's column, kept for the importer's check and months.csv.
     return {"month": r.month.isoformat(), "money_in": r.money_in, "spent": r.spent, "loan": r.loan,
-            "saving": r.saving, "left_over": r.left_over, "by_category": r.by_category, "balances": r.balances,
+            "saving": r.saving, "left_over": r.money_in - r.spent, "by_category": r.by_category, "balances": r.balances,
             "cash": r.cash, "invested": r.invested, "cards": r.cards, "loans": r.loans, "net_worth": r.net_worth}
 
 
@@ -91,14 +93,23 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
     for tg in s.tags:
         items = [t for t in items if tg in (meta.get(t.id, {}).get("tags") or "").split()]
     if s.text:
-        needle = s.text
-        digits = needle.replace("$", "").replace(",", "")
+        # Every word has to match somewhere, not necessarily in the same field: "trader groceries" finds Trader
+        # Joe's in Groceries. A number matches the amount; "-5" only refunds and other negative amounts.
+        needles = s.text.split()
 
         def hit(t):
             m = meta.get(t.id, {})
             names = [t.what, m.get("note") or "", m.get("tags") or "", st.cat[t.category_id].name]
             names += [st.acct[a].name for a in (t.from_id, t.to_id) if a in st.acct]
-            return any(needle in x.lower() for x in names) or (digits and digits in f"{abs(t.amount) / 100:.2f}")
+            names = [x.lower() for x in names]
+            amount = f"{abs(t.amount) / 100:.2f}"
+
+            def one(w):
+                digits = w.replace("$", "").replace(",", "")
+                neg = digits.startswith("-") and len(digits) > 1
+                digits = digits.lstrip("-")
+                return any(w in x for x in names) or (bool(digits) and digits in amount and (not neg or t.amount < 0))
+            return all(one(w) for w in needles)
         items = [t for t in items if hit(t)]
     if category:
         items = [t for t in items if t.category_id == category]
@@ -240,16 +251,25 @@ async def restore(request: Request, con: Con):
 
 @router.post("/transactions/bulk")
 async def bulk(request: Request, con: Con):
-    """Body: {"ids": [...], "action": "delete" | "recategorize" | "tag", "category_id"?: int, "tags"?: [..]}.
-    Delete returns the removed rows for Undo. Recategorize checks every row against the new category's
-    From/To rules first: moving spending into an income category would count it as income."""
+    """Body: {"ids": [...], "action": "delete" | "recategorize" | "tag", "category_id"?: int, "tags"?: [..]}, or
+    {"action": "revert", "rows": [{"id", "category_id", "tags"}]} to undo a recategorize or tag.
+    Delete returns the removed rows for Undo; recategorize and tag return `before` (each row's category and tags as
+    they were) for revert. Recategorize checks every row against the new category's From/To rules first: moving
+    spending into an income category would count it as income. `count` is the rows that exist."""
     b = await body(request)
+    if b.get("action") == "revert":
+        return _revert(con, b.get("rows"))
     ids = id_list(b.get("ids", []))
     if not ids:
         raise HTTPException(422, {"errors": ["No rows selected."]})
     marks = ",".join("?" * len(ids))
     if b.get("action") == "delete":
-        return {"ok": True, "count": len(ids), "deleted": _remove(con, ids)}
+        gone = _remove(con, ids)
+        return {"ok": True, "count": len(gone), "deleted": gone}
+    before = [{"id": r["id"], "category_id": r["category_id"], "tags": (r["tags"] or "").split()}
+              for r in con.execute(f"SELECT id, category_id, tags FROM transactions WHERE id IN ({marks})", ids)]
+    if not before:
+        raise HTTPException(404, {"errors": ["Those entries are gone. Pull to refresh."]})
     if b.get("action") == "recategorize":
         st = service.load(con)
         c = st.cat.get(opt_id(b.get("category_id"), "Category") or 0)
@@ -262,13 +282,31 @@ async def bulk(request: Request, con: Con):
                                                  f"{c.name} ({c.type}).", *errs]})
         con.execute(f"UPDATE transactions SET category_id=? WHERE id IN ({marks})", [c.id, *ids])
     elif b.get("action") == "tag":
-        add = {x.strip().lstrip("#").lower() for x in words(b.get("tags")) if x.strip()}
+        add = tag_set(b.get("tags"))
         if not add:
             raise HTTPException(422, {"errors": ["Type a tag."]})
-        for r in con.execute(f"SELECT id, tags FROM transactions WHERE id IN ({marks})", ids).fetchall():
-            merged = " ".join(sorted(set((r["tags"] or "").split()) | add))
-            con.execute("UPDATE transactions SET tags=? WHERE id=?", (merged, r["id"]))
+        for r in before:
+            con.execute("UPDATE transactions SET tags=? WHERE id=?", (" ".join(sorted(set(r["tags"]) | add)), r["id"]))
     else:
         raise HTTPException(422, {"errors": ["Unknown action."]})
     con.commit()
-    return {"ok": True, "count": len(ids)}
+    return {"ok": True, "count": len(before), "before": before}
+
+
+def _revert(con, raw) -> dict:
+    """Undo for a bulk recategorize or tag: puts each row's category and tags back as `before` had them."""
+    if not isinstance(raw, list) or not raw or not all(isinstance(x, dict) for x in raw):
+        raise HTTPException(422, {"errors": ["rows must be a list."]})
+    st = service.load(con)
+    txns = {t.id: t for t in st.txns}
+    for x in raw:
+        t = txns.get(whole(x.get("id"), "id"))
+        c = st.cat.get(whole(x.get("category_id"), "Category"))
+        if t is None or c is None:
+            continue  # deleted since: nothing to put back
+        if validate(replace(t, category_id=c.id), c.type, st.acct):
+            continue  # edited since so that it no longer fits: leave it
+        con.execute("UPDATE transactions SET category_id=?, tags=? WHERE id=?",
+                    (c.id, " ".join(sorted(tag_set(x.get("tags")))), t.id))
+    con.commit()
+    return {"ok": True, "count": len(raw)}

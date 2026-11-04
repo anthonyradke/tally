@@ -43,9 +43,35 @@ const BY_TYPE: Record<CatType, [string, Tint]> = {
 export interface Visual { sf: SFSymbol; md: string; glyph: string; tint: Tint }
 interface CatLike { name: string; type: CatType; icon?: string | null; color?: string | null }
 
-/** Resolve a category's glyph + tint: explicit override → name default → type default. */
+// Common words in a name, for categories named differently from the ones above ("Rent", "Dining out", "Utilities").
+const BY_WORD: [RegExp, [string, Tint]][] = [
+  [/card/, ['credit-card', 'gray']], [/\brent\b|mortgage|housing/, ['house', 'blue']], [/utilit|electric|power/, ['zap', 'teal']], [/water/, ['droplets', 'teal']],
+  [/internet|wifi|phone/, ['wifi', 'blue']], [/dining|restaurant|\beat|food|takeout/, ['utensils', 'orange']],
+  [/coffee|cafe/, ['coffee', 'orange']], [/grocer/, ['shopping-cart', 'green']], [/\bgas\b|fuel/, ['fuel', 'amber']],
+  [/\bcar\b|auto|transit|uber|lyft/, ['car', 'blue']], [/travel|flight|trip|hotel/, ['plane', 'teal']],
+  [/subscri|stream/, ['repeat', 'violet']], [/shop|cloth|amazon/, ['shopping-bag', 'pink']], [/gift/, ['gift', 'pink']],
+  [/health|medical|doctor|pharm/, ['heart-pulse', 'red']], [/gym|fitness/, ['dumbbell', 'red']],
+  [/fun|entertain|movie|game/, ['popcorn', 'blue']], [/\bpets?\b|\bdogs?\b|\bcats?\b/, ['paw-print', 'orange']],
+  [/interest/, ['hand-coins', 'green']], [/saving/, ['piggy-bank', 'teal']],
+]
+// A spending category with no default of its own gets a color from its name: they were all grey, and grey bars and
+// donut slices read as the empty track behind them.
+const SPREAD: Tint[] = ['blue', 'teal', 'orange', 'violet', 'pink', 'amber', 'green', 'red']
+const spread = (name: string): Tint => SPREAD[[...name].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7) % SPREAD.length]
+
+function defaults(c: CatLike): [string, Tint] {
+  const named = BY_NAME[c.name]
+  if (named) return named
+  const low = c.name.toLowerCase()
+  const word = BY_WORD.find(([re]) => re.test(low))?.[1]
+  if (word) return word
+  const [glyph, tint] = BY_TYPE[c.type]
+  return [glyph, c.type === 'Spending' ? spread(c.name) : tint]
+}
+
+/** Resolve a category's glyph + tint: explicit override → name default → a word in its name → type default. */
 export function categoryVisual(c: CatLike): Visual {
-  const [dGlyph, dTint] = BY_NAME[c.name] ?? BY_TYPE[c.type]
+  const [dGlyph, dTint] = defaults(c)
   const glyph = c.icon && GLYPHS[c.icon] ? c.icon : dGlyph
   const tint = isTint(c.color) ? c.color : dTint
   const [sf, md] = GLYPHS[glyph]

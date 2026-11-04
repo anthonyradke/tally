@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshControl, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
+import type { SearchBarCommands } from 'react-native-screens'
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import * as Haptics from 'expo-haptics'
 import Animated, { Easing, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
@@ -20,7 +21,7 @@ import { Txt } from '@/components/Txt'
 import { api, type Txn } from '@/lib/api'
 import { deleteTxns } from '@/lib/actions'
 import { addDays, dayLabel } from '@/lib/dates'
-import { extraCount, toId, toQuery, useFilters } from '@/lib/filters'
+import { EMPTY, extraCount, toId, toQuery, useFilters, type Filters } from '@/lib/filters'
 import { formatCents } from '@/lib/money'
 import { useOutbox } from '@/lib/outbox'
 import { usePullRefresh } from '@/lib/refresh'
@@ -44,7 +45,11 @@ export default function Activity() {
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const queued = useOutbox((s) => s.items)
 
-  // Deep links from Home, a category, an account or a tag set the filters once.
+  // Deep links from Home, a category, an account or a tag start from cleared filters: added to whatever was on (a
+  // Money in chip left from earlier), "See all" often showed no matches. The filters are shared with the Activity
+  // tab, so the ones it had come back when this screen closes.
+  const before = useRef<Filters | null>(null)
+  useEffect(() => () => { if (before.current) useFilters.getState().replace(before.current) }, [])
   useEffect(() => {
     const p: Partial<typeof f> = {}
     if (params.when === 'upcoming' && t.b) { p.start = addDays(t.b.today, 1); p.end = undefined; p.sort = 'date'; p.dir = 'asc' }
@@ -54,7 +59,9 @@ export default function Activity() {
     if (params.account) p.account = toId(params.account)
     if (params.tag) p.tag = params.tag
     if (params.group) p.group = params.group
-    if (Object.keys(p).length) set(p)
+    if (!Object.keys(p).length) return
+    before.current ??= useFilters.getState().f
+    useFilters.getState().replace({ ...EMPTY, ...p })
   }, [params.q, params.when, params.day, params.category, params.account, params.tag, params.group, t.b?.today]) // eslint-disable-line react-hooks/exhaustive-deps
   // An account that's gone (deleted since a saved view, or a stale link) would filter to nothing with no chip lit.
   useEffect(() => {
@@ -173,13 +180,24 @@ export default function Activity() {
     </View>
   )
 
+  // The native search bar keeps its own text: a search set from elsewhere (a place's "All at…", Clear filters, a
+  // saved view) is written into it, or it showed nothing while the list was filtered.
+  const searchBar = useRef<SearchBarCommands | null>(null)
+  const typed = useRef('')
+  useEffect(() => {
+    if (f.q === typed.current) return
+    typed.current = f.q
+    const id = setTimeout(() => searchBar.current?.setText(f.q), 0) // the ref lands after the header mounts
+    return () => clearTimeout(id)
+  }, [f.q])
+
   // Kept from one render to the next: a new one rebuilds the header's buttons, and a tap in between was lost.
   const live = useLatest({ startSelect, endSelect, account: f.account })
   const toolbar = useMemo(() => (
     <>
       {process.env.EXPO_OS !== 'web' && (
-        <Stack.SearchBar placeholder="Entries, notes, tags, amounts" onChangeText={(e) => set({ q: e.nativeEvent.text })}
-          onCancelButtonPress={() => set({ q: '' })} hideWhenScrolling={false} />
+        <Stack.SearchBar ref={searchBar} placeholder="Entries, notes, tags, amounts" onChangeText={(e) => { typed.current = e.nativeEvent.text; set({ q: e.nativeEvent.text }) }}
+          onCancelButtonPress={() => { typed.current = ''; set({ q: '' }) }} hideWhenScrolling={false} />
       )}
       {/* Buttons are direct children (arrays, not a fragment): the native toolbar silently drops a fragment. */}
       <Stack.Toolbar placement="right">
@@ -251,7 +269,7 @@ export default function Activity() {
                 borderBottomLeftRadius: item.last ? radius.panel : 0, borderBottomRightRadius: item.last ? radius.panel : 0,
               }}>
                 {!item.first && <Divider sel={sel} />}
-                <TxnRow t={r} c={t.catOf(r)} acct={t.acct} mark={t.markFor(r.what)} today={t.b!.today}
+                <TxnRow t={r} c={t.catOf(r)} acct={t.acct} mark={t.markFor(r.what)} today={t.b!.today} here={f.account}
                   showDate={f.sort === 'amount' ? dayLabel(r.date, t.b!.today) : undefined}
                   sel={sel} selected={picked.has(r.id)} onSelect={selecting ? toggle : undefined}
                   padTop={item.first ? space.xs : 0} padBottom={item.last ? space.xs : 0} />

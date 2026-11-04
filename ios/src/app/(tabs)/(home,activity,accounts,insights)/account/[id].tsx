@@ -67,7 +67,8 @@ export default function AccountDetail() {
   if (!a || !b) return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}><StateView q={t.q} /></ScrollView>
 
   const owed = a.kind === 'card' || a.kind === 'loan'
-  // Before the rows load, the balance from the last month end the server worked out (what Accounts shows too).
+  // Before the rows load, this month's balance as the server works it out (what Accounts shows too). A loan's
+  // includes this month's interest, so its caption says so.
   const now = series?.values.at(-1) ?? b.months.filter((m) => m.month <= b.today).at(-1)?.balances[String(a.id)] ?? a.start_balance
   const monthStartIdx = series && (a.kind === 'cash' || a.kind === 'card') ? series.values.length - fromISO(b.today).getDate() : -1
   const startOfMonth = monthStartIdx > 0 && series ? series.values[monthStartIdx - 1] : null
@@ -93,7 +94,7 @@ export default function AccountDetail() {
               style={{ ...ramp.hero, color: c.label }}
               caption={change != null && change !== 0 ? (
                 <Txt variant="callout" tone="label2"><Txt variant="callout" tone={good ? 'pos' : 'neg'} num style={{ fontWeight: '600' }}>{change > 0 ? '+' : '−'}{formatCents(Math.abs(change))}</Txt> this month</Txt>
-              ) : <Txt variant="callout" tone="label2">{a.kind === 'investment' || a.kind === 'loan' ? 'As of the last month end' : 'As of today'}</Txt>} />
+              ) : <Txt variant="callout" tone="label2">{a.kind === 'loan' ? `By the end of ${fromISO(b.today).toLocaleDateString('en-US', { month: 'long' })}, with its interest` : a.kind === 'investment' ? 'As of the last balance typed at month end' : 'As of today'}</Txt>} />
           </View>
           {series && series.values.length > 1 ? (
             <ScrubChart scrub={scrub} slots={series.values.length + (ahead?.count ? AHEAD : 0)} height={160}
@@ -160,7 +161,7 @@ export default function AccountDetail() {
             {rows.slice(0, 12).map((x, i, all) => (
               <View key={x.id}>
                 {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-                <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={b.today} showDate={`${dayLabel(x.date, b.today)}, ${t.catOf(x).name}`}
+                <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={b.today} here={a.id} showDate={`${dayLabel(x.date, b.today)}, ${t.catOf(x).name}`}
                   padTop={i === 0 ? space.xs : 0} padBottom={i === all.length - 1 ? space.xs : 0} />
               </View>
             ))}

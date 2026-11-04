@@ -47,3 +47,10 @@ export function dayLabel(iso: string, today: string = todayISO()): string {
 }
 
 export const isFuture = (iso: string, today: string = todayISO()): boolean => iso > today
+
+/** When something is next due, inside a sentence: "today", "tomorrow", else "next Mon, Sep 14" ("next Tomorrow"
+ *  came from putting the capitalized header label after "next"). */
+export function nextDue(iso: string, today: string = todayISO()): string {
+  const l = dayLabel(iso, today)
+  return l === 'Today' || l === 'Tomorrow' || l === 'Yesterday' ? l.toLowerCase() : `next ${l}`
+}

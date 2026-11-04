@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics'
 import { categoryVisual } from '@/icons/categories'
 import type { Bootstrap } from '@/lib/api'
 import { useAllTxns } from '@/lib/balances'
-import { dayLabel } from '@/lib/dates'
+import { nextDue } from '@/lib/dates'
 import { dollarsText } from '@/lib/forms'
 import { formatCents } from '@/lib/money'
 import { findRepeats, type Repeat } from '@/lib/repeats'
@@ -47,7 +47,7 @@ export function RepeatSuggestions({ b }: { b: Bootstrap }) {
         const cat = b.categories.find((x) => x.id === r.category_id)
         const v = cat ? categoryVisual(cat) : null
         return (
-          <Row key={keyOf(r)} label={r.what} sub={`${FREQ[r.freq]}, ${formatCents(r.amount)}, next ${dayLabel(r.next, b.today)}`} onPress={() => open(r)}
+          <Row key={keyOf(r)} label={r.what} sub={`${FREQ[r.freq]}, ${formatCents(r.amount)}, ${nextDue(r.next, b.today)}`} onPress={() => open(r)}
             leading={v ? <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={30} /> : undefined}
             trailing={
               <Tap feedback="opacity" onPress={() => hide(r)} hitSlop={10} accessibilityLabel={`Not recurring: ${r.what}`}>

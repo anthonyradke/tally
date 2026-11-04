@@ -21,8 +21,10 @@ export function Commitments({ b }: { b: Bootstrap }) {
   const t = useTally()
   const k = commitments(b)
   if (!k.out.length) return null
-  const done = b.months.filter((m) => m.month < monthOf(b.today)).slice(-3)
-  const income = done.length ? done.reduce((n, m) => n + m.money_in, 0) / done.length : 0
+  // The middle month of the last six with money in: one large one-off deposit pulled an average up so far the
+  // share read "about 1%".
+  const ins = b.months.filter((m) => m.month < monthOf(b.today)).slice(-6).map((m) => m.money_in).filter((v) => v > 0).sort((x, y) => x - y)
+  const income = ins.length ? (ins.length % 2 ? ins[(ins.length - 1) / 2] : (ins[ins.length / 2 - 1] + ins[ins.length / 2]) / 2) : 0
   const share = income > 0 ? k.outMonthly / income : null
   return (
     <Section title="Recurring costs" href="/settings/recurring" action="Edit">

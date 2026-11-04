@@ -148,10 +148,18 @@ def test_delete_template_removes_only_future_rows(client, world, monkeypatch):
     freeze(monkeypatch, TODAY)
     t = client.post("/api/recurring", json=tmpl(world, freq="weekly", next_date="2026-09-10")).json()
     client.get("/api/bootstrap")
-    assert client.delete(f"/api/recurring/{t['id']}").status_code == 204
+    before = dates(client)
+    gone = client.delete(f"/api/recurring/{t['id']}").json()
     assert dates(client) == ["2026-09-10", "2026-09-17", "2026-09-24"]  # today's row has happened
     assert client.get("/api/admin").json()["recurring"] == []
     assert client.delete(f"/api/recurring/{t['id']}").status_code == 204  # deleting again is harmless
+    # Undo: the template comes back with its id, then its future rows with their link.
+    assert client.post("/api/recurring/restore", json={"template": gone["template"]}).status_code == 201
+    rows = [{**x, "amount": x["amount"] / 100} for x in gone["rows"]]
+    assert client.post("/api/transactions/restore", json={"rows": rows}).status_code == 201
+    assert dates(client) == before
+    assert all(x["recurring_id"] == t["id"] for x in client.get("/api/transactions").json()["items"])
+    assert client.post("/api/recurring/restore", json={"template": gone["template"]}).status_code == 409
 
 
 def test_templates_follow_the_from_to_rules(client, world):

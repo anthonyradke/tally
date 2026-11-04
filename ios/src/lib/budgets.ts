@@ -13,14 +13,20 @@ export function elapsed(month: string, today: string): number {
   return t.getDate() / new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate()
 }
 
-/** How far over budget this month ends if spending keeps its pace so far, or null if it's on track. Quiet for the
- *  first five days (one grocery run isn't a pace) and once it's already over (the bar says that). */
-export function paceOver(spent: number, budget: number, month: string, today: string): number | null {
+/** How far over budget this month ends if the rest of it goes like the months before: what's spent so far plus what
+ *  those months usually spent after this day (`usual`, from typical.ts). Null when it's on track, with no history to
+ *  go by, for the first five days (one grocery run isn't a pace) and once it's already over (the bar says that).
+ *  It used to project straight-line, so rent paid on the 1st read "on pace to go $7,000 over" on the 5th. */
+export function paceOver(spent: number, budget: number, month: string, today: string, usual?: { by: number; full: number } | null): number | null {
   const f = elapsed(month, today)
-  if (f >= 1 || fromISO(today).getDate() < 5 || spent > budget) return null
-  const projected = Math.round(spent / f)
+  if (!usual || f >= 1 || f <= 0 || fromISO(today).getDate() < 5 || spent > budget) return null
+  const projected = spent + Math.max(0, usual.full - usual.by)
   return projected > budget * 1.05 ? projected - budget : null
 }
+
+/** A category's entry in a `Typical`, as `paceOver` takes it. */
+export const usualFor = (t: { by: Map<number, number>; full: Map<number, number> } | null, id: number) =>
+  t && t.full.has(id) ? { by: t.by.get(id) ?? 0, full: t.full.get(id)! } : null
 
 export interface Suggestion { c: Category; average: number; suggested: number; months: number }
 

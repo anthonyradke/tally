@@ -24,13 +24,15 @@ export function SpendCalendar({ b, month }: { b: Bootstrap; month: string }) {
   const hidden = useHidden()
   const [picked, setPicked] = useState<string | null>(null)
   const q = useTransactions({ type: 'Spending', start: month, end: lastOfMonth(month), limit: 3000 })
-  const hist = useTransactions({ type: 'Spending', start: addDays(b.today, -84), end: b.today, limit: 5000 })
+  // The weekday line covers the 12 weeks up to the month on screen (or today), not always the latest 12 weeks.
+  const until = lastOfMonth(month) < b.today ? addDays(lastOfMonth(month), 1) : b.today
+  const hist = useTransactions({ type: 'Spending', start: addDays(until, -84), end: until, limit: 5000 })
   const days = daysOf(month, q.data?.items ?? [])
   const max = Math.max(1, ...days.filter((d) => d.date <= b.today).map((d) => d.cents))
   const lead = (fromISO(month).getDay() + 6) % 7 // weeks start on Monday
   const past = days.filter((d) => d.date <= b.today)
   const quiet = past.filter((d) => d.cents <= 0).length
-  const big = hist.data ? bigWeekday(hist.data.items, b.today, b.start) : null
+  const big = hist.data ? bigWeekday(hist.data.items, until, b.start) : null
   const sel = days.find((d) => d.date === picked)
   const open = (date: string) => router.push({ pathname: '/activity', params: { day: date } })
   const tap = (date: string) => {

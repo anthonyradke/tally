@@ -22,10 +22,16 @@ import { Txt } from './Txt'
 const web = process.env.EXPO_OS === 'web'
 const CHECK = 34 // the selection circle's column
 
-/** Which account a row is "about": where spending came from, where money landed, or From → To for transfers. */
-function accountLine(t: Txn, c: Category, acct: Map<number, Account>): string {
+/** Which account a row is "about": where spending came from, where money landed, or From → To for transfers. In a
+ *  list of one account's rows (`here`), only the other side: "To Chase", or nothing when there isn't one. */
+function accountLine(t: Txn, c: Category, acct: Map<number, Account>, here?: number): string {
   const f = t.from_id ? acct.get(t.from_id)?.name : undefined
   const to = t.to_id ? acct.get(t.to_id)?.name : undefined
+  if (here != null && (t.from_id === here || t.to_id === here)) {
+    if (t.from_id === here && to) return `To ${to}`
+    if (t.to_id === here && f) return `From ${f}`
+    return ''
+  }
   if (c.type === 'Money in') return to ?? ''
   if (c.type === 'Spending') return f ?? ''
   return f && to ? `${f} → ${to}` : (f ?? to ?? '')
@@ -34,8 +40,10 @@ function accountLine(t: Txn, c: Category, acct: Map<number, Account>): string {
 /** An entry. Tap opens it, long press has a menu, swipes have actions (see SwipeRow). In a list that can select,
  *  `sel` (0 → 1, shared by every row so the whole list animates at once without re-rendering) slides a check circle
  *  in, and taps toggle `selected` instead. */
-export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, sel, selected, onSelect, padTop = 0, padBottom = 0 }: {
+export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, here, sel, selected, onSelect, padTop = 0, padBottom = 0 }: {
   t: Txn; c: Category; acct: Map<number, Account>; mark: MarkSpec | null; today: string; showDate?: string
+  /** The account whose rows these are (its page, or Activity filtered to it): its own name isn't repeated. */
+  here?: number
   sel?: SharedValue<number>; selected?: boolean; onSelect?: (id: number) => void
   /** Extra padding for the first/last row of a group, inside the row so the highlight fills the group's corners. */
   padTop?: number; padBottom?: number
@@ -44,7 +52,11 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
   const v = categoryVisual(c)
   const amt = rowAmount(c.type, t.amount)
   const future = isFuture(t.date, today)
-  const where = accountLine(t, c, acct)
+  const where = accountLine(t, c, acct, here)
+  // From → To is long: it goes under the name, where the category would be, instead of squeezing both into "Chase CC
+  // pay…" and "SoFi HYSA → Chase …". The glyph and the muted amount already say it's a transfer.
+  const route = where.includes('→')
+  const sub = route ? (showDate ? `${showDate}, ${where}` : where) : showDate ?? c.name
   const fold = useFold(t.id, useFresh((s) => s.ids.has(t.id)))
   const [attempt, setAttempt] = useState(0) // bumped when a delete fails, so the swiped-away row comes back
   const selecting = !!onSelect
@@ -80,7 +92,7 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
           <Txt variant="row" numberOfLines={1}>{t.what || c.name}</Txt>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Txt variant="sub" tone="label2" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {future ? `Scheduled, ${showDate ?? c.name}` : showDate ?? c.name}
+              {future ? `Scheduled, ${sub}` : sub}
             </Txt>
             {t.split_group && <Icon sf="square.split.2x1" md="call_split" size={11} color={theme.c.label2} />}
             {t.receipt && <Icon sf="paperclip" md="attach_file" size={11} color={theme.c.label2} />}
@@ -89,7 +101,7 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
         </View>
         <View style={{ alignItems: 'flex-end', gap: 2, maxWidth: '42%' }}>
           <Money cents={amt.cents} sign={amt.sign} tone={amt.tone} muted={amt.muted} />
-          {!!where && <Txt variant="sub" tone="label2" numberOfLines={1}>{where}</Txt>}
+          {!!where && !route && <Txt variant="sub" tone="label2" numberOfLines={1}>{where}</Txt>}
         </View>
       </View>
     </LinkRow>

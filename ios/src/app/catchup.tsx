@@ -76,6 +76,9 @@ export function CatchUp({ account }: { account?: number }) {
   }, [t.b, t.acct, picked])
   const acct = list.find((a) => a.id === picked) ?? list[0]
   const history = useTransactions({ limit: 600 }, !!t.b)
+  // Suggestions come from what has happened: scheduled rows (a weekly bill posted weeks ahead) used to fill "Usual
+  // on…". Lookalikes still check them, since a scheduled bill is a likely duplicate.
+  const historyRows = useMemo(() => (history.data?.items ?? []).filter((x) => !today || x.date <= today), [history.data, today])
   const recent = useTransactions({ account: acct?.id, end: today, limit: 8 }, !!acct && !!today)
   // Only this account's own rows: a list still showing the last account's while the new one loads would mislead.
   const rows = (recent.data?.items ?? []).filter((x) => x.from_id === acct?.id || x.to_id === acct?.id)
@@ -190,7 +193,6 @@ export function CatchUp({ account }: { account?: number }) {
   const barStyle = useAnimatedStyle(() => ({ paddingBottom: Math.max(kb.get(), bottom) + space.s }))
 
   if (!t.b || !acct) return <View style={{ flex: 1, backgroundColor: c.bg }} />
-  const historyRows = history.data?.items ?? []
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>

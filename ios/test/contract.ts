@@ -129,7 +129,9 @@ await hit('ok', 'DELETE', `/api/favorites/${fav.id}`)
 const view = await hit('view', 'POST', '/api/saved-views', { name: 'Contract', query: 'tag=check' })
 await hit('ok', 'DELETE', `/api/saved-views/${view.id}`)
 const rec = await hit('recurring', 'POST', '/api/recurring', { label: 'Contract', category_id: spend.id, from_account_id: card.id, amount: 1, freq: 'yearly', next_date: `${Number(b.today.slice(0, 4)) + 1}-01-01` })
-await hit('ok', 'DELETE', `/api/recurring/${rec.id}`)
+const recGone = await hit('recurringGone', 'DELETE', `/api/recurring/${rec.id}`)
+await hit('recurring', 'POST', '/api/recurring/restore', { template: recGone.template })
+await hit('recurringGone', 'DELETE', `/api/recurring/${rec.id}`)
 await hit('ok', 'PUT', `/api/budgets/${spend.id}`, { amount: spend.budget == null ? null : spend.budget / 100 })
 await hit('settings', 'PUT', '/api/settings', { theme: b.settings.theme ?? '' })
 
@@ -137,12 +139,14 @@ await hit('settings', 'PUT', '/api/settings', { theme: b.settings.theme ?? '' })
 const rows = all.items
 const typeOf = (t: Txn): CatType => b.categories.find((c) => c.id === t.category_id)!.type
 const end = (m: string) => { const d = new Date(`${m}T00:00:00`); d.setMonth(d.getMonth() + 1, 0); return `${m.slice(0, 8)}${String(d.getDate()).padStart(2, '0')}` }
+// Month rows count what has happened: rows dated after today join them on their day.
+const posted = rows.filter((t) => t.date <= b.today)
 for (const m of b.months) {
   for (const a of cash) {
-    const mine = dailyBalances(a as Account, rows, b.start, end(m.month)).values.at(-1)
+    const mine = dailyBalances(a as Account, posted, b.start, end(m.month)).values.at(-1)
     if (mine !== m.balances[String(a.id)]) errors.push(`${a.name} at the end of ${m.month}: app ${mine}, server ${m.balances[String(a.id)]}`)
   }
-  const inMonth = rows.filter((t) => monthOf(t.date) === m.month)
+  const inMonth = posted.filter((t) => monthOf(t.date) === m.month)
   const spent = inMonth.filter((t) => typeOf(t) === 'Spending').reduce((n, t) => n + t.amount, 0)
   if (spent !== m.spent) errors.push(`spending in ${m.month}: app ${spent}, server ${m.spent}`)
   const byDay = groupByDay([...inMonth].reverse(), typeOf).reduce((n, g) => n + g.spent, 0)

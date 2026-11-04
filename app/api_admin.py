@@ -18,7 +18,29 @@ SETTING_KEYS = {"start_month", "ef_months", "roth_limit", "home_layout", "activi
 
 
 def _pct(v, what: str):
-    return number(v, what) / 100 if v not in (None, "") else None
+    """A rate typed as a percent ("4.25"), stored as 0.0425. 0 to 100: 500% or a negative APY went in before."""
+    if v in (None, ""):
+        return None
+    p = number(v, what)
+    if not 0 <= p <= 100:
+        bad(f"{what} must be between 0 and 100%.")
+    return p / 100
+
+
+def _budget(v) -> Optional[int]:
+    if v in (None, ""):
+        return None
+    c = money(v, "Budget")
+    if c < 0:
+        bad("A budget can't be negative.")
+    return c
+
+
+def _same_name(con, table: str, name: str, id: Optional[int]):
+    """Names differ by more than case: "checking" next to "Checking" read as one account in every list."""
+    r = con.execute(f"SELECT name FROM {table} WHERE name = ? COLLATE NOCASE AND id IS NOT ?", (name, id)).fetchone()
+    if r:
+        raise HTTPException(409, {"errors": [f"There's already one called {r[0]}."]})
 
 
 def _opened(v, kind: str) -> Optional[str]:
@@ -115,17 +137,33 @@ async def order_accounts(request: Request, con: Con):
 
 @router.post("/accounts", status_code=201)
 async def create_account(request: Request, con: Con):
-    id = _upsert(con, "accounts", _account_fields(await body(request)), None)
+    f = _account_fields(await body(request))
+    _same_name(con, "accounts", f["name"], None)
+    id = _upsert(con, "accounts", f, None)
     con.commit()
     return _get(con, "accounts", id)
 
 
 @router.put("/accounts/{id}")
 async def update_account(id: int, request: Request, con: Con):
-    _get(con, "accounts", id)
-    _upsert(con, "accounts", _account_fields(await body(request)), id)
+    old = _get(con, "accounts", id)
+    f = _account_fields(await body(request))
+    _same_name(con, "accounts", f["name"], id)
+    if f["kind"] != old["kind"] and (n := _uses(con, id)):
+        # Cash and cards count the same rows in opposite directions, and investments and loans don't count rows at
+        # all, so every balance would silently change. Like a category's type, refuse while anything uses it.
+        raise HTTPException(409, {"errors": [f"{old['name']} has {n}, so its type can't change. Make a new "
+                                             f"account instead, and switch this one's Active off."]})
+    _upsert(con, "accounts", f, id)
     con.commit()
     return _get(con, "accounts", id)
+
+
+def _uses(con, id: int) -> str:
+    n = con.execute("SELECT COUNT(*) FROM transactions WHERE from_account_id=? OR to_account_id=?", (id, id)).fetchone()[0]
+    m = con.execute("SELECT COUNT(*) FROM typed_balances WHERE account_id=?", (id,)).fetchone()[0]
+    return " and ".join(x for x in (f"{n} {'entry' if n == 1 else 'entries'}" if n else "",
+                                     f"{m} month-end {'balance' if m == 1 else 'balances'}" if m else "") if x)
 
 
 @router.delete("/accounts/{id}", status_code=204)
@@ -142,7 +180,8 @@ def _category_fields(b: dict) -> dict:
     return {"name": text(b["name"], "Name"), "type": b["type"], "sort": whole(b.get("sort") or 0, "sort"),
             "active": flag(b.get("active", True), "Active"), "icon": opt_text(b.get("icon"), "Icon"),
             "color": opt_text(b.get("color"), "Color"),
-            "budget": money(b["budget"], "Budget") if b.get("budget") not in (None, "") else None}
+            # Only spending has a budget: one left from before a type change would count nowhere.
+            "budget": _budget(b.get("budget")) if b["type"] == "Spending" else None}
 
 
 @router.put("/categories/order")  # before /categories/{id}
@@ -152,7 +191,9 @@ async def order_categories(request: Request, con: Con):
 
 @router.post("/categories", status_code=201)
 async def create_category(request: Request, con: Con):
-    id = _upsert(con, "categories", _category_fields(await body(request)), None)
+    f = _category_fields(await body(request))
+    _same_name(con, "categories", f["name"], None)
+    id = _upsert(con, "categories", f, None)
     con.commit()
     return _get(con, "categories", id)
 
@@ -180,6 +221,7 @@ def _misfits(con, id: int, new_type: str) -> list[str]:
 @router.put("/categories/{id}")
 async def update_category(id: int, request: Request, con: Con):
     f = _category_fields(await body(request))
+    _same_name(con, "categories", f["name"], id)
     if errs := _misfits(con, id, f["type"]):
         raise HTTPException(409, {"errors": errs})
     _upsert(con, "categories", f, id)
@@ -198,8 +240,9 @@ async def set_budget(category_id: int, request: Request, con: Con):
     """Body: {"amount": dollars | null, "month"?: "YYYY-MM-01"}. With month → override for that month only;
     without → the category's default. null clears."""
     b = await body(request)
-    _get(con, "categories", category_id)
-    amount = money(b["amount"], "Budget") if b.get("amount") not in (None, "") else None
+    if _get(con, "categories", category_id)["type"] != "Spending":
+        bad("Only spending categories have a budget.")
+    amount = _budget(b.get("amount"))
     if b.get("month"):
         b["month"] = month_of(day(b["month"], "Month")).isoformat()
         if amount is None:
@@ -253,7 +296,7 @@ def delete_favorite(id: int, con: Con):
 def _view_fields(b: dict) -> dict:
     if not text(b.get("name"), "Name"):
         raise HTTPException(422, {"errors": ["Name is required."]})
-    return {"name": text(b["name"], "Name"), "query": text(b.get("query"), "query"), "icon": opt_text(b.get("icon"), "Icon"),
+    return {"name": text(b["name"], "Name"), "query": text(b.get("query"), "query", 2000), "icon": opt_text(b.get("icon"), "Icon"),
             "sort": whole(b.get("sort") or 0, "sort")}
 
 
@@ -299,7 +342,10 @@ async def put_settings(request: Request, con: Con):
                 raise HTTPException(422, {"errors": ["The start month can't be later than this month."]})
             v = v.isoformat()
         elif k == "roth_limit":
-            v = str(money(v or 0, "Roth limit"))
+            v = money(v or 0, "Roth limit")
+            if v < 0:
+                bad("The Roth limit can't be negative.")
+            v = str(v)
         elif k == "ef_months":
             v = whole(v, "Months of spending")
             if not 1 <= v <= 24:

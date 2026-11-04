@@ -20,4 +20,8 @@ test('bigWeekday: the day that costs the most, when it stands out', () => {
   assert.equal(w.avg, 9000)
   assert.equal(bigWeekday(rows.map((r) => ({ ...r, amount: 1000 })), '2026-10-01', '2026-07-01'), null) // nothing stands out
   assert.equal(bigWeekday(rows, '2026-10-01', '2026-09-15'), null) // too little history
+  // One big day (rent) doesn't make its weekday the costly one, and recurring rows don't count.
+  const flat = rows.map((r) => ({ ...r, amount: 1000 }))
+  assert.equal(bigWeekday([...flat, { date: '2026-09-01', amount: 140000 }], '2026-10-01', '2026-07-01'), null)
+  assert.equal(bigWeekday([...flat, ...['2026-09-01', '2026-08-04'].map((date) => ({ date, amount: 140000, recurring_id: 3 }))], '2026-10-01', '2026-07-01'), null)
 })

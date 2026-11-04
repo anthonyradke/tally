@@ -6,7 +6,7 @@ from datetime import date
 from typing import Optional
 from fastapi import HTTPException
 from .engine import Txn, validate
-from .inputs import bad, day, far, money, opt_id, opt_text, text, whole, words
+from .inputs import bad, day, far, money, opt_id, opt_text, text, tag_set, whole
 
 META_COLS = ("note", "tags", "split_group", "receipt", "recurring_id")
 
@@ -26,9 +26,8 @@ def _parse(b: dict, txn_id: Optional[int] = None) -> tuple[Txn, dict]:
         raise HTTPException(422, {"errors": ["Pick a category."]})
     t = Txn(txn_id, day(b.get("date")), text(b.get("what"), "Description"), whole(b["category_id"], "Category"),
             opt_id(b.get("from_id"), "From"), opt_id(b.get("to_id"), "To"), money(b.get("amount") or 0))
-    tags = words(b.get("tags"))
-    meta = {"note": text(b.get("note"), "Note"),
-            "tags": " ".join(sorted({x.strip().lstrip("#").lower() for x in tags if x.strip()})),
+    meta = {"note": text(b.get("note"), "Note", 2000),
+            "tags": " ".join(sorted(tag_set(b.get("tags")))),
             "split_group": opt_text(b.get("split_group"), "Split"), "client_id": None}
     return t, meta
 

@@ -184,8 +184,10 @@ def test_api_totals_agree_everywhere(client, world, monkeypatch):
     boot = client.get("/api/bootstrap").json()
     assert boot["today"] == "2026-09-20"
     sept = next(m for m in boot["months"] if m["month"] == "2026-09-01")
-    listed = client.get("/api/transactions?type=Spending&start=2026-09-01&end=2026-09-30").json()
-    assert sept["spent"] == listed["sum"] == 2002 + 3 - 525
+    # The row dated the 30th is still ahead: it joins the month's spending on its day.
+    listed = client.get("/api/transactions?type=Spending&start=2026-09-01&end=2026-09-20").json()
+    assert sept["spent"] == listed["sum"] == 2002 - 525
+    assert sept["left_over"] == 1000_00 - (2002 - 525)
     assert [m["month"] for m in boot["months"]] == ["2026-08-01", "2026-09-01", "2026-10-01"]  # the future row adds Oct
     chk = str(world["chk"])
     assert sept["balances"][chk] == 1000_00 + 1000_00 - 250_50

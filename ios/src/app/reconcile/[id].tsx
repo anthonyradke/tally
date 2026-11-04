@@ -20,6 +20,7 @@ import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { api, ApiError, type Diagnosis, type Txn } from '@/lib/api'
 import { close } from '@/lib/nav'
+import { dayLabel } from '@/lib/dates'
 import { fromCents, press, toCents } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { Reveal } from '@/lib/privacy'
@@ -93,7 +94,8 @@ export default function Reconcile() {
         )}
         {!dx ? (
           <Animated.View key="check" entering={FadeIn.duration(220)}>
-            <Button label={busy ? 'Checking…' : 'Check'} onPress={() => check(false)} disabled={busy || !amount} style={{ height: 52 }} />
+            {/* Nothing typed checks $0.00: a card paid off in full. */}
+            <Button label={busy ? 'Checking…' : amount ? 'Check' : 'Check $0.00'} onPress={() => check(false)} disabled={busy} style={{ height: 52 }} />
           </Animated.View>
         ) : dx.gap === 0 ? (
           <Animated.View key="mark" entering={FadeIn.duration(220)}>
@@ -150,7 +152,7 @@ function Rows({ title, rows, why }: { title: string; rows: Txn[]; why: string })
       <View style={{ backgroundColor: c.panel, borderRadius: radius.panel, overflow: 'hidden' }}>
         {rows.map((x, i) => (
           <View key={x.id}>{i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-            <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={t.b!.today} showDate={x.date} />
+            <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={t.b!.today} showDate={`${dayLabel(x.date, t.b!.today)}, ${t.catOf(x).name}`} />
           </View>
         ))}
       </View>

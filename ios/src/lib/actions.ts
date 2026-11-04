@@ -16,6 +16,7 @@ export async function deleteTxns(rows: Txn[]): Promise<boolean> {
   try {
     const gone = rows.length === 1 ? [await api.deleteTxn(rows[0].id)] : (await api.bulk({ ids: rows.map((r) => r.id), action: 'delete' })).deleted ?? []
     await invalidateAll()
+    if (!gone.length) { toast({ text: 'Those entries were already gone.' }); return true }
     toast({
       text: gone.length === 1 ? `Deleted ${gone[0].what || 'entry'}` : `Deleted ${gone.length} entries`,
       action: { label: 'Undo', run: () => undo(gone) },

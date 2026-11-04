@@ -26,6 +26,9 @@ export default function FiltersSheet() {
   const [pickCat, setPickCat] = useState(false)
   const [pickAcct, setPickAcct] = useState(false)
   const [viewName, setViewName] = useState('')
+  // The field keeps what's typed ("#Trip"); the filter gets it tidied. Writing the tidied text back into the field
+  // moved the cursor and made "#" impossible to type.
+  const [tagText, setTagText] = useState(f.tag ?? '')
   if (!t.b) return null
   const active = activeRange(f, t.b.today)
   const cat = f.category ? t.cat.get(f.category) : undefined
@@ -45,7 +48,7 @@ export default function FiltersSheet() {
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingTop: space.xl, gap: space.xl, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Txt variant="title2" accessibilityRole="header">Filters</Txt>
-        {extraCount(f) > 0 && <Button label="Reset" secondary onPress={() => set({ category: undefined, account: undefined, start: undefined, end: undefined, tag: undefined, group: undefined, sort: 'date', dir: 'desc' })} style={{ height: 34, paddingHorizontal: space.l }} />}
+        {extraCount(f) > 0 && <Button label="Reset" secondary onPress={() => { setTagText(''); set({ category: undefined, account: undefined, start: undefined, end: undefined, tag: undefined, group: undefined, sort: 'date', dir: 'desc' }) }} style={{ height: 34, paddingHorizontal: space.l }} />}
       </View>
 
       <View style={{ gap: space.s }}>
@@ -66,7 +69,7 @@ export default function FiltersSheet() {
         <Row label="Category" value={cat?.name ?? 'Any'} onPress={() => setPickCat((v) => !v)}
           leading={cat ? (() => { const v = categoryVisual(cat); return <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={28} /> })() : <Icon sf="square.grid.2x2" md="category" size={18} color={c.label2} />} />
         {pickCat && [<Row key="any" label="Any category" chevron={false} onPress={() => { set({ category: undefined }); setPickCat(false) }} />,
-          ...t.b.categories.filter((x) => x.active).map((x) => {
+          ...t.b.categories.filter((x) => x.active || x.id === f.category).map((x) => {
             const v = categoryVisual(x)
             return <Row key={x.id} label={x.name} chevron={false} leading={<Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={28} />}
               trailing={x.id === f.category ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : undefined}
@@ -80,8 +83,8 @@ export default function FiltersSheet() {
           ))]}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
           <Icon sf="number" md="tag" size={18} color={c.label2} />
-          <TextInput value={f.tag ?? ''} placeholder="Tag" placeholderTextColor={c.label3} autoCapitalize="none" autoCorrect={false}
-            onChangeText={(v) => set({ tag: v.trim().replace(/^#/, '').toLowerCase() || undefined })} style={{ flex: 1, fontSize: 17, color: c.label }} />
+          <TextInput value={tagText} placeholder="Tag" placeholderTextColor={c.label3} autoCapitalize="none" autoCorrect={false}
+            onChangeText={(v) => { setTagText(v); set({ tag: v.trim().replace(/^#/, '').toLowerCase() || undefined }) }} style={{ flex: 1, fontSize: 17, color: c.label }} />
         </View>
       </Group>
 

@@ -66,14 +66,14 @@ export default function Settings() {
           <Row label="Server" value={url ? url.replace(/^https?:\/\//, '').split('.')[0] : process.env.EXPO_OS === 'web' ? 'This site' : 'Not set'} sf="server.rack" md="dns" href="/settings/server" />
           {queued.length > 0 && <Row label="Waiting to send" value={String(queued.length)} sf="icloud.and.arrow.up" md="cloud_upload" href="/settings/server" />}
         </Group>
-        <Group header="Backups" footer={backups.data ? `${backups.data.count} nightly snapshots on x1. Your Mac copies them to iCloud each day.` : undefined}>
+        <Group header="Backups" footer={backups.data ? `${backups.data.count} nightly snapshots on the server. Your Mac copies them to iCloud each day.` : undefined}>
           <Row label="Last backup" chevron={false}
             leading={<Icon sf={stale ? 'exclamationmark.triangle.fill' : 'checkmark.shield'} md={stale ? 'warning' : 'verified_user'} size={18} color={stale ? c.neg : c.label2} />}
             value={<Txt variant="body" tone={stale ? 'neg' : 'label2'}>{last ? ago(last.at, now) : backups.isLoading ? '' : 'None found'}</Txt>} />
         </Group>
         <View style={{ alignItems: 'center', gap: 2 }}>
           <Txt variant="foot" tone="label2">Tally {Constants.expoConfig?.version ?? ''}</Txt>
-          <Txt variant="foot" tone="label3">Your data lives on x1. This app is a window onto it.</Txt>
+          <Txt variant="foot" tone="label3">Your data lives on your server. This app is a window onto it.</Txt>
         </View>
       </ScrollView>
     </>

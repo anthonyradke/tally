@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { budgetFor, elapsed, paceOver, suggestBudgets } from '@/lib/budgets'
+import { monthsBefore, typicalFrom } from '@/lib/typical'
 import { monthsNow } from '@/lib/months'
 import { paceFrom, paceWindow } from '@/lib/pace'
 import { boot, cat, month, row } from './fixtures.ts'
@@ -35,11 +36,15 @@ test('elapsed and paceOver', () => {
   assert.equal(elapsed('2026-10-01', '2026-09-24'), 0)
   assert.equal(elapsed('2026-09-01', '2026-09-15'), 0.5)
   assert.equal(elapsed('2028-02-01', '2028-02-29'), 1)
-  assert.equal(paceOver(10000, 20000, '2026-09-01', '2026-09-03'), null)  // too early to call
-  assert.equal(paceOver(15000, 20000, '2026-09-01', '2026-09-15'), 10000) // on pace for 300 against 200
-  assert.equal(paceOver(9000, 20000, '2026-09-01', '2026-09-15'), null)
-  assert.equal(paceOver(25000, 20000, '2026-09-01', '2026-09-15'), null)  // already over: the bar says so
-  assert.equal(paceOver(15000, 20000, '2026-08-01', '2026-09-15'), null)  // a past month has no pace
+  const groceries = { by: 10000, full: 20000 } // half of it usually by mid-month
+  assert.equal(paceOver(10000, 20000, '2026-09-01', '2026-09-03', groceries), null)  // too early to call
+  assert.equal(paceOver(15000, 20000, '2026-09-01', '2026-09-15', groceries), 5000) // 150 so far, 100 more usually to come
+  assert.equal(paceOver(9000, 20000, '2026-09-01', '2026-09-15', groceries), null)
+  assert.equal(paceOver(25000, 20000, '2026-09-01', '2026-09-15', groceries), null)  // already over: the bar says so
+  assert.equal(paceOver(15000, 20000, '2026-08-01', '2026-09-15', groceries), null)  // a past month has no pace
+  assert.equal(paceOver(15000, 20000, '2026-09-01', '2026-09-15'), null)  // no history to go by
+  // Rent paid on the 1st is all there by the 5th: nothing more is coming, so it isn't on pace to go over.
+  assert.equal(paceOver(140000, 140000, '2026-09-01', '2026-09-05', { by: 140000, full: 140000 }), null)
 })
 
 test('suggestBudgets: average of the last three completed months, up to the next $10', () => {
@@ -87,4 +92,19 @@ test('paceFrom: a short month after a long one, and a leap February', () => {
   assert.equal(leap.cur.at(-1), 70)
   const march = paceFrom([row('2028-02-29', 70)], '2028-03-31')
   assert.equal(march.prev.at(-1), 70) // Feb's total carries across March's longer tail
+})
+
+test('typicalFrom: spending by this day of the month in the months before', () => {
+  const months = monthsBefore('2026-11-04', 3, '2026-09-01')
+  assert.deepEqual(months, ['2026-09-01', '2026-10-01']) // nothing before Tally started counting
+  const items = [
+    { date: '2026-09-01', amount: 140000, category_id: 1 }, { date: '2026-10-01', amount: 140000, category_id: 1 },
+    { date: '2026-09-03', amount: 5000, category_id: 2 }, { date: '2026-09-20', amount: 15000, category_id: 2 },
+    { date: '2026-10-28', amount: 20000, category_id: 2 }, { date: '2026-11-02', amount: 999, category_id: 2 },
+  ]
+  const t = typicalFrom(items, months, 4)
+  assert.equal(t.by.get(1), 140000) // rent is all there by the 4th
+  assert.equal(t.full.get(1), 140000)
+  assert.equal(t.by.get(2), 2500)
+  assert.equal(t.full.get(2), 20000)
 })

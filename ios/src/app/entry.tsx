@@ -184,7 +184,8 @@ export function Entry({ embedded }: { embedded?: boolean }) {
         }
         saved = r
       }
-      if (d.photo && saved[0]) await api.uploadReceipt(saved[0].id, d.photo).catch(() => toast({ text: 'Saved, but the receipt photo did not upload.', tone: 'error' }))
+      // A failed upload is said in the last toast: one of its own was replaced by "Saved" before it could be read.
+      const lost = d.photo && saved[0] ? await api.uploadReceipt(saved[0].id, d.photo).then(() => false, () => true) : false
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       play(d.kind === 'Money in' && !d.refund && !editing ? 'income' : 'add')
       markFresh(saved.map((x) => x.id))
@@ -193,7 +194,8 @@ export function Entry({ embedded }: { embedded?: boolean }) {
       setDone(true) // the button draws a check before the sheet goes
       await new Promise((r) => setTimeout(r, 560))
       close()
-      toast({ text: editing ? 'Saved' : `Added ${formatCents(cents)}${cat && !d.split ? ` to ${cat.name}` : ''}` })
+      toast(lost ? { text: `${editing ? 'Saved' : `Added ${formatCents(cents)}`}, but the receipt photo didn't upload. Try adding it again.`, tone: 'error' }
+        : { text: editing ? 'Saved' : `Added ${formatCents(cents)}${cat && !d.split ? ` to ${cat.name}` : ''}` })
     } catch (e) {
       setErrors(e instanceof ApiError ? e.errors : ['Tally is unreachable. Check Tailscale and try again.'])
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
@@ -369,13 +371,13 @@ export function Entry({ embedded }: { embedded?: boolean }) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
               <Icon sf="text.alignleft" md="notes" size={18} color={c.label2} />
               <Field value={d.note} onChangeText={(note) => set({ note })} placeholder="Note" placeholderTextColor={c.label3} multiline
-                onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
+                onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} style={{ flex: 1, fontSize: 17, color: c.label, paddingTop: space.m, paddingBottom: space.m, textAlignVertical: 'center' }} />
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
               <Icon sf="number" md="tag" size={18} color={c.label2} />
               <Field value={tagText ?? d.tags.join(' ')} placeholder="Tags, separated by spaces" placeholderTextColor={c.label3}
                 autoCapitalize="none" autoCorrect={false} onFocus={() => setTyping(true)} onBlur={() => { setTyping(false); setTagText(null) }}
-                onChangeText={(v) => { setTagText(v); set({ tags: v.split(/\s+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean) }) }}
+                onChangeText={(v) => { setTagText(v); set({ tags: v.split(/[\s,]+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean) }) }}
                 style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
             </View>
             <Receipt />

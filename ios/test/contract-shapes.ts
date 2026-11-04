@@ -18,6 +18,7 @@ export interface Shapes {
   category: R<'saveCategory'>
   favorite: R<'saveFavorite'>
   recurring: R<'saveRecurring'>
+  recurringGone: R<'deleteRecurring'>
   view: R<'saveView'>
   settings: R<'putSettings'>
   ok: unknown

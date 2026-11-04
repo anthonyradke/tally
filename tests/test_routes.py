@@ -215,10 +215,13 @@ def test_negative_amounts_are_refunds(client, world):
 
 
 def test_unicode_and_long_text_round_trip(client, world):
-    what = "Ünïcødé 🍕 " + "x" * 2000
-    t = ok(client.post("/api/transactions", json=txn(world, what=what, note="日本語")), 201)
-    assert t["what"] == what.strip() and t["note"] == "日本語"
+    what, note = "Ünïcødé 🍕 " + "x" * 180, "日本語 " + "y" * 1990
+    t = ok(client.post("/api/transactions", json=txn(world, what=what, note=note)), 201)
+    assert t["what"] == what.strip() and t["note"] == note
     assert ok(client.get("/api/transactions?q=🍕"))["total"] == 1
+    # Past the limits it's refused with a reason, not stored to stretch every row it shows in.
+    assert client.post("/api/transactions", json=txn(world, what="x" * 5000)).status_code == 422
+    assert client.post("/api/transactions", json=txn(world, note="x" * 2001)).status_code == 422
 
 
 # Bodies that aren't what the app sends. Each must be refused with a 4xx, not crash with a 500.

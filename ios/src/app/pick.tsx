@@ -13,12 +13,12 @@ import { Group, Row } from '@/components/Row'
 import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
-import { api, ApiError, type CatType, type Kind } from '@/lib/api'
+import { api, ApiError, type BulkBefore, type CatType, type Kind } from '@/lib/api'
 import { close } from '@/lib/nav'
-import { invalidateAll } from '@/lib/data'
+import { cachedTxn, invalidateAll } from '@/lib/data'
 import { useDraft } from '@/lib/draft'
 import { monthsNow } from '@/lib/months'
-import { SHAPES } from '@/lib/shapes'
+import { fits, SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { space, useTheme } from '@/theme'
@@ -54,7 +54,12 @@ function Categories({ line, ids, checked }: { line?: string; ids?: string; check
   const bulk = !!ids
   // In the composer, the kind chosen up top goes first; a split line only takes spending.
   const order = bulk ? TYPE_ORDER : [d.kind, ...TYPE_ORDER.filter((x) => x !== d.kind)]
-  const types = line ? ['Spending' as CatType] : order
+  // Bulk moves only offer categories every chosen row fits (a spending row can't move to Money in: the server
+  // refuses it). Rows not in any cached list can't be checked, so then every type shows and the server decides.
+  const rows = bulk ? ids!.split(',').map((x) => cachedTxn(Number(x))) : []
+  const known = rows.every(Boolean)
+  const fitsAll = (ty: CatType) => !bulk || !known || rows.every((r) => fits(r!, ty))
+  const types = line ? ['Spending' as CatType] : order.filter(fitsAll)
   // Bulk moves check the entry's own category when there's just one; the draft has nothing to do with them.
   const current = bulk ? checked : line ? d.split?.find((l) => l.key === line)?.category_id : d.category_id
   const choose = async (id: number, type: CatType) => {
@@ -62,7 +67,7 @@ function Categories({ line, ids, checked }: { line?: string; ids?: string; check
       try {
         const r = await api.bulk({ ids: ids!.split(',').map(Number), action: 'recategorize', category_id: id })
         await invalidateAll()
-        toast({ text: `Moved ${r.count === 1 ? '1 entry' : `${r.count} entries`}` })
+        toast({ text: `Moved ${r.count === 1 ? '1 entry' : `${r.count} entries`}`, action: r.before ? undo(r.before) : undefined })
       } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
       return done()
     }
@@ -138,16 +143,25 @@ function DateSheet() {
   )
 }
 
+/** Undo for a bulk move or tag: puts each row's category and tags back. */
+const undo = (before: BulkBefore[]) => ({
+  label: 'Undo',
+  run: async () => {
+    try { await api.revert(before); await invalidateAll() } catch { toast({ text: "Couldn't undo. Tally is unreachable.", tone: 'error' }) }
+  },
+})
+
 function BulkTag({ ids }: { ids: string }) {
   const { c } = useTheme()
   const [tag, setTag] = useState('')
   const apply = async () => {
-    const tags = tag.split(/\s+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean)
+    // Commas or spaces between tags, like the placeholder shows; a comma used to stay on the tag ("trip,").
+    const tags = tag.split(/[\s,]+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean)
     if (!tags.length) return
     try {
       const r = await api.bulk({ ids: ids.split(',').map(Number), action: 'tag', tags })
       await invalidateAll()
-      toast({ text: `Tagged ${r.count === 1 ? '1 entry' : `${r.count} entries`}` })
+      toast({ text: `Tagged ${r.count === 1 ? '1 entry' : `${r.count} entries`}`, action: r.before ? undo(r.before) : undefined })
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
     done()
   }

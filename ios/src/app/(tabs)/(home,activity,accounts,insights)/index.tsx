@@ -27,7 +27,7 @@ import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import type { Bootstrap, MonthRow } from '@/lib/api'
-import { budgetFor, elapsed, paceOver } from '@/lib/budgets'
+import { budgetFor, elapsed, paceOver, usualFor } from '@/lib/budgets'
 import { efPace } from '@/lib/goals'
 import { useTransactions } from '@/lib/data'
 import { addDays, fromISO, monthLabel } from '@/lib/dates'
@@ -39,6 +39,7 @@ import { usePrivacy } from '@/lib/privacy'
 import { play } from '@/lib/sound'
 import { usePullRefresh } from '@/lib/refresh'
 import { useTally } from '@/lib/tally'
+import { useTypical } from '@/lib/typical'
 import { radius, space, font as ramp, useTheme } from '@/theme'
 
 const DEFAULT_ORDER = ['networth', 'review', 'stats', 'quick', 'budgets', 'spending', 'ef', 'forecast', 'upcoming', 'recent', 'roth', 'chart']
@@ -133,8 +134,8 @@ function Delta({ cents, suffix }: { cents: number; suffix: string }) {
 
 const SEEN = 'tally.seen.networth'
 
-/** The figure Home opens on: how far ahead this month is so far (money in, less spending and loan payments; money
- *  moved to savings still counts as yours). Tapping it swaps to net worth and back; it always opens on the month. */
+/** The figure Home opens on: this month's left over so far (money in less spending; the same figure as Left over in
+ *  the month panel). Tapping it swaps to net worth and back; it always opens on the month. */
 function Hero({ b }: { b: Bootstrap }) {
   const { c } = useTheme()
   const reduce = useReducedMotion()
@@ -153,8 +154,7 @@ function Hero({ b }: { b: Bootstrap }) {
     return () => { live = false }
   }, [now])
   if (!cur) return null
-  const out = cur.spent + cur.loan
-  const up = cur.money_in - out
+  const up = cur.left_over
   return (
     <Tap feedback="opacity" onPress={() => { Haptics.selectionAsync().catch(() => {}); setWorth(!worth) }}
       accessibilityHint={worth ? 'Shows this month' : 'Shows net worth'} style={{ paddingHorizontal: space.xs, marginBottom: space.section - 4 }}>
@@ -171,7 +171,7 @@ function Hero({ b }: { b: Bootstrap }) {
         ) : (
           <>
             <RollingMoney cents={up} sign="always" style={{ ...ramp.hero, color: up > 0 ? c.pos : up < 0 ? c.neg : c.label }} rollIn />
-            <Txt variant="callout" tone="label2" num>{formatCents(cur.money_in, { cents: false })} in, {formatCents(out, { cents: false })} out</Txt>
+            <Txt variant="callout" tone="label2" num>{formatCents(cur.money_in, { cents: false })} in, {formatCents(cur.spent, { cents: false })} spent</Txt>
           </>
         )}
       </Animated.View>
@@ -296,6 +296,7 @@ function FloatUp({ text, color }: { text: string; color?: string }) {
 function Budgets({ b }: { b: Bootstrap }) {
   const { c, tint } = useTheme()
   const { cur } = monthsNow(b)
+  const typical = useTypical(b, 3)
   if (!cur) return null
   const rows = b.categories.filter((x) => x.active && x.type === 'Spending')
     .map((x) => ({ x, budget: budgetFor(b, x, cur.month), spent: cur.by_category[String(x.id)] ?? 0 }))
@@ -326,7 +327,7 @@ function Budgets({ b }: { b: Bootstrap }) {
         {rows.slice(0, 5).map(({ x, budget, spent }) => {
           const v = categoryVisual(x)
           const over = spent > budget
-          const warn = paceOver(spent, budget, cur.month, b.today)
+          const warn = paceOver(spent, budget, cur.month, b.today, usualFor(typical, x.id))
           return (
             <Tap key={x.id} href={{ pathname: '/category/[id]', params: { id: String(x.id) } }} feedback="opacity" style={{ gap: space.s }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>

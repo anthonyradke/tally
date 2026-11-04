@@ -21,9 +21,10 @@ import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
 import { api, type AdminData, type CatType, type Kind } from '@/lib/api'
 import { suggestBudgets } from '@/lib/budgets'
+import { invalidateAll, useTransactions } from '@/lib/data'
 import { commitments } from '@/lib/commitments'
 import { budgetAmount } from '@/lib/forms'
-import { dayLabel, toISO } from '@/lib/dates'
+import { addDays, dayLabel, nextDue, toISO } from '@/lib/dates'
 import { fromCents, toCents } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { discard, flush, useOutbox } from '@/lib/outbox'
@@ -157,6 +158,11 @@ function RecurringList({ a }: { a: AdminData }) {
   const { tint } = useTheme()
   const { b } = useTally()
   const cats = new Map(a.categories.map((x) => [x.id, x]))
+  // When each one is next due: its first row still ahead, if it posted one already. The template's own next date is
+  // the one after, so rent with December posted read "next Jan 1".
+  const ahead = useTransactions({ start: b ? addDays(b.today, 1) : undefined, sort: 'date', dir: 'asc', limit: 2000 }, !!b && a.recurring.length > 0)
+  const due = new Map<number, string>()
+  for (const x of ahead.data?.items ?? []) if (x.recurring_id && !due.has(x.recurring_id)) due.set(x.recurring_id, x.date)
   const ideas = b ? <RepeatSuggestions b={b} /> : null
   if (!a.recurring.length) return <>{ideas}<Empty sf="repeat" md="repeat" title="Nothing recurring yet" body="Add a paycheck, rent or a subscription and Tally posts it ahead of time, about 45 days out." /></>
   const k = b ? commitments(b) : null
@@ -164,11 +170,11 @@ function RecurringList({ a }: { a: AdminData }) {
     <>
     {ideas}
     <Group footer={k && k.outMonthly ? `Bills and subscriptions add up to ${formatCents(k.outMonthly, { cents: false })} a month, ${formatCents(k.outMonthly * 12, { cents: false })} a year.` : undefined}>
-      {a.recurring.map((r) => {
+      {[...a.recurring].sort((x, y) => (y.active - x.active) || (due.get(x.id) ?? x.next_date).localeCompare(due.get(y.id) ?? y.next_date)).map((r) => {
         const cat = cats.get(r.category_id)
         const v = cat ? categoryVisual(cat) : null
         return (
-          <Row key={r.id} label={r.label} sub={r.active ? `${r.freq[0].toUpperCase()}${r.freq.slice(1)}, next ${dayLabel(r.next_date, b?.today)}` : 'Paused'}
+          <Row key={r.id} label={r.label} sub={r.active ? `${r.freq[0].toUpperCase()}${r.freq.slice(1)}, ${nextDue(due.get(r.id) ?? r.next_date, b?.today)}` : 'Paused'}
             value={formatCents(r.amount)} leading={v ? <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={30} /> : undefined}
             onPress={() => router.push({ pathname: '/edit', params: { kind: 'recurring', id: String(r.id) } })} />
         )
@@ -210,6 +216,9 @@ function Budgets({ a }: { a: AdminData }) {
     setVals((v) => Object.fromEntries(a.categories.map((x) => [x.id, typing.current.has(x.id) ? v[x.id] ?? '' : x.budget ? fromCents(x.budget) : ''])))
   }, [a])
   const suggestions = b ? suggestBudgets(b) : []
+  // Suggestions only fill categories with no budget yet: they used to overwrite ones you'd set, in one tap. Each
+  // row still shows what it usually is.
+  const unset = suggestions.filter((s) => (a.categories.find((x) => x.id === s.c.id)?.budget ?? null) == null)
   const spending = a.categories.filter((x) => x.type === 'Spending' && x.active)
   const save = (id: number, v: string) => {
     typing.current.delete(id)
@@ -220,22 +229,28 @@ function Budgets({ a }: { a: AdminData }) {
     write(() => api.setBudget(id, now))
   }
   const applySuggestions = async () => {
-    const ok = await write(async () => { for (const s of suggestions) await api.setBudget(s.c.id, s.suggested) }, `Set ${suggestions.length} budgets`)
-    if (ok) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+    const list = unset
+    const ok = await write(async () => { for (const s of list) await api.setBudget(s.c.id, s.suggested) })
+    if (!ok) return
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+    toast({
+      text: `Set ${list.length === 1 ? '1 budget' : `${list.length} budgets`}`,
+      action: { label: 'Undo', run: async () => { await write(async () => { for (const s of list) await api.setBudget(s.c.id, null) }) } },
+    })
   }
   const total = spending.reduce((n, x) => n + toCents(vals[x.id] ?? ''), 0)
   return (
     <>
-      {suggestions.length > 0 && (
+      {unset.length > 0 && (
         <View style={{ padding: space.l, borderRadius: radius.panel, backgroundColor: c.panel, gap: space.m }}>
           <View style={{ flexDirection: 'row', gap: space.m, alignItems: 'center' }}>
             <Icon sf="wand.and.stars" md="auto_fix_high" size={20} color={c.label} />
             <View style={{ flex: 1, gap: 2 }}>
               <Txt variant="headline">Suggested from your spending</Txt>
-              <Txt variant="sub" tone="label2">The average of the last {suggestions[0].months === 1 ? 'month' : `${suggestions[0].months} months`}, rounded up to $10, for {suggestions.length} categories.</Txt>
+              <Txt variant="sub" tone="label2">The average of the last {unset[0].months === 1 ? 'month' : `${unset[0].months} months`}, rounded up to $10, for {unset.length === 1 ? 'the category' : `the ${unset.length} categories`} with no budget yet.</Txt>
             </View>
           </View>
-          <Button label="Use suggestions" onPress={applySuggestions} />
+          <Button label={unset.length === 1 ? 'Use the suggestion' : `Use ${unset.length} suggestions`} onPress={applySuggestions} />
         </View>
       )}
       <Group header="Monthly budget" footer={total ? `${formatCents(total, { cents: false })} a month across every category. Leave a field empty for no budget.` : 'Leave a field empty for no budget.'}>
@@ -269,16 +284,21 @@ function General({ a }: { a: AdminData }) {
   // The tick moves on tap; the save catches up behind it (and the tick goes back if it fails).
   const [chosen, setChosen] = useState<Record<string, number>>({})
   const pick = (key: 'roth_category' | 'interest_category', types: CatType[]) => {
-    const cur = chosen[key] ?? Number(s[key] ?? 0)
+    // Never stored: the server goes by the default name. Stored empty: switched off (None).
+    const fallback = cats.find((x) => x.name === (key === 'roth_category' ? 'Roth IRA' : 'Other Income'))?.id ?? 0
+    const cur = chosen[key] ?? (s[key] === undefined ? fallback : Number(s[key] || 0))
     const choose = (id: number) => {
       Haptics.selectionAsync().catch(() => {})
       setChosen((m) => ({ ...m, [key]: id }))
-      write(() => api.putSettings({ [key]: id })).then((ok) => { if (!ok) setChosen(({ [key]: _, ...rest }) => rest) })
+      write(() => api.putSettings({ [key]: id || '' })).then((ok) => { if (!ok) setChosen(({ [key]: _, ...rest }) => rest) })
     }
-    return cats.filter((x) => types.includes(x.type)).map((x) => (
-      <Row key={x.id} label={x.name} chevron={false} onPress={() => choose(x.id)}
-        trailing={x.id === cur ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : undefined} />
-    ))
+    const tick = (on: boolean) => (on ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : undefined)
+    return [
+      ...cats.filter((x) => types.includes(x.type)).map((x) => (
+        <Row key={x.id} label={x.name} chevron={false} onPress={() => choose(x.id)} trailing={tick(x.id === cur)} />
+      )),
+      <Row key="none" label="None" sub={key === 'interest_category' ? 'Month end skips the interest step' : "Nothing counts toward the Roth limit"} chevron={false} onPress={() => choose(0)} trailing={tick(!cur)} />,
+    ]
   }
   return (
     <>
@@ -324,24 +344,16 @@ function HomeLayout({ a }: { a: AdminData }) {
   const hidden = local?.hidden ?? new Set(saved.hidden ?? [])
   const save = (o: string[], h: Set<string>) => {
     setLocal({ order: o, hidden: h })
-    write(() => api.putSettings({ home_layout: { order: o, hidden: [...h] } })).then((ok) => { if (!ok) setLocal(null) })
+    return write(() => api.putSettings({ home_layout: { order: o, hidden: [...h] } })).then((ok) => { if (!ok) setLocal(null); return ok })
   }
-  const { c } = useTheme()
+  // Press and hold a row to drag it, like every other list in Settings (it used to step up one place per tap).
   return (
-    <Group footer="Month in review shows during the first week of a month. Net worth over time appears once there are three months.">
-      {order.map((id, i) => (
-        <Row key={id} label={WIDGET_NAMES[id]} chevron={false}
-          trailing={
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
-              <Tap feedback="opacity" hitSlop={6} disabled={i === 0} accessibilityLabel="Move up" onPress={() => { const o = [...order]; [o[i - 1], o[i]] = [o[i], o[i - 1]]; save(o, hidden) }}
-                style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: c.fill, alignItems: 'center', justifyContent: 'center', opacity: i === 0 ? 0.3 : 1 }}>
-                <Icon sf="chevron.up" md="expand_less" size={12} color={c.label} weight="bold" />
-              </Tap>
-              <Switch value={!hidden.has(id)} onValueChange={(on) => { const h = new Set(hidden); if (on) h.delete(id); else h.add(id); save(order, h) }} />
-            </View>
-          } />
-      ))}
-    </Group>
+    <DragGroup items={order} keyOf={(id) => id} onReorder={(next) => save(next, hidden)}
+      footer="Press and hold a card to move it. Month in review shows during the first week of a month. Net worth over time appears once there are three months."
+      render={(id) => (
+        <Row label={WIDGET_NAMES[id]} chevron={false}
+          trailing={<Switch value={!hidden.has(id)} onValueChange={(on) => { const h = new Set(hidden); if (on) h.delete(id); else h.add(id); save(order, h) }} />} />
+      )} />
   )
 }
 
@@ -360,15 +372,26 @@ function Server() {
   const [val, setVal] = useState(url)
   const [state, setState] = useState<'idle' | 'checking' | 'ok' | 'fail'>('idle')
   const queued = useOutbox((s) => s.items)
+  // The new address is tried first and kept only if Tally answers there: a typo used to be saved straight away and
+  // left the app talking to nothing. "Use it anyway" is for a server that's down for now.
   const test = async () => {
+    const prev = url
     setState('checking')
     set(val)
-    try { await api.bootstrap(); setState('ok'); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}) }
-    catch { setState('fail'); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
+    try {
+      await api.bootstrap()
+      setState('ok')
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      invalidateAll()
+    } catch {
+      set(prev)
+      setState('fail')
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
+    }
   }
   return (
     <>
-      <Group header="Tally's address" footer="Tally runs on x1 and is reachable only over Tailscale, so keep the Tailscale app connected on this phone.">
+      <Group header="Tally's address" footer="Tally runs on your own server and is reachable only over Tailscale, so keep the Tailscale app connected on this phone.">
         <View style={{ padding: space.l, gap: space.m }}>
           <TextInput value={val} onChangeText={setVal} autoCapitalize="none" autoCorrect={false} keyboardType="url" placeholder="https://…"
             placeholderTextColor={c.label3} style={{ fontSize: 17, color: c.label }} />
@@ -377,7 +400,14 @@ function Server() {
             {defaultServer && val !== defaultServer && <Button label="Reset" secondary onPress={() => setVal(defaultServer)} />}
           </View>
           {state === 'ok' && <Txt variant="callout" tone="pos">Connected.</Txt>}
-          {state === 'fail' && <Txt variant="callout" tone="neg">No answer. Is Tailscale on?</Txt>}
+          {state === 'fail' && (
+            <View style={{ gap: space.xs }}>
+              <Txt variant="callout" tone="neg">No answer there, so Tally kept the address it had. Is Tailscale on?</Txt>
+              <Tap feedback="opacity" hitSlop={8} onPress={() => { set(val); setState('idle'); toast({ text: 'Address saved' }) }}>
+                <Txt variant="callout" style={{ fontWeight: '600' }}>Use it anyway</Txt>
+              </Tap>
+            </View>
+          )}
         </View>
       </Group>
       {queued.length > 0 && (

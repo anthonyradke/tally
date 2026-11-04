@@ -6,12 +6,13 @@ export interface Filters {
   q: string; type: CatType | ''; category?: number; account?: number; start?: string; end?: string
   tag?: string; group?: string; sort: 'date' | 'amount'; dir: 'asc' | 'desc'
 }
-const EMPTY: Filters = { q: '', type: '', sort: 'date', dir: 'desc' }
+export const EMPTY: Filters = { q: '', type: '', sort: 'date', dir: 'desc' }
 
-interface S { f: Filters; set: (p: Partial<Filters>) => void; reset: () => void }
+interface S { f: Filters; set: (p: Partial<Filters>) => void; replace: (f: Filters) => void; reset: () => void }
 export const useFilters = create<S>((set) => ({
   f: EMPTY,
   set: (p) => set((s) => ({ f: { ...s.f, ...p } })),
+  replace: (f) => set({ f }),
   reset: () => set({ f: EMPTY }),
 }))
 

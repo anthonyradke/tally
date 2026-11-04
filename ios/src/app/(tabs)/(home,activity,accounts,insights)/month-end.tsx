@@ -36,6 +36,8 @@ export default function MonthEnd() {
   const [typed, setTyped] = useState<Record<string, string>>({})
   const [interest, setInterest] = useState<Record<string, string>>({})
   const [loans, setLoans] = useState<Record<string, string>>({})
+  // One save at a time: a double tap on Log interest used to log it twice.
+  const [busy, setBusy] = useState<'typed' | 'loans' | 'interest' | null>(null)
   // The fields start from each fresh answer (set while rendering, React's pattern for state that follows a prop).
   const [seeded, setSeeded] = useState<typeof q.data>(undefined)
   if (q.data && q.data !== seeded) {
@@ -57,24 +59,36 @@ export default function MonthEnd() {
     return true
   }
   // `had`: what each field held when the screen loaded. Emptying one that had a balance takes it back out.
-  const saveTyped = async (fields: Record<string, string>, had: Record<string, number | null>) => {
+  const saveTyped = async (which: 'typed' | 'loans', fields: Record<string, string>, had: Record<string, number | null>) => {
+    if (busy) return
     const { cents, bad } = amountsById(fields)
     if (typos(bad)) return
     const cleared = Object.keys(fields).filter((k) => fields[k].trim() === '' && had[k] != null).map(Number)
+    setBusy(which)
     try {
       await api.monthEndTyped(ym, cents, cleared)
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       play('add'); toast({ text: 'Balances saved' }); await refresh()
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
+    finally { setBusy(null) }
   }
   const saveInterest = async () => {
+    if (busy) return
     const { cents, bad } = amountsById(interest, true)
     if (typos(bad)) return
+    setBusy('interest')
     try {
       await api.monthEndInterest(ym, cents)
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       play('income'); toast({ text: 'Interest logged' }); await refresh()
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
+    finally { setBusy(null) }
+  }
+  // An investment not typed yet shows the balance it carries from the month before, in grey, like the loans do.
+  const carried = (k: string) => {
+    const row = b.months.find((m) => m.month === `${ym}-01`)
+    const v = row?.balances[k]
+    return v == null ? undefined : fromCents(v)
   }
   const acct = (id: string) => t.acct.get(Number(id)) as Account
   // Steps number themselves: a month with no savings APY skips the interest step.
@@ -87,14 +101,14 @@ export default function MonthEnd() {
         <Arrive on={waited} style={{ gap: space.xxl }}>
         {Object.keys(d.typed).length > 0 && (
           <View style={{ gap: space.m }}>
-            <Step n={1} title="Investment balances" done={d.typed_done} sub="What each one was worth at the end of the month." />
+            <Step n={1} title="Investment balances" done={d.typed_done} sub="What each one was worth at the end of the month. The grey figure is the one it carries from the month before." />
             <Group>
               {Object.keys(d.typed).map((k) => (
                 <Row key={k} label={acct(k)?.name ?? k} chevron={false} value={
-                  <Field value={typed[k] ?? ''} onChange={(v) => setTyped((s) => ({ ...s, [k]: v }))} />} />
+                  <Field value={typed[k] ?? ''} placeholder={carried(k)} onChange={(v) => setTyped((s) => ({ ...s, [k]: v }))} />} />
               ))}
             </Group>
-            <Button label="Save balances" onPress={() => saveTyped(typed, d.typed)} secondary={d.typed_done} />
+            <Button label={busy === 'typed' ? 'Saving…' : 'Save balances'} onPress={() => saveTyped('typed', typed, d.typed)} disabled={!!busy} secondary={d.typed_done} />
           </View>
         )}
         {Object.keys(d.interest).length > 0 && (
@@ -108,7 +122,7 @@ export default function MonthEnd() {
                 <Row key={k} label={acct(k)?.name ?? k} chevron={false} value={<Field value={interest[k] ?? ''} onChange={(val) => setInterest((s) => ({ ...s, [k]: val }))} />} />
               ))}
             </Group>
-            {!d.interest_done && <Button label="Log interest" onPress={saveInterest} />}
+            {!d.interest_done && <Button label={busy === 'interest' ? 'Logging…' : 'Log interest'} onPress={saveInterest} disabled={!!busy} />}
           </View>
         )}
         <View style={{ gap: space.m }}>
@@ -134,7 +148,7 @@ export default function MonthEnd() {
                   <Field value={loans[k] ?? ''} placeholder={fromCents(v.balance)} onChange={(val) => setLoans((s) => ({ ...s, [k]: val }))} />} />
               ))}
             </Group>
-            <Button label="Save loan balances" onPress={() => saveTyped(loans, Object.fromEntries(Object.entries(d.loans).map(([k, v]) => [k, v.typed])))} secondary />
+            <Button label={busy === 'loans' ? 'Saving…' : 'Save loan balances'} disabled={!!busy} onPress={() => saveTyped('loans', loans, Object.fromEntries(Object.entries(d.loans).map(([k, v]) => [k, v.typed])))} secondary />
           </View>
         )}
         </Arrive>
@@ -143,12 +157,12 @@ export default function MonthEnd() {
   )
 }
 
-function Field({ value, onChange, placeholder = '0.00' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+function Field({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const { c } = useTheme()
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: c.fill, borderRadius: radius.input, paddingHorizontal: space.m, height: 36, width: 128 }}>
       <Txt variant="body" tone="label2">$</Txt>
-      <TextInput value={value} onChangeText={(v) => onChange(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder={placeholder} placeholderTextColor={c.label3}
+      <TextInput value={value} onChangeText={(v) => onChange(v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder={placeholder ?? '0.00'} placeholderTextColor={c.label3}
         style={{ flex: 1, minWidth: 48, fontSize: 17, color: c.label, textAlign: 'right', fontVariant: ['tabular-nums'] }} />
     </View>
   )

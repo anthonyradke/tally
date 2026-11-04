@@ -11,13 +11,14 @@ import { StateView } from '@/components/StateView'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
-import { budgetFor, elapsed, paceOver } from '@/lib/budgets'
+import { budgetFor, elapsed, paceOver, usualFor } from '@/lib/budgets'
 import { useTransactions } from '@/lib/data'
 import { dayLabel, fromISO, monthLabel, monthOf } from '@/lib/dates'
 import { formatCents, pct } from '@/lib/money'
 import { useTally } from '@/lib/tally'
 import { useAllTxns } from '@/lib/balances'
 import { placesIn } from '@/lib/merchant'
+import { useTypical } from '@/lib/typical'
 import { Money } from '@/components/Money'
 import { Tap } from '@/components/Tap'
 import { font as ramp, space, useTheme } from '@/theme'
@@ -33,6 +34,7 @@ export default function CategoryDetail() {
   const b = t.b
   const rows = useTransactions({ category: Number(id), limit: 40 }, !!x)
   const all = useAllTxns(!!x)
+  const typical = useTypical(b, 3, x?.type === 'Spending')
   if (!x || !b) return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}><StateView q={t.q} /></ScrollView>
   const v = categoryVisual(x)
   const color = tint(v.tint)
@@ -42,7 +44,9 @@ export default function CategoryDetail() {
   const spent = cur ? cur.by_category[String(x.id)] ?? 0 : 0
   const budget = cur && x.type === 'Spending' ? budgetFor(b, x, cur.month) : null
   const avg = values.length > 1 ? Math.round(values.slice(0, -1).reduce((n, v2) => n + v2, 0) / (values.length - 1)) : null
-  const warn = budget && cur ? paceOver(spent, budget, cur.month, b.today) : null
+  const partial = !!cur && elapsed(cur.month, b.today) < 1
+  const usualNow = typical && x.type === 'Spending' ? Math.round(typical.by.get(x.id) ?? 0) : null
+  const warn = budget && cur ? paceOver(spent, budget, cur.month, b.today, usualFor(typical, x.id)) : null
   const places = all.data ? placesIn(b, x.id, all.data.items) : []
   const verb = x.type === 'Money in' ? 'Received' : x.type === 'Spending' ? 'Spent' : 'Moved'
 
@@ -60,7 +64,7 @@ export default function CategoryDetail() {
             <Mark kind="glyph" sf={v.sf} md={v.md} tint={color} size={44} />
             <View style={{ flex: 1 }}>
               <Txt variant="sub" tone="label2" style={{ fontSize: 15 }}>{verb} in {cur ? monthName(cur.month) : ''}</Txt>
-              <ScrubFigure cents={Math.abs(spent)} values={values} labels={months.map((m) => `In ${monthLabel(m.month, 'long')}`)} scrub={scrub}
+              <ScrubFigure cents={Math.abs(spent)} values={values} labels={months.map((m) => `In ${monthLabel(m.month, 'long')}${m === cur && partial ? ' so far' : ''}`)} scrub={scrub}
                 style={{ ...ramp.title, color: c.label }} />
             </View>
           </View>
@@ -78,8 +82,10 @@ export default function CategoryDetail() {
           )}
           {values.length > 1 && (
             <Panel style={{ gap: space.s }}>
-              <ScrubChart scrub={scrub} slots={values.length} zero series={[{ values, color }]} height={110} guide={budget} />
-              {avg != null && <Txt variant="foot" tone="label2" num>Average before this month: {formatCents(avg, { cents: false })} a month</Txt>}
+              {/* The last point is a month still going, so it nearly always sits low: its dot breathes, and the line
+                  under the chart says what's usual by now. */}
+              <ScrubChart scrub={scrub} slots={values.length} zero series={[{ values, color }]} height={110} guide={budget} live={partial} />
+              {avg != null && <Txt variant="foot" tone="label2" num>Average before this month: {formatCents(avg, { cents: false })} a month{partial && usualNow != null ? `, ${formatCents(usualNow, { cents: false })} by this day` : ''}</Txt>}
             </Panel>
           )}
         </View>

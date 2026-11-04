@@ -63,6 +63,8 @@ export default function New() {
   const { fav, from, date } = link
   const { d, set, reset } = useDraft()
   const history = useTransactions({ limit: 600 }, !!t.b)
+  // "Recent" suggests what has happened, not the bills scheduled weeks ahead that topped it.
+  const past = useMemo(() => (history.data?.items ?? []).filter((x) => !t.b || x.date <= t.b.today), [history.data, t.b])
   // Seed the draft once: blank, from an account, or from a quick action (which may already have an amount, and then
   // it starts on the first step still missing something).
   const makeSeed = () => {
@@ -206,7 +208,8 @@ export default function New() {
     setErrors(errs)
     if (errs.length) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}); return }
     setSaving(true)
-    const again = { label: 'Add another', run: () => { router.push({ pathname: '/new', params: { date: d.date } }) } }
+    // Add another keeps the day and the account it was opened from (an account's page, or Activity filtered to one).
+    const again = { label: 'Add another', run: () => { router.push({ pathname: '/new', params: { date: d.date, ...(from ? { from } : {}) } }) } }
     try {
       const saved = await sendOrQueue(lines, d.what || (cat?.name ?? 'Entry'))
       if (!saved) {
@@ -216,7 +219,8 @@ export default function New() {
         toast({ text: QUEUED, action: again })
         return
       }
-      if (d.photo && saved[0]) await api.uploadReceipt(saved[0].id, d.photo).catch(() => toast({ text: 'Saved, but the receipt photo did not upload.', tone: 'error' }))
+      // A failed upload is said in the last toast: one of its own was replaced by "Added…" before it could be read.
+      const lost = d.photo && saved[0] ? await api.uploadReceipt(saved[0].id, d.photo).then(() => false, () => true) : false
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       play(d.kind === 'Money in' && !d.refund ? 'income' : 'add')
       markFresh(saved.map((x) => x.id))
@@ -226,7 +230,8 @@ export default function New() {
       await new Promise((r) => setTimeout(r, 560))
       close()
       // Catching up on a week at once: Add another starts the next entry on the same day.
-      toast({ text: `Added ${formatCents(cents)}${cat ? ` to ${cat.name}` : ''}`, action: again })
+      toast(lost ? { text: `Added ${formatCents(cents)}, but the receipt photo didn't upload. Add it from the entry.`, tone: 'error', action: again }
+        : { text: `Added ${formatCents(cents)}${cat ? ` to ${cat.name}` : ''}`, action: again })
     } catch (e) {
       setErrors(e instanceof ApiError ? e.errors : ['Tally is unreachable. Check Tailscale and try again.'])
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
@@ -289,8 +294,8 @@ export default function New() {
                   <Animated.View style={shakeStyle}>
                     <RollingText text={formatCents(calc ? total(calc, d.amount) : cents)} style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: d.amount || calc ? c.label : c.label3 }} />
                   </Animated.View>
-                  {calc ? <Txt variant="callout" tone="label2" num numberOfLines={1}>{expression(calc, d.amount)}</Txt>
-                    : d.what ? <Txt variant="callout" tone="label2">{d.what}</Txt> : null}
+                  {/* Always there (a blank line when there's nothing to say), so the figure doesn't jump when a sum starts. */}
+                  <Txt variant="callout" tone="label2" num={!!calc} numberOfLines={1}>{calc ? expression(calc, d.amount) : d.what || '\u00a0'}</Txt>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space.s, marginBottom: -space.s }}>
                   {calc && <OpKey label="=" hint="Total" onPress={() => { Haptics.selectionAsync().catch(() => {}); settle() }} />}
@@ -305,7 +310,7 @@ export default function New() {
               </View>
             )}
 
-            {s === 'what' && <What history={history.data?.items ?? []} onPick={pickPast} onSubmit={next} />}
+            {s === 'what' && <What history={past} onPick={pickPast} onSubmit={next} />}
 
             {s === 'category' && (
               <ScrollView contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
@@ -332,7 +337,10 @@ export default function New() {
                 <Group>
                   <Row label={d.kind === 'Money in' ? 'From' : 'What'} value={d.what || 'Add a name'} sf="text.alignleft" md="notes" onPress={() => go('what')} />
                   <Row label="Category" value={cat?.name ?? 'Choose'} onPress={() => go('category')}
-                    leading={cat ? <CatMark id={cat.id} /> : undefined} sf={cat ? undefined : 'square.grid.2x2'} md={cat ? undefined : 'category'} />
+                    leading={cat ? (
+                      // The mark sits in the icons' 18 pt column, so "Category" lines up with What and From.
+                      <View style={{ width: 18, alignItems: 'center', overflow: 'visible' }}><CatMark id={cat.id} size={24} /></View>
+                    ) : undefined} sf={cat ? undefined : 'square.grid.2x2'} md={cat ? undefined : 'category'} />
                   {shape.from !== 'blank' && <Row label="From" value={d.from_id ? t.acct.get(d.from_id)?.name : 'Choose'} sf="arrow.up.right" md="north_east" onPress={() => go('from')} />}
                   {shape.to !== 'blank' && <Row label="To" value={d.to_id ? t.acct.get(d.to_id)?.name : shape.to === 'optional' ? 'None' : 'Choose'} sf="arrow.down.left" md="south_west" onPress={() => go('to')} />}
                 </Group>
@@ -429,13 +437,13 @@ function Dot({ on, done, label, onPress }: { on: boolean; done: boolean; label: 
   )
 }
 
-function CatMark({ id }: { id: number }) {
+function CatMark({ id, size = 30 }: { id: number; size?: number }) {
   const t = useTally()
   const { tint } = useTheme()
   const x = t.cat.get(id)
   if (!x) return null
   const v = categoryVisual(x)
-  return <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={30} />
+  return <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={size} />
 }
 
 /** "What was it?": a name, with your past entries of this kind under it. Picking one copies its category and accounts. */
@@ -526,13 +534,13 @@ function Extras({ onSplit }: { onSplit: () => void }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
         <Icon sf="text.bubble" md="chat" size={18} color={c.label2} />
         <Field value={d.note} onChangeText={(note) => set({ note })} placeholder="Note" placeholderTextColor={c.label3} multiline
-          style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
+          style={{ flex: 1, fontSize: 17, color: c.label, paddingTop: space.m, paddingBottom: space.m, textAlignVertical: 'center' }} />
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
         <Icon sf="number" md="tag" size={18} color={c.label2} />
         <Field value={tagText ?? d.tags.join(' ')} placeholder="Tags, separated by spaces" placeholderTextColor={c.label3}
           autoCapitalize="none" autoCorrect={false} onBlur={() => setTagText(null)}
-          onChangeText={(v) => { setTagText(v); set({ tags: v.split(/\s+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean) }) }}
+          onChangeText={(v) => { setTagText(v); set({ tags: v.split(/[\s,]+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean) }) }}
           style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
       </View>
       <Receipt />

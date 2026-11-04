@@ -71,17 +71,21 @@ async def month_end_typed(ym: str, request: Request, con: Con):
 
 @router.post("/month-end/{ym}/interest")
 async def month_end_interest(ym: str, request: Request, con: Con):
-    """Body: {"<account_id>": dollars, ...} — logs an interest income row (Settings' interest_category) dated the last day of the month."""
+    """Body: {"<account_id>": dollars, ...} — logs an interest income row (Settings' interest_category) dated the last
+    day of the month, once per account and month."""
     m = parse_month(ym)
     st = service.load(con)
     income = st.category_for("interest_category", "Other Income")
     if income is None:
         raise HTTPException(422, {"errors": ["Pick an interest income category in Settings, General first."]})
+    logged = {aid for aid, x in st.month_end_status(m)["interest"].items() if x["logged"]}
     for k, v in (await body(request)).items():
         if v not in (None, "") and (amount := money(v, "Interest")):
             aid = whole(k, "Account")
             if aid not in st.acct:
                 raise HTTPException(404)
+            if aid in logged:
+                continue  # already logged for the month: a second tap (or a retry) used to log it twice
             db.insert_txn(st.con, Txn(None, eom(m), f"{st.acct[aid].name} interest", income, None, aid, amount))
     st.con.commit()
     return {"ok": True}

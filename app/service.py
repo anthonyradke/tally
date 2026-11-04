@@ -47,7 +47,7 @@ class State:
     def roth_ytd(self) -> int:
         rid = self.category_for("roth_category", "Roth IRA")
         return sum(t.amount for t in self.txns
-                   if t.category_id == rid and t.date.year == self.today.year)
+                   if t.category_id == rid and t.date.year == self.today.year and t.date <= self.today)
 
     def by_kind(self, kind: str) -> list[Account]:
         return [a for a in self.accounts if a.kind == kind and a.id not in self.hidden]
@@ -64,8 +64,8 @@ class State:
     def month_end_status(self, m: date) -> dict:
         inv = self.by_kind("investment")
         typed = {a.id: self.typed.get((a.id, m)) for a in inv}
-        hysas = [a for a in self.by_kind("cash") if a.apy]
         income = self.category_for("interest_category", "Other Income")
+        hysas = [a for a in self.by_kind("cash") if a.apy] if income is not None else []  # None: no interest step
         interest = {}
         for a in hysas:
             done = [t for t in self.txns if t.to_id == a.id and t.category_id == income
@@ -101,5 +101,8 @@ def load(con, today: Optional[date] = None) -> State:
     start = date.fromisoformat(db.setting(con, "start_month"))
     last = max([today] + [t.date for t in txns] + [m for _, m in typed])
     months = month_range(start, last)
-    rows = month_table(accounts, cats, txns, typed, months)
+    # Month totals and balances count what has happened: a scheduled row (a recurring bill dated later this month)
+    # joins them on its day. Spent, left over and net worth then agree with the figures the app works out by day.
+    posted = [t for t in txns if t.date <= today]
+    rows = month_table(accounts, cats, posted, typed, months)
     return State(con, accounts, cats, txns, typed, start, today, months, rows, hidden)
