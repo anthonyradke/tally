@@ -24,6 +24,7 @@ import { extraCount, toId, toQuery, useFilters } from '@/lib/filters'
 import { formatCents } from '@/lib/money'
 import { useOutbox } from '@/lib/outbox'
 import { usePullRefresh } from '@/lib/refresh'
+import { useLatest } from '@/lib/nav'
 import { useTally } from '@/lib/tally'
 import { radius, space, useTheme } from '@/theme'
 
@@ -172,7 +173,9 @@ export default function Activity() {
     </View>
   )
 
-  return (
+  // Kept from one render to the next: a new one rebuilds the header's buttons, and a tap in between was lost.
+  const live = useLatest({ startSelect, endSelect, account: f.account })
+  const toolbar = useMemo(() => (
     <>
       {process.env.EXPO_OS !== 'web' && (
         <Stack.SearchBar placeholder="Entries, notes, tags, amounts" onChangeText={(e) => set({ q: e.nativeEvent.text })}
@@ -181,15 +184,21 @@ export default function Activity() {
       {/* Buttons are direct children (arrays, not a fragment): the native toolbar silently drops a fragment. */}
       <Stack.Toolbar placement="right">
         {selecting ? [
-          <Stack.Toolbar.Button key="done" variant="done" onPress={endSelect}>Done</Stack.Toolbar.Button>,
+          <Stack.Toolbar.Button key="done" variant="done" onPress={() => live.current.endSelect()}>Done</Stack.Toolbar.Button>,
         ] : [
           <Stack.Toolbar.Button key="filters" icon={extra ? 'line.3.horizontal.decrease.circle.fill' : 'line.3.horizontal.decrease.circle'}
             accessibilityLabel={extra ? `Filters, ${extra} on` : 'Filters'} onPress={() => router.push('/filters')} />,
-          <Stack.Toolbar.Button key="select" icon="checkmark.circle" accessibilityLabel="Select entries" onPress={startSelect} />,
+          <Stack.Toolbar.Button key="select" icon="checkmark.circle" accessibilityLabel="Select entries" onPress={() => live.current.startSelect()} />,
           <Stack.Toolbar.Button key="catchup" icon="text.badge.plus" accessibilityLabel="Catch up an account"
-            onPress={() => router.push({ pathname: '/catchup', params: f.account != null ? { account: String(f.account) } : {} })} />,
+            onPress={() => router.push({ pathname: '/catchup', params: live.current.account != null ? { account: String(live.current.account) } : {} })} />,
         ]}
       </Stack.Toolbar>
+    </>
+  ), [selecting, extra]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <>
+      {toolbar}
       <View style={{ flex: 1, backgroundColor: c.bg }} collapsable={false}>
         <FlashList
           data={t.b ? items : []}

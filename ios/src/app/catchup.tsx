@@ -32,14 +32,21 @@ import { radius, space, useTheme } from '@/theme'
 type Page = 'list' | 'what' | 'amount' | 'category' | 'other'
 const KEYBOARD = Easing.bezier(0.38, 0.7, 0.125, 1)
 
+// One element for good, so the X is never rebuilt under a tap (see useLatest in lib/nav).
+const HEADER = (
+  <>
+    <Stack.Screen options={{ title: 'Catch up' }} />
+    <Stack.Toolbar placement="left">
+      <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Close" onPress={() => { Keyboard.dismiss(); close() }} />
+    </Stack.Toolbar>
+  </>
+)
+
 export default function CatchUpRoute() {
   const { account } = useLocalSearchParams<{ account?: string }>()
   return (
     <Reveal.Provider value>
-      <Stack.Screen options={{ title: 'Catch up' }} />
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Close" onPress={() => close()} />
-      </Stack.Toolbar>
+      {HEADER}
       <CatchUp account={account ? Number(account) : undefined} />
     </Reveal.Provider>
   )

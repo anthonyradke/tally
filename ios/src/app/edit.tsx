@@ -1,8 +1,8 @@
 // The editor modal for Settings items: account, category, quick action, recurring template, saved view, budget.
 // Its own Cancel/Save; destructive actions sit at the bottom and act at once (the server refuses deletes that would
 // orphan entries, and says to hide the item instead).
-import { useState, type ReactNode } from 'react'
-import { KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
+import { useMemo, useState, type ReactNode } from 'react'
+import { Keyboard, KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { AccountMark, LogoMark } from '@/components/AccountMark'
@@ -18,7 +18,7 @@ import { Txt } from '@/components/Txt'
 import { LOGO_IDS, LOGOS } from '@/icons/banks'
 import { categoryVisual, GLYPH_NAMES, GLYPHS, KIND_SYMBOL } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
-import { close } from '@/lib/nav'
+import { close, useLatest } from '@/lib/nav'
 import { api, ApiError, type AdminData, type CatType, type Freq, type Kind } from '@/lib/api'
 import { budgetAmount, initial, pctStr, type Form } from '@/lib/forms'
 import { monthOf } from '@/lib/dates'
@@ -86,15 +86,26 @@ export default function Edit() {
   }
 
   const [newTitle, editTitle] = TITLE[kind] ?? ['Edit', 'Edit']
-  return (
+  // Kept from one render to the next (this screen renders on every key): a new one rebuilds the header's buttons, and a
+  // tap in between was lost.
+  const title = id ? editTitle : newTitle
+  const off = busy || !f
+  const live = useLatest(save)
+  const header = useMemo(() => (
     <>
-      <Stack.Screen options={{ title: id ? editTitle : newTitle }} />
+      <Stack.Screen options={{ title }} />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => close()} />
+        <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => { Keyboard.dismiss(); close() }} />
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="checkmark" variant="prominent" tintColor={c.ink} accessibilityLabel="Save" disabled={busy || !f} onPress={save} />
+        <Stack.Toolbar.Button icon="checkmark" variant="prominent" tintColor={c.ink} accessibilityLabel="Save" disabled={off} onPress={() => live.current()} />
       </Stack.Toolbar>
+    </>
+  ), [title, off, c.ink]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <>
+      {header}
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
           contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 80 }}>

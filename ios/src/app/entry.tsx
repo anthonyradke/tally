@@ -2,7 +2,7 @@
 // A new entry starts empty: no category or account is guessed for you.
 // New entries go through the outbox, so saving never fails just because the phone is off Tailscale.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ScrollView, Switch, TextInput, View } from 'react-native'
+import { Keyboard, ScrollView, Switch, TextInput, View } from 'react-native'
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, ZoomIn } from 'react-native-reanimated'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
@@ -24,7 +24,7 @@ import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import { merchantKey } from '@/icons/merchants'
 import { api, ApiError, type CatType, type Txn } from '@/lib/api'
-import { close } from '@/lib/nav'
+import { close, useLatest } from '@/lib/nav'
 import { deleteTxns } from '@/lib/actions'
 import { cachedTxn, invalidateAll, useTransactions } from '@/lib/data'
 import { addDays, dayLabel } from '@/lib/dates'
@@ -226,12 +226,15 @@ export function Entry({ embedded }: { embedded?: boolean }) {
   }
   const closePad = () => { Haptics.selectionAsync().catch(() => {}); setPad(false) }
 
-  return (
+  // Kept from one render to the next (this screen renders on every key): a new one rebuilds the header's buttons, and a
+  // tap in between was lost.
+  const live = useLatest({ row: one.data, today: t.b?.today })
+  const header = useMemo(() => (
     <>
       {!embedded && <Stack.Screen options={{ title: editing ? 'Edit entry' : 'New entry' }} />}
       {!embedded && (
         <Stack.Toolbar placement="left">
-          <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => close()} />
+          <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => { Keyboard.dismiss(); close() }} />
         </Stack.Toolbar>
       )}
       {editing && (
@@ -240,16 +243,22 @@ export function Entry({ embedded }: { embedded?: boolean }) {
             <Stack.Toolbar.MenuAction icon="plus.square.on.square" onPress={() => {
               Haptics.selectionAsync().catch(() => {})
               setDup(true)
-              set({ id: undefined, date: t.b?.today ?? d.date, receipt: null, removeReceipt: false })
+              set({ id: undefined, date: live.current.today ?? useDraft.getState().d.date, receipt: null, removeReceipt: false })
             }}>Duplicate to today</Stack.Toolbar.MenuAction>
             <Stack.Toolbar.MenuAction icon="trash" destructive onPress={() => {
-              const row = one.data
+              const row = live.current.row
               close()
               if (row) deleteTxns([row])
             }}>Delete</Stack.Toolbar.MenuAction>
           </Stack.Toolbar.Menu>
         </Stack.Toolbar>
       )}
+    </>
+  ), [embedded, editing]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <>
+      {header}
       <View style={{ flex: 1, backgroundColor: c.bg }}>
         <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentInsetAdjustmentBehavior="automatic"
           automaticallyAdjustKeyboardInsets onScrollBeginDrag={() => { if (pad) setPad(false) }}

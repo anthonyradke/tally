@@ -52,6 +52,18 @@ export default function AccountDetail() {
   // What's already scheduled, carried on past today as a dashed line.
   const ahead = useMemo(() => (a && b && daily && all.data ? outlook(a, all.data.items, b.start, b.today) : null), [a, b, daily, all.data])
 
+  // Kept from one render to the next: a new one rebuilds the header's buttons, and a tap in between was lost.
+  const name = a?.name
+  const header = useMemo(() => (
+    <>
+      <Stack.Screen options={{ title: name ?? '', headerLargeTitle: false }} />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button icon="text.badge.plus" accessibilityLabel="Catch up this account" onPress={() => router.push({ pathname: '/catchup', params: { account: id } })} />
+        <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" onPress={() => router.push({ pathname: '/new', params: { from: id } })} />
+      </Stack.Toolbar>
+    </>
+  ), [id, name])
+
   if (!a || !b) return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}><StateView q={t.q} /></ScrollView>
 
   const owed = a.kind === 'card' || a.kind === 'loan'
@@ -72,11 +84,7 @@ export default function AccountDetail() {
 
   return (
     <>
-      <Stack.Screen options={{ title: a.name, headerLargeTitle: false }} />
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="text.badge.plus" accessibilityLabel="Catch up this account" onPress={() => router.push({ pathname: '/catchup', params: { account: String(a.id) } })} />
-        <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" onPress={() => router.push({ pathname: '/new', params: { from: String(a.id) } })} />
-      </Stack.Toolbar>
+      {header}
       <ScrollView onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
         <View style={{ gap: space.m, marginBottom: space.section - 4 }}>
           <View style={{ paddingHorizontal: space.xs, gap: 2 }}>

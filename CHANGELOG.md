@@ -37,6 +37,9 @@ Changed
 Fixed
 - Typing a name, note or tags no longer sometimes jumps the cursor to the front of the field mid-word ("McD" turning
   into "onaldsMcD").
+- Header buttons answer the first tap. Catch up and the other buttons on Activity, and the X on Catch up, the
+  composer and the editors, sometimes took a few tries or did nothing, because the header rebuilt its buttons
+  whenever the screen redrew (Activity on every refresh, the composer on every key).
 - Next in a new entry always goes to the next page. It used to jump past steps that already had an answer, so after a
   quick action or going back it could leap from the amount straight to the accounts.
 - A saved view or link pointing at a deleted account no longer filters Activity to nothing with no chip lit, and

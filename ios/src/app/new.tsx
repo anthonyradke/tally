@@ -369,17 +369,26 @@ export default function New() {
     </View>
   )
 
-  return (
-    <Reveal.Provider value>
+  // Kept from one render to the next (this screen renders on every key): a new one rebuilds the header's buttons, and a
+  // tap in between was lost.
+  const offerCatchUp = !form && !catching && step === 'amount'
+  const header = useMemo(() => (
+    <>
       <Stack.Screen options={{ title: catching ? 'Catch up' : 'New entry' }} />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => close()} />
+        <Stack.Toolbar.Button icon="xmark" accessibilityLabel="Cancel" onPress={() => { Keyboard.dismiss(); close() }} />
       </Stack.Toolbar>
-      {!form && !catching && step === 'amount' && (
+      {offerCatchUp && (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button icon="text.badge.plus" accessibilityLabel="Catch up an account" onPress={catchUp} />
         </Stack.Toolbar>
       )}
+    </>
+  ), [catching, offerCatchUp])
+
+  return (
+    <Reveal.Provider value>
+      {header}
       <View style={{ flex: 1 }}>
         <Pages page={form ? 'form' : catching ? 'catchup' : 'steps'} dir={1}
           render={(k) => (k === 'form' ? <Entry embedded /> : k === 'catchup' ? <CatchUp account={from ? Number(from) : undefined} /> : flow)} />
