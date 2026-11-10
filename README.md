@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/icon.png" width="112" height="112" alt="Tally icon">
+</p>
+
 <h1 align="center">Tally</h1>
 
 <p align="center">A personal finance app for iPhone, backed by a small self-hosted server.</p>
@@ -6,6 +10,7 @@
   <img src="https://img.shields.io/badge/iOS-Expo%20SDK%2057-000?logo=apple" alt="iOS, Expo SDK 57">
   <img src="https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white" alt="Python 3.13">
   <img src="https://img.shields.io/badge/FastAPI-SQLite-009688?logo=fastapi&logoColor=white" alt="FastAPI and SQLite">
+  <img src="https://img.shields.io/github/v/release/anthonyradke/tally" alt="Latest release">
 </p>
 
 Tally is a ledger: every entry is one row with a date, a name, a category, an amount and a From and/or To account.
@@ -45,7 +50,23 @@ The repo has two halves:
   <img src="docs/themes.png" width="860" alt="Insights, New entry and Home in three other themes">
 </p>
 
+## Requirements
+
+- A machine to run the backend: Python 3.13 and [uv](https://docs.astral.sh/uv/). SQLite is the only datastore.
+- An iPhone with Expo Go, or a Mac with Xcode for a standalone build. There is no App Store or TestFlight build.
+- A private network between the two. The setup below uses Tailscale.
+
 ## How it works
+
+```mermaid
+flowchart LR
+  app["iPhone app<br/>Expo Router"] -- "HTTPS, bearer token" --> serve["Tailscale Serve<br/>adds Tailscale-User-Login"]
+  outbox["Outbox<br/>offline entries"] --> app
+  serve --> api["FastAPI<br/>validates every entry"]
+  api --> db[("SQLite<br/>entries in integer cents")]
+  db --> engine["engine.py<br/>derives balances on read"]
+  engine --> api
+```
 
 ### The ledger
 
@@ -66,15 +87,11 @@ the cent.
 
 ### The app
 
-The app is built with Expo Router, one file per screen. Pending entries live in a persisted outbox keyed by a client-generated id, which the server
-treats as idempotent, so a retry after a dropped response never creates a duplicate.
-
-Tally started as a React PWA. The iPhone app began as a separate repo and moved in here with its history in 3.0.0,
-when the web app was retired. Both are still in git history.
+The app is built with Expo Router, one file per screen. Pending entries live in a persisted outbox keyed by a
+client-generated id, which the server treats as idempotent, so a retry after a dropped response never creates a
+duplicate.
 
 ## Running the backend
-
-Requires [uv](https://docs.astral.sh/uv/).
 
 ```sh
 uv sync
@@ -101,34 +118,25 @@ npm test
 
 On a phone with Expo Go and Tailscale on, open `exp://<server's Tailscale IP>:8082` or scan the QR code.
 
-To install a standalone build with a free Apple ID, run `npx expo prebuild --platform ios` once, pick a Personal Team
-under Signing & Capabilities in `ios/ios/Tally.xcworkspace`, then run
-`npx expo run:ios --device --configuration Release` with the phone connected. Trust the profile on the phone under
-Settings › General › VPN & Device Management. Re-running the same command reinstalls over the old copy and keeps
-cached data and queued entries.
-
-For layout work without a phone, `npx expo start --web --port 8082` plus `node scripts/preview.mjs` serves the web
-build and the API from one origin on `http://127.0.0.1:8090`. `API_PORT=8001` points it at a backend running on a
-copy of the database.
+[docs/development.md](docs/development.md) covers installing a standalone build on a phone and previewing layouts in
+a browser.
 
 ## Layout
 
-```
-app/engine.py        balance calculations (no database access)
-app/db.py            schema and connections
-app/migrate.py       schema migrations
-app/api*.py          the JSON API
-app/recurring.py     recurring entries
-app/search.py        search shortcuts (>50, aug, #trip)
-app/importer.py      spreadsheet import
-app/main.py          app setup and CSV export
-tests/               backend tests, each against a throwaway database
-scripts/             demo data and backups
-ios/src/app          screens, one file per route (Expo Router)
-ios/src/components   rolling digits, the scrub chart, rows, panels, the keypad
-ios/src/lib          API client, outbox and the money rules the screens need
-ios/src/theme        colors, type, spacing and the eight themes
-```
+| Path | Contents |
+|---|---|
+| `app/engine.py` | Balance calculations, with no database access |
+| `app/db.py`, `app/migrate.py` | Schema, connections and migrations |
+| `app/api*.py` | The JSON API |
+| `app/recurring.py`, `app/search.py` | Recurring entries and search shortcuts (`>50`, `aug`, `#trip`) |
+| `app/importer.py` | Spreadsheet import |
+| `app/main.py` | App setup and CSV export |
+| `tests/` | Backend tests, each against a throwaway database |
+| `scripts/` | Demo data and backups |
+| `ios/src/app` | Screens, one file per route |
+| `ios/src/components` | Rolling digits, the scrub chart, rows, panels, the keypad |
+| `ios/src/lib` | API client, outbox and the money rules the screens need |
+| `ios/src/theme` | Colors, type, spacing and the eight themes |
 
 Design notes are in `ios/DESIGN.md` and release notes in `CHANGELOG.md`.
 
