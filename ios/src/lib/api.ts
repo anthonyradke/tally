@@ -1,6 +1,6 @@
 // Typed client for the Tally backend (FastAPI on x1, reached over Tailscale). Amounts are integer cents everywhere in
 // the app; request bodies carry dollars because the backend's `cents()` parser is the single source of rounding truth.
-import { getServer } from './server'
+import { authHeaders, getServer } from './server'
 
 export type Kind = 'cash' | 'card' | 'investment' | 'loan'
 export type CatType = 'Money in' | 'Spending' | 'Saving' | 'Transfer' | 'Loan'
@@ -49,7 +49,7 @@ async function call<T>(method: string, path: string, body?: unknown, timeoutMs =
   try {
     const res = await fetch(`${getServer()}/api${path}`, {
       method, signal: ctrl.signal,
-      headers: body === undefined || isForm ? undefined : { 'Content-Type': 'application/json' },
+      headers: body === undefined || isForm ? authHeaders() : { ...authHeaders(), 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     })
     if (res.status === 204) return undefined as T

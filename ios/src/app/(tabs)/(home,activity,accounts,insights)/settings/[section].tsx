@@ -19,7 +19,7 @@ import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
-import { api, type AdminData, type CatType, type Kind } from '@/lib/api'
+import { api, ApiError, type AdminData, type CatType, type Kind } from '@/lib/api'
 import { suggestBudgets } from '@/lib/budgets'
 import { invalidateAll, useTransactions } from '@/lib/data'
 import { commitments } from '@/lib/commitments'
@@ -368,42 +368,49 @@ function Themes() {
 
 function Server() {
   const { c } = useTheme()
-  const { url, set } = useServer()
+  const { url, set, token, setToken } = useServer()
   const [val, setVal] = useState(url)
-  const [state, setState] = useState<'idle' | 'checking' | 'ok' | 'fail'>('idle')
+  const [tok, setTok] = useState(token)
+  const [state, setState] = useState<'idle' | 'checking' | 'ok' | 'fail' | 'token'>('idle')
   const queued = useOutbox((s) => s.items)
   // The new address is tried first and kept only if Tally answers there: a typo used to be saved straight away and
   // left the app talking to nothing. "Use it anyway" is for a server that's down for now.
   const test = async () => {
     const prev = url
+    const prevToken = token
     setState('checking')
     set(val)
+    setToken(tok)
     try {
       await api.bootstrap()
       setState('ok')
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       invalidateAll()
-    } catch {
+    } catch (e) {
       set(prev)
-      setState('fail')
+      setToken(prevToken)
+      setState(e instanceof ApiError && (e.status === 401 || e.status === 403) ? 'token' : 'fail')
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
     }
   }
   return (
     <>
-      <Group header="Tally's address" footer="Tally runs on your own server and is reachable only over Tailscale, so keep the Tailscale app connected on this phone.">
+      <Group header="Tally's address" footer="Tally runs on your own server and is reachable only over Tailscale, so keep the Tailscale app connected on this phone. The token is in /etc/tally/env on the server.">
         <View style={{ padding: space.l, gap: space.m }}>
           <TextInput value={val} onChangeText={setVal} autoCapitalize="none" autoCorrect={false} keyboardType="url" placeholder="https://…"
+            placeholderTextColor={c.label3} style={{ fontSize: 17, color: c.label }} />
+          <TextInput value={tok} onChangeText={setTok} autoCapitalize="none" autoCorrect={false} secureTextEntry placeholder="Token"
             placeholderTextColor={c.label3} style={{ fontSize: 17, color: c.label }} />
           <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
             <Button label={state === 'checking' ? 'Checking…' : 'Save and test'} onPress={test} style={{ flex: 1 }} />
             {defaultServer && val !== defaultServer && <Button label="Reset" secondary onPress={() => setVal(defaultServer)} />}
           </View>
           {state === 'ok' && <Txt variant="callout" tone="pos">Connected.</Txt>}
+          {state === 'token' && <Txt variant="callout" tone="neg">Tally answered but refused the token, so it kept the old one. Copy it again from the server.</Txt>}
           {state === 'fail' && (
             <View style={{ gap: space.xs }}>
               <Txt variant="callout" tone="neg">No answer there, so Tally kept the address it had. Is Tailscale on?</Txt>
-              <Tap feedback="opacity" hitSlop={8} onPress={() => { set(val); setState('idle'); toast({ text: 'Address saved' }) }}>
+              <Tap feedback="opacity" hitSlop={8} onPress={() => { set(val); setToken(tok); setState('idle'); toast({ text: 'Address saved' }) }}>
                 <Txt variant="callout" style={{ fontWeight: '600' }}>Use it anyway</Txt>
               </Tap>
             </View>

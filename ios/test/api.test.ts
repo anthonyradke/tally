@@ -55,3 +55,18 @@ test('receipt names are encoded into the URL', () => {
   assert.equal(api.receiptUrl('5-ab.png'), 'https://tally.test/api/receipts/5-ab.png')
   assert.equal(api.receiptUrl('../x'), 'https://tally.test/api/receipts/..%2Fx')
 })
+
+test('the saved token goes out on every request, and only once one is saved', async () => {
+  respond(200, { ok: true })
+  await api.transactions()
+  assert.equal((calls[0].init.headers as Record<string, string>).Authorization, undefined)
+  useServer.setState({ token: 'tok123' })
+  try {
+    await api.transactions()
+    await api.createTxn({ date: '2026-09-24', what: 'x', category_id: 2, from_id: 1, to_id: null, amount: 1 }, 'abc12345')
+    for (const c of calls.slice(1)) assert.equal((c.init.headers as Record<string, string>).Authorization, 'Bearer tok123')
+    assert.equal((calls[2].init.headers as Record<string, string>)['Content-Type'], 'application/json')
+  } finally {
+    useServer.setState({ token: '' })
+  }
+})

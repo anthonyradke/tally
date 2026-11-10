@@ -83,8 +83,10 @@ TALLY_DB=data/demo.db uv run uvicorn app.main:app --port 8000
 uv run pytest
 ```
 
-Without `TALLY_DB` it starts with an empty database. There is no login: the server is meant to be reachable only
-on a private network.
+Without `TALLY_DB` it starts with an empty database. Without `TALLY_TOKEN` there is no login, which suits a local
+copy. Set `TALLY_TOKEN` to require `Authorization: Bearer <token>` on every request, and `TALLY_OWNER` to also require
+the `Tailscale-User-Login` header that Tailscale Serve adds to match that login. The app takes the token in
+Settings > Server and keeps it in the keychain.
 
 ## Running the app
 
@@ -132,7 +134,8 @@ Design notes are in `ios/DESIGN.md` and release notes in `CHANGELOG.md`.
 
 ## Known limitations
 
-- No authentication. Access control is the private network; don't expose the backend to the internet as is.
+- One shared token, not user accounts. The backend is still meant for a private network only; don't expose it to the
+  internet as is.
 - Single user and single currency (USD).
 - Apps signed with a free Apple ID expire after 7 days and have to be reinstalled from Xcode. A paid developer
   account would allow `eas build` and TestFlight instead.

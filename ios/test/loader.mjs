@@ -7,6 +7,7 @@ const root = new URL('../', import.meta.url)
 const STUBS = {
   '@react-native-async-storage/async-storage': 'storage.mjs',
   'expo-haptics': 'noop.mjs',
+  'expo-secure-store': 'secure-store.mjs',
   'expo-router': 'noop.mjs',
   'react-native': 'noop.mjs',
 }

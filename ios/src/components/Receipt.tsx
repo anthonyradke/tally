@@ -8,6 +8,7 @@ import { Tap } from './Tap'
 import { Txt } from './Txt'
 import { api } from '@/lib/api'
 import { useDraft } from '@/lib/draft'
+import { authHeaders } from '@/lib/server'
 import { space, useTheme } from '@/theme'
 
 export function Receipt() {
@@ -24,7 +25,7 @@ export function Receipt() {
   if (uri) {
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.m, paddingLeft: space.l }}>
-        <Image source={{ uri }} style={{ width: 48, height: 64, borderRadius: 8 }} contentFit="cover" />
+        <Image source={{ uri, headers: d.photo ? undefined : authHeaders() }} style={{ width: 48, height: 64, borderRadius: 8 }} contentFit="cover" />
         <Txt variant="body" style={{ flex: 1 }}>Receipt</Txt>
         <Tap feedback="opacity" onPress={() => set({ photo: null, removeReceipt: true })} hitSlop={10}><Txt variant="callout" tone="neg">Remove</Txt></Tap>
       </View>

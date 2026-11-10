@@ -3,9 +3,9 @@ The web apps were retired: Jinja + HTMX on 2026-09-18, the React PWA on 2026-09-
 Run: uvicorn app.main:app --host 127.0.0.1 --port 8000"""
 from __future__ import annotations
 import csv, io
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
-from . import service
+from . import auth, service
 from .api import Con, router as api_router
 from .api_ops import router as ops_router
 from .api_admin import router as admin_router
@@ -13,7 +13,14 @@ from .api_files import router as files_router
 from .api_recurring import router as recurring_router
 from .engine import month_of
 
-app = FastAPI(title="Tally")
+app = FastAPI(title="Tally", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.middleware("http")
+async def _login(request: Request, call_next):
+    return auth.refuse(request) or await call_next(request)
+
+
 for r in (api_router, ops_router, admin_router, recurring_router, files_router):
     app.include_router(r)
 

@@ -10,6 +10,9 @@ release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
 ## Unreleased
 Added
+- A login for the server. When it's set up, every request needs a token, typed once in Settings > Server and kept
+  in the phone's keychain; a wrong token is reported there instead of looking like Tally is down. Receipt photos
+  send it too. The server's API documentation pages are no longer served.
 - Settings > Activity filters (also reachable from the Filters sheet) picks which chip rows sit above Activity's
   list (type, accounts, dates, categories, sort), their order, and which chips each row offers. Every row's chips
   can be reordered; account and category chips start in their Settings order.
