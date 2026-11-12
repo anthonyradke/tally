@@ -5,7 +5,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, View } from 'react-native'
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, ZoomIn } from 'react-native-reanimated'
-import { Stack, useLocalSearchParams } from 'expo-router'
+import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { CheckDraw } from '@/components/CheckDraw'
@@ -16,11 +16,14 @@ import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { api, ApiError, type Txn } from '@/lib/api'
 import { catchable, flip, lookalikes, otherSide, sides } from '@/lib/catchup'
-import { invalidateAll, useTransactions } from '@/lib/data'
+import { balanceOn, effect, useAllTxns } from '@/lib/balances'
+import { markCaughtUp } from '@/lib/caughtUp'
+import { invalidateAll, queryClient, useTransactions } from '@/lib/data'
+import { useDraftOwner } from '@/lib/draftOwner'
 import { blank, toCents, toInputs, useDraft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { markFresh } from '@/lib/motion'
-import { close } from '@/lib/nav'
+import { close, useBusy } from '@/lib/nav'
 import { sendOrQueue } from '@/lib/outbox'
 import { Reveal } from '@/lib/privacy'
 import { fits, HINT } from '@/lib/shapes'
@@ -56,7 +59,10 @@ export function CatchUp({ account }: { account?: number }) {
   const { c } = useTheme()
   const insets = useSafeAreaInsets()
   const t = useTally()
-  const { d, set, reset } = useDraft()
+  const { d, set, reset: resetDraft } = useDraft()
+  const owner = useDraftOwner()
+  const reset = (x: Parameters<typeof resetDraft>[0]) => resetDraft(x, owner)
+  const busy = useBusy()
   const [picked, setPicked] = useState<number | undefined>(account)
   const [page, setPage] = useState<Page>('list')
   const [dir, setDir] = useState<1 | -1>(1)
@@ -68,7 +74,7 @@ export function CatchUp({ account }: { account?: number }) {
   const [done, setDone] = useState(false)
   const [shakeStyle, shake] = useShake()
 
-  const today = t.b?.today
+  const today = t.b ? t.today : undefined
   const list = useMemo(() => {
     const all = t.b ? catchable(t.b.accounts) : []
     const extra = picked != null && !all.some((a) => a.id === picked) ? t.acct.get(picked) : undefined // e.g. the HSA's own page
@@ -85,13 +91,27 @@ export function CatchUp({ account }: { account?: number }) {
 
   // The draft store is shared with the composer: start clean, before the first paint.
   useLayoutEffect(() => { if (today) reset(blank(today)) }, [!!today]) // eslint-disable-line react-hooks/exhaustive-deps
-  // Closing after adding some: one line on Home or Activity says how many.
-  const tally = useRef({ added: 0, queued: 0 })
-  useEffect(() => { tally.current = { added: added.length, queued } }, [added.length, queued])
+  // Closing after adding some: one line on Home or Activity says how many, every list refreshes (each Add only
+  // refreshed what Catch up shows, not the full list behind Accounts), and each account touched counts as caught up.
+  const tally = useRef({ added: 0, queued: 0, accounts: new Set<number>() })
+  useEffect(() => { tally.current = { ...tally.current, added: added.length, queued } }, [added.length, queued])
   useEffect(() => () => {
     const n = tally.current.added + tally.current.queued
-    if (n) toast({ text: `Caught up: ${n === 1 ? '1 entry' : `${n} entries`} added${tally.current.queued ? `, ${tally.current.queued} waiting for Tailscale` : ''}` })
+    tally.current.accounts.forEach((id) => markCaughtUp(id))
+    if (n) {
+      invalidateAll().catch(() => {})
+      toast({ text: `Caught up: ${n === 1 ? '1 entry' : `${n} entries`} added${tally.current.queued ? `, ${tally.current.queued} waiting for Tailscale` : ''}` })
+    }
   }, [])
+  // The account's balance once this entry is in, on its day, to check against the bank's running balance.
+  const all = useAllTxns(!!t.b)
+  const after = useMemo(() => {
+    if (!t.b || !acct || !all.data || (acct.kind !== 'cash' && acct.kind !== 'card')) return null
+    const known = new Set(all.data.items.map((x) => x.id))
+    const rows = [...all.data.items, ...added.filter((x) => !known.has(x.id))]
+    const line = toInputs(d)[0]
+    return balanceOn(acct, rows, t.b.start, d.date) + (toCents(d.amount) ? effect(acct, line) : 0)
+  }, [t.b, acct, all.data, added, d])
 
   const go = (p: Page, way: 1 | -1) => {
     Haptics.selectionAsync().catch(() => {})
@@ -126,8 +146,9 @@ export function CatchUp({ account }: { account?: number }) {
     go('amount', -1)
   }
 
-  async function add() {
-    if (!acct || saving) return
+  const add = () => busy(addNow) // a second tap while one is saving does nothing
+  async function addNow() {
+    if (!acct) return
     const lines = toInputs(d)
     const errs: string[] = []
     if (!cents) errs.push('Enter an amount.')
@@ -144,13 +165,15 @@ export function CatchUp({ account }: { account?: number }) {
         markFresh(saved.map((x) => x.id))
         setAdded((a) => [...a, ...saved])
         setLast({ row: saved[0], label, cents })
+        tally.current.accounts.add(acct.id)
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {})
         play('tick')
         setQueued((n) => n + 1)
         setLast({ row: null, label, cents })
+        tally.current.accounts.add(acct.id)
       }
-      invalidateAll().catch(() => {})
+      refreshHere()
       setDone(true) // the button draws its check, then the next entry slides in
       await new Promise((r) => setTimeout(r, 420))
       setDone(false)
@@ -163,7 +186,16 @@ export function CatchUp({ account }: { account?: number }) {
       setSaving(false)
     }
   }
-  async function undo() {
+  // Only what Catch up shows: the bootstrap and its own two lists. The rest refreshes when it closes.
+  const refreshHere = () => {
+    queryClient.invalidateQueries({ queryKey: ['bootstrap'] }).catch(() => {})
+    queryClient.invalidateQueries({ queryKey: ['transactions'], predicate: (q) => {
+      const k = q.queryKey[1] as { limit?: number } | undefined
+      return k?.limit === 8 || k?.limit === 600
+    } }).catch(() => {})
+  }
+  const undo = () => busy(undoNow) // tapped twice, the second used to say "Not Found" after the first had worked
+  async function undoNow() {
     const row = last?.row
     if (!row) return
     try {
@@ -172,7 +204,7 @@ export function CatchUp({ account }: { account?: number }) {
       Haptics.selectionAsync().catch(() => {})
       setAdded((a) => a.filter((x) => x.id !== row.id))
       setLast(null)
-      invalidateAll().catch(() => {})
+      refreshHere()
     } catch (e) {
       setLast({ ...last!, error: e instanceof ApiError ? e.errors.join(' ') : "Couldn't undo: Tally is unreachable." })
     }
@@ -198,9 +230,10 @@ export function CatchUp({ account }: { account?: number }) {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <View style={{ flex: 1 }}>
         <Pages page={page} dir={dir} render={(p) => (
-          p === 'list' ? <LeftOff accounts={list} acct={acct} onAcct={(id) => { setPicked(id); setLast(null) }} rows={rows} loading={recent.isLoading} added={count} />
+          p === 'list' ? <LeftOff accounts={list} acct={acct} onAcct={(id) => { setPicked(id); setLast(null) }} rows={rows} loading={recent.isLoading} added={count}
+              onCheck={() => { Haptics.selectionAsync().catch(() => {}); router.push(`/reconcile/${acct.id}`) }} />
           : p === 'what' ? <What acct={acct} history={historyRows} count={count} last={last} onUndo={undo} onPick={pickPast} onSubmit={() => go('amount', 1)} />
-          : p === 'amount' ? <Amount acct={acct} history={historyRows} count={count} lookalike={lookalike} errors={errors} shake={shakeStyle}
+          : p === 'amount' ? <Amount acct={acct} history={historyRows} count={count} lookalike={lookalike} errors={errors} shake={shakeStyle} after={after}
               onWhat={() => go('what', -1)} onCategory={(id) => pickCategory(id, false)} onMoreCategories={() => go('category', 1)}
               onOther={() => go('other', 1)} onFlip={() => { Haptics.selectionAsync().catch(() => {}); set(flip(d)) }} onRefuse={refuse} />
           : p === 'category' ? <Categories onPick={(id) => pickCategory(id, true)} />

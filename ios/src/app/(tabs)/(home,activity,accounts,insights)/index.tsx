@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
 import { router, Stack } from 'expo-router'
 import Animated, { FadeIn, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated'
@@ -11,6 +11,7 @@ import { EASE } from '@/components/ease'
 import { Forecast } from '@/components/Forecast'
 import { Glow } from '@/components/Glow'
 import { Moments } from '@/components/Moments'
+import { CatchUpNudge } from '@/components/CatchUpNudge'
 import { StoryButton } from '@/components/StoryButton'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
@@ -70,7 +71,8 @@ export default function Home() {
   const [waited] = useState(!b) // the skeleton showed first
   const hidden = usePrivacy((s) => s.hidden)
   const [title] = useState(greeting)
-  return (
+  // Kept between renders (data refreshes re-render Home): a new header rebuilds its buttons and loses a tap (lib/nav).
+  const header = useMemo(() => (
     <>
       <Stack.Screen options={{ title }} />
       <Stack.Toolbar placement="right">
@@ -78,6 +80,11 @@ export default function Home() {
           onPress={() => { Haptics.selectionAsync().catch(() => {}); play('toggle'); usePrivacy.getState().set(!hidden) }} />
         <Stack.Toolbar.Button icon="gearshape" accessibilityLabel="Settings" onPress={() => router.push('/settings')} />
       </Stack.Toolbar>
+    </>
+  ), [title, hidden])
+  return (
+    <>
+      {header}
       <ScrollView onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
         refreshControl={<RefreshControl {...pull} />}>
@@ -90,7 +97,7 @@ export default function Home() {
 
 function Widgets({ b }: { b: Bootstrap }) {
   const ids = layout(b)
-  const out: ReactNode[] = [<Moments key="moments" b={b} />]
+  const out: ReactNode[] = [<Moments key="moments" b={b} />, <CatchUpNudge key="nudge" b={b} />]
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i]
     // Emergency fund and Roth are small; when they sit next to each other they share a row.

@@ -10,8 +10,19 @@ export const queryClient = new QueryClient({
 
 export const useBootstrap = () => useQuery({ queryKey: ['bootstrap'], queryFn: api.bootstrap, staleTime: 60_000 })
 
+/** A search (`q`) is kept for 5 minutes, not a week: each one typed was a new entry in the cache saved on the phone. */
 export const useTransactions = (q: TxnQuery, enabled = true) =>
-  useQuery({ queryKey: ['transactions', q], queryFn: () => api.transactions(q), placeholderData: keepPreviousData, enabled })
+  useQuery({ queryKey: ['transactions', q], queryFn: () => api.transactions(q), placeholderData: keepPreviousData, enabled,
+    ...(q.q ? { gcTime: 5 * 60_000 } : {}) })
+
+/** What the cache saved on the phone keeps: what a cold start paints (bootstrap, Settings, the lists without a
+ *  search). Searches, single entries and month-end answers are fetched again. */
+export const keepOnPhone = (key: readonly unknown[]): boolean => {
+  if (key[0] === 'bootstrap' || key[0] === 'admin') return true
+  if (key[0] !== 'transactions' || key[1] === 'one') return false
+  const q = key[1] as { q?: string } | undefined
+  return !q?.q
+}
 
 /** A row that's already in some cached list, so an editor can fill in on its first frame instead of after a fetch. */
 export function cachedTxn(id: number): Txn | undefined {
@@ -25,8 +36,13 @@ export function cachedTxn(id: number): Txn | undefined {
   return undefined
 }
 
-/** Anything that changes rows: refresh balances, months and every list. */
-export const invalidateAll = () => Promise.all([
+/** Anything that changes rows: refresh balances, months and every list. Single entries not on screen are dropped,
+ *  not just marked stale: an editor opened later started from the old copy and saved it back over the change. */
+export const invalidateAll = () => {
+  queryClient.removeQueries({ queryKey: ['transactions', 'one'], type: 'inactive' })
+  return refreshAll()
+}
+const refreshAll = () => Promise.all([
   queryClient.invalidateQueries({ queryKey: ['bootstrap'] }),
   queryClient.invalidateQueries({ queryKey: ['transactions'] }),
   queryClient.invalidateQueries({ queryKey: ['admin'] }),

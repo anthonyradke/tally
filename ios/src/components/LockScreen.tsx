@@ -2,6 +2,7 @@
 // with the t, and when locked, an Unlock button. It floats over every screen and sheet.
 import { useEffect, type ReactNode } from 'react'
 import { AppState, StyleSheet, View } from 'react-native'
+import { router, useRootNavigationState } from 'expo-router'
 import { FullWindowOverlay } from 'react-native-screens'
 import { BlurView } from 'expo-blur'
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
@@ -18,15 +19,23 @@ function Overlay({ children }: { children: ReactNode }) {
 
 export function LockScreen() {
   const { c, dark } = useTheme()
-  const { locked, cover } = useLock()
+  const { locked, cover, held, ready } = useLock()
   // Ask as soon as it locks while Tally is in front (on launch, or coming back after a while).
   useEffect(() => {
     if (locked && AppState.currentState === 'active') unlock()
   }, [locked])
+  // A link that came in while locked opens now, once the navigator is up (a cold start's link waits for it too).
+  const navReady = !!useRootNavigationState()?.key
+  useEffect(() => {
+    if (!ready || locked || !held || !navReady) return
+    useLock.setState({ held: null })
+    router.push(held as never)
+  }, [ready, locked, held, navReady])
   if (!locked && !cover) return null
   return (
     <Overlay>
-      <Animated.View entering={FadeIn.duration(120)} exiting={FadeOut.duration(220)} style={StyleSheet.absoluteFill}>
+      {/* The app-switcher cover appears at once: iOS takes its snapshot as Tally leaves, and a fade-in could miss it. */}
+      <Animated.View entering={locked ? FadeIn.duration(120) : undefined} exiting={FadeOut.duration(220)} style={StyleSheet.absoluteFill}>
         <BlurView intensity={locked ? 100 : 40} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
         {locked && <View style={[StyleSheet.absoluteFill, { backgroundColor: c.bg, opacity: 0.6 }]} />}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.l }}>

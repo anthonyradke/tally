@@ -28,10 +28,18 @@ export interface Diagnosis { expected: number; actual: number; gap: number; save
 export interface MonthEnd { month: string; typed: Record<string, number | null>; loans: Record<string, { typed: number | null; balance: number }>; recon: Record<string, { actual: number; expected: number; date: string } | null>; interest: Record<string, { logged: Txn[]; proposed: number }>; typed_done: boolean; interest_done: boolean; recon_done: boolean }
 export interface Reconciliation { id: number; account_id: number; date: string; actual: number; expected: number }
 export interface Backups { latest: { name: string; size: number; at: string } | null; count: number; folder: string }
+/** `offsite`: the last good off-site backup (cellar), when the server has one. */
+export interface Health { version: string; database: 'ok' | 'damaged'; backups: Backups; offsite: { last_success: string | null; result: string | null } | null }
+/** An entry in Recently deleted (kept 30 days); `deleted_at` is UTC. */
+export type DeletedTxn = Txn & { deleted_at: string }
+export interface Skip { recurring_id: number; date: string }
+/** A bank statement line: `amount` in cents, signed as the bank's file had it. */
+export interface StatementLine { line: number; date: string; what: string; amount: number }
+export interface StatementMatch { account_id: number; first: string; last: string; matched: { statement: StatementLine; entry: Txn }[]; missing: StatementLine[]; extra: Txn[] }
 /** Settings rows straight from the tables: `active` and `ef` are SQLite's 0/1 here. Saving one returns the same. */
 export type AdminAccount = Omit<Account, 'active' | 'ef'> & { sort: number; active: number; ef: number }
 export type AdminCategory = Omit<Category, 'active'> & { sort: number; active: number }
-export interface AdminData { accounts: AdminAccount[]; categories: AdminCategory[]; favorites: Favorite[]; recurring: Recurring[]; saved_views: SavedView[]; budgets: Budget[]; settings: Record<string, string> }
+export interface AdminData { accounts: AdminAccount[]; categories: AdminCategory[]; favorites: Favorite[]; recurring: Recurring[]; saved_views: SavedView[]; budgets: Budget[]; skips: Skip[]; settings: Record<string, string> }
 
 export class ApiError extends Error {
   constructor(public status: number, public errors: string[]) { super(errors.join(' ')) }
@@ -41,6 +49,10 @@ export class ApiError extends Error {
  *  as opposed to Tally refusing it. Only these are worth retrying. */
 export const unreachable = (e: unknown) =>
   e instanceof ApiError ? e.status >= 502 : e instanceof TypeError || (e instanceof Error && e.name === 'AbortError')
+
+/** Tally refused the token (401) or the tailnet login (403): nothing wrong with the entry, so it waits, like when
+ *  offline, until the token in Settings is right. */
+export const locked = (e: unknown) => e instanceof ApiError && (e.status === 401 || e.status === 403)
 
 async function call<T>(method: string, path: string, body?: unknown, timeoutMs = 15_000): Promise<T> {
   const isForm = body instanceof FormData
@@ -54,8 +66,10 @@ async function call<T>(method: string, path: string, body?: unknown, timeoutMs =
     })
     if (res.status === 204) return undefined as T
     const data = await res.json().catch(() => undefined)
-    // Anything that isn't Tally's JSON (a dev server's HTML page, a captive portal) counts as unreachable.
-    if (res.ok && data === undefined) throw new ApiError(502, ['Tally did not answer at this address.'])
+    // Anything that isn't Tally's JSON (a dev server's HTML page, a captive portal, a proxy's 403 or 404 page) counts
+    // as unreachable, whatever its status: it isn't Tally refusing the request. A plain 500 is Tally's own crash page.
+    if (data === undefined && res.status !== 500) throw new ApiError(502, ['Tally did not answer at this address.'])
+    if (res.status === 401) throw new ApiError(401, ['Tally wants its token. Add it in Settings, Server.'])
     if (!res.ok) {
       const detail = data?.detail
       const errors: string[] = Array.isArray(detail?.errors) ? detail.errors : [typeof detail === 'string' ? detail : `Request failed (${res.status})`]
@@ -130,5 +144,46 @@ export const api = {
   deleteView: (id: number) => call<void>('DELETE', `/saved-views/${id}`),
   orderViews: (ids: number[]) => call<{ ok: true }>('PUT', '/saved-views/order', { ids }),
   backups: () => call<Backups>('GET', '/backups'),
+  health: () => call<Health>('GET', '/health'),
+  /** Newest first. Putting one back is `restore` with the row (which also takes it off the list). */
+  deleted: () => call<DeletedTxn[]>('GET', '/deleted'),
+  forgetDeleted: (id: number) => call<void>('DELETE', `/deleted/${id}`),
+  emptyDeleted: () => call<void>('DELETE', '/deleted'),
+  /** Skips one date (the next when left out). Undo: `restore` the rows, or `unskipRecurring` when none had posted. */
+  skipRecurring: (id: number, date?: string) => call<{ date: string; rows: Txn[] }>('POST', `/recurring/${id}/skip`, date ? { date } : {}),
+  unskipRecurring: (id: number, date: string) => call<void>('DELETE', `/recurring/${id}/skip/${date}`),
+  statement: (accountId: number, csv: string) => call<StatementMatch>('POST', `/reconcile/${accountId}/statement`, { csv }, 30_000),
   putSettings: (body: Record<string, unknown>) => call<Record<string, string>>('PUT', '/settings', body),
+}
+
+/** A file from the server as text (the CSV exports), with the token: opening the URL in Safari sent none. */
+export async function download(path: string): Promise<string> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 30_000)
+  try {
+    const res = await fetch(`${getServer()}${path}`, { headers: authHeaders(), signal: ctrl.signal })
+    if (res.status === 401) throw new ApiError(401, ['Tally wants its token. Add it in Settings, Server.'])
+    if (!res.ok) throw new ApiError(res.status >= 500 ? 502 : res.status, [`Export failed (${res.status}).`])
+    return await res.text()
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** Checks an address and token before Settings switches to them, so nothing (the outbox, a refetch) goes to an
+ *  address that doesn't work in the meantime. Resolves with the server's version. */
+export async function probe(url: string, token: string): Promise<string> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 10_000)
+  try {
+    const res = await fetch(`${url}/api/health`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: ctrl.signal })
+    const data = await res.json().catch(() => undefined)
+    if (data === undefined) throw new ApiError(502, ['Tally did not answer at this address.'])
+    if (res.status === 401) throw new ApiError(401, ['Tally answered, but refused the token.'])
+    if (res.status === 404) throw new ApiError(404, ['Tally answered, but needs updating on the server.'])
+    if (!res.ok) throw new ApiError(res.status, [`Tally answered with an error (${res.status}).`])
+    return (data as Health).version
+  } finally {
+    clearTimeout(timer)
+  }
 }

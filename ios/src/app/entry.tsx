@@ -24,7 +24,8 @@ import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import { merchantKey } from '@/icons/merchants'
 import { api, ApiError, type CatType, type Txn } from '@/lib/api'
-import { close, useLatest } from '@/lib/nav'
+import { close, useBusy, useCloseHere, useLatest } from '@/lib/nav'
+import { useDraftOwner } from '@/lib/draftOwner'
 import { deleteTxns } from '@/lib/actions'
 import { cachedTxn, invalidateAll, useTransactions } from '@/lib/data'
 import { addDays, dayLabel } from '@/lib/dates'
@@ -73,17 +74,32 @@ export function Entry({ embedded }: { embedded?: boolean }) {
   const [dup, setDup] = useState(mode === 'duplicate')
   const editing = !!id && !dup
   const loaded = useRef(false)
+  const owner = useDraftOwner()
+  const busy = useBusy()
+  const closeHere = useCloseHere()
+  // What the form was filled from, to tell whether it's been edited since.
+  const seededFrom = useRef<string | null>(null)
+  const seededDraft = useRef<string | null>(null)
+  const seed = (r: Txn): Draft => {
+    const d0 = fromTxn(r, t.catOf(r).type)
+    return mode === 'duplicate' ? { ...d0, id: undefined, date: t.today, receipt: null } : d0
+  }
+  const fillFrom = (r: Txn) => {
+    reset(seed(r), owner)
+    seededFrom.current = JSON.stringify(r)
+    seededDraft.current = JSON.stringify(useDraft.getState().d)
+  }
 
   // Seed the draft once: edit, duplicate, a quick action, or a blank entry with sensible defaults. Before the first
   // paint, so the last entry's draft never flashes up in this one.
   useLayoutEffect(() => {
     if (loaded.current || !t.b) return
     if (embedded) { loaded.current = true; return }
-    const today = t.b.today
+    const today = t.today
     if (id) {
-      if (!one.data) { if (useDraft.getState().d.id !== Number(id)) reset(blank(today)); return }
+      if (!one.data) { if (useDraft.getState().d.id !== Number(id)) reset(blank(today), owner); return }
       loaded.current = true
-      reset(seed(one.data))
+      fillFrom(one.data)
       return
     }
     loaded.current = true
@@ -91,16 +107,23 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     if (f) {
       const cat = t.cat.get(f.category_id)
       reset({ ...blank(today), what: f.label, category_id: f.category_id, from_id: f.from_account_id, to_id: f.to_account_id,
-        amount: f.amount ? fromCents(f.amount) : '', kind: cat?.type ?? 'Spending' })
+        amount: f.amount ? fromCents(f.amount) : '', kind: cat?.type ?? 'Spending' }, owner)
       return
     }
     // Opened from an account's page: the entry starts from that account.
-    reset({ ...blank(today), from_id: from && t.acct.has(Number(from)) ? Number(from) : null })
-    function seed(r: Txn): Draft {
-      const d0 = fromTxn(r, t.catOf(r).type)
-      return mode === 'duplicate' ? { ...d0, id: undefined, date: today, receipt: null } : d0
-    }
+    reset({ ...blank(today), from_id: from && t.acct.has(Number(from)) ? Number(from) : null }, owner)
   }, [t.b, one.data]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The form fills on its first frame from a copy already in a list, which can be old (a bulk recategorize changed
+  // it since). When the fresh copy arrives and differs, and nothing has been typed yet, the form takes it: saving
+  // the old copy used to put the old category and tags back.
+  useEffect(() => {
+    if (!id || embedded || !loaded.current || !one.data || !one.isFetchedAfterMount) return
+    if (JSON.stringify(one.data) === seededFrom.current) return
+    const cur = useDraft.getState()
+    if (cur.owner !== owner || JSON.stringify(cur.d) !== seededDraft.current) return // edited already: keep it
+    fillFrom(one.data)
+  }, [one.data, one.isFetchedAfterMount]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Merchant memory: the last entry for each name, and the most used category.
   const memory = useMemo(() => {
@@ -156,7 +179,8 @@ export function Entry({ embedded }: { embedded?: boolean }) {
   const splitSum = d.split?.reduce((n, l) => n + toCents(l.amount), 0) ?? 0
   const left = cents - splitSum
 
-  async function save() {
+  const save = () => busy(saveNow) // a second tap while the first is saving does nothing
+  async function saveNow() {
     if (!t.b || (id && !loaded.current)) return // still loading the entry: saving now would write the last draft over it
     const lines = toInputs(d)
     const base = lines[0]
@@ -190,10 +214,10 @@ export function Entry({ embedded }: { embedded?: boolean }) {
       play(d.kind === 'Money in' && !d.refund && !editing ? 'income' : 'add')
       markFresh(saved.map((x) => x.id))
       if (fav && !editing) useQuickFloat.getState().show(Number(fav), cents)
-      await invalidateAll()
+      invalidateAll().catch(() => {}) // refreshes behind the check
       setDone(true) // the button draws a check before the sheet goes
       await new Promise((r) => setTimeout(r, 560))
-      close()
+      closeHere()
       toast(lost ? { text: `${editing ? 'Saved' : `Added ${formatCents(cents)}`}, but the receipt photo didn't upload. Try adding it again.`, tone: 'error' }
         : { text: editing ? 'Saved' : `Added ${formatCents(cents)}${cat && !d.split ? ` to ${cat.name}` : ''}` })
     } catch (e) {

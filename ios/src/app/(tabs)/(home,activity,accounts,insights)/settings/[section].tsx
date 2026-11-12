@@ -19,16 +19,16 @@ import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
-import { api, ApiError, type AdminData, type CatType, type Kind } from '@/lib/api'
+import { api, ApiError, probe, type AdminData, type CatType, type Kind } from '@/lib/api'
 import { suggestBudgets } from '@/lib/budgets'
-import { invalidateAll, useTransactions } from '@/lib/data'
+import { invalidateAll, queryClient, useTransactions } from '@/lib/data'
 import { commitments } from '@/lib/commitments'
 import { budgetAmount } from '@/lib/forms'
 import { addDays, dayLabel, nextDue, toISO } from '@/lib/dates'
 import { fromCents, toCents } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { discard, flush, useOutbox } from '@/lib/outbox'
-import { defaultServer, useServer } from '@/lib/server'
+import { cleanServer, defaultServer, useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
@@ -375,20 +375,22 @@ function Server() {
   const queued = useOutbox((s) => s.items)
   // The new address is tried first and kept only if Tally answers there: a typo used to be saved straight away and
   // left the app talking to nothing. "Use it anyway" is for a server that's down for now.
-  const test = async () => {
-    const prev = url
-    const prevToken = token
-    setState('checking')
+  // Tested before switching, so the outbox and refetches never go to an address that doesn't answer meanwhile.
+  const apply = () => {
+    const moved = cleanServer(val) !== url
     set(val)
     setToken(tok)
+    if (moved) queryClient.clear() // another server's balances must not show as this one's
+    invalidateAll()
+  }
+  const test = async () => {
+    setState('checking')
     try {
-      await api.bootstrap()
+      await probe(cleanServer(val), tok.trim())
+      apply()
       setState('ok')
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
-      invalidateAll()
     } catch (e) {
-      set(prev)
-      setToken(prevToken)
       setState(e instanceof ApiError && (e.status === 401 || e.status === 403) ? 'token' : 'fail')
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
     }
@@ -410,7 +412,7 @@ function Server() {
           {state === 'fail' && (
             <View style={{ gap: space.xs }}>
               <Txt variant="callout" tone="neg">No answer there, so Tally kept the address it had. Is Tailscale on?</Txt>
-              <Tap feedback="opacity" hitSlop={8} onPress={() => { set(val); setToken(tok); setState('idle'); toast({ text: 'Address saved' }) }}>
+              <Tap feedback="opacity" hitSlop={8} onPress={() => { apply(); setState('idle'); toast({ text: 'Address saved' }) }}>
                 <Txt variant="callout" style={{ fontWeight: '600' }}>Use it anyway</Txt>
               </Tap>
             </View>
@@ -423,7 +425,7 @@ function Server() {
             <Row key={q.cid} label={q.label} sub={q.error ?? `${formatCents(q.lines.reduce((n, l) => n + l.amount, 0))}, saved ${dayLabel(toISO(new Date(q.at)))}`} chevron={false}
               trailing={<Tap feedback="opacity" onPress={() => { discard(q.cid); toast({ text: 'Discarded' }) }} hitSlop={8}><Txt variant="callout" tone="neg">Discard</Txt></Tap>} />
           ))}
-          <Row label="Send now" sf="arrow.up.circle" md="upload" chevron={false} onPress={() => flush().then((n) => {
+          <Row label="Send now" sf="arrow.up.circle" md="upload" chevron={false} onPress={() => flush(true).then((n) => {
             const refused = useOutbox.getState().items.filter((q) => q.error).length
             toast({ text: n ? `Sent ${n}` : refused ? 'Tally refused these. Discard them, or fix and add them again.' : 'Still unreachable', tone: !n && refused ? 'error' : undefined })
           })} />
@@ -439,7 +441,8 @@ function Capture() {
   const steps = [
     'Open the Shortcuts app, go to Automation and tap +.',
     'Choose Transaction (Wallet), pick your cards, and set it to Run Immediately.',
-    `Add the action Open URLs with ${scheme}://new?amount=[Amount]&what=[Merchant]&card=[Card], inserting Amount, Merchant and Card from the Shortcut Input.`,
+    'Add a URL Encode action for the Merchant, so a name like "Barnes & Noble" or "Store #12" stays whole.',
+    `Add the action Open URLs with ${scheme}://new?amount=[Amount]&what=[URL Encoded Text]&card=[Card], inserting Amount and Card from the Shortcut Input.`,
     'Next time you tap to pay, Tally opens the new entry filled in, with the category and account from your last visit there. Check it and tap Add.',
   ]
   return (

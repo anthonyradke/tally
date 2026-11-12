@@ -3,7 +3,7 @@
 // adding a second one (app/api.py `_landed`). Edits, deletes and receipts still need a connection.
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { create } from 'zustand'
-import { api, ApiError, unreachable, type Txn, type TxnInput } from './api'
+import { api, ApiError, locked, unreachable, type Txn, type TxnInput } from './api'
 import { invalidateAll } from './data'
 
 export interface Queued { cid: string; lines: TxnInput[]; label: string; at: string; error?: string }
@@ -47,7 +47,7 @@ export async function sendOrQueue(lines: TxnInput[], label: string): Promise<Txn
     const r = await send(lines, cid)
     return Array.isArray(r) ? r : [r]
   } catch (e) {
-    if (!unreachable(e)) throw e
+    if (!unreachable(e) && !locked(e)) throw e
     enqueue({ cid, lines, label })
     return null
   }
@@ -55,18 +55,21 @@ export async function sendOrQueue(lines: TxnInput[], label: string): Promise<Txn
 
 let running: Promise<number> | null = null
 
-/** Post everything queued, oldest first. Stops at the first unreachable error (still offline); a refusal (say the
- *  category was deleted meanwhile) stays queued with its reason so it can be discarded. Returns how many landed. */
-export function flush(): Promise<number> {
+/** Post everything queued, oldest first. Stops at the first unreachable error (still offline) or a refused token; a
+ *  refusal of the entry itself (say the category was deleted meanwhile) stays queued with its reason so it can be
+ *  discarded. Those are only tried again with `retry` (Send now), not every 20 s. Returns how many landed. */
+export function flush(retry = false): Promise<number> {
   if (running) return running
   running = (async () => {
     let sent = 0
     for (const q of [...items()]) {
+      if (!items().some((x) => x.cid === q.cid)) continue // discarded while an earlier one was sending
+      if (q.error && !retry) continue
       try {
         await send(q.lines, q.cid)
         discard(q.cid); sent++
       } catch (e) {
-        if (unreachable(e)) break
+        if (unreachable(e) || locked(e)) break
         write(items().map((x) => (x.cid === q.cid ? { ...x, error: e instanceof ApiError ? e.errors.join(' ') : String(e) } : x)))
       }
     }

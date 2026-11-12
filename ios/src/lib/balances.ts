@@ -7,8 +7,9 @@ import { useTransactions } from './data'
 import { addDays } from './dates'
 import { formatCents } from './money'
 
-/** Every row, oldest first reused by Accounts and account detail (one cached request). */
-export const useAllTxns = (enabled = true) => useTransactions({ limit: 10000, sort: 'date', dir: 'asc' }, enabled)
+/** Every row, oldest first, reused by Accounts and account detail (one cached request). The limit is far past any
+ *  real ledger (about a thousand rows a year); the server sorts oldest first, so a cut would drop the newest. */
+export const useAllTxns = (enabled = true) => useTransactions({ limit: 1_000_000, sort: 'date', dir: 'asc' }, enabled)
 
 export interface Series { dates: string[]; values: number[] }
 
@@ -29,6 +30,19 @@ export function dailyBalances(a: Account, rows: Txn[], start: string, end: strin
     dates.push(d); values.push(bal)
   }
   return { dates, values }
+}
+
+/** What one row does to a cash account's or a card's balance (cards count up as they're charged). */
+export function effect(a: Pick<Account, 'id' | 'kind'>, t: Pick<Txn, 'from_id' | 'to_id' | 'amount'>): number {
+  const s = a.kind === 'card' ? -1 : 1
+  return (t.to_id === a.id ? s * t.amount : 0) - (t.from_id === a.id ? s * t.amount : 0)
+}
+
+/** A cash account's or a card's balance at the end of `day`, from its starting balance and every row up to then. */
+export function balanceOn(a: Account, rows: Txn[], start: string, day: string): number {
+  let bal = a.start_balance
+  for (const t of rows) if (t.date >= start && t.date <= day) bal += effect(a, t)
+  return bal
 }
 
 /** Balance as of today (future-dated rows left out), for every account. */

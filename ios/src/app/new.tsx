@@ -30,7 +30,8 @@ import { Txt } from '@/components/Txt'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import { merchantKey } from '@/icons/merchants'
 import { api, ApiError, type CatType, type Kind, type Txn } from '@/lib/api'
-import { close } from '@/lib/nav'
+import { close, useBusy, useCloseHere } from '@/lib/nav'
+import { useDraftOwner } from '@/lib/draftOwner'
 import { invalidateAll, useTransactions } from '@/lib/data'
 import { blank, fromCents, press, toCents, toInputs, useDraft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
@@ -53,7 +54,14 @@ const KINDS: [CatType, string][] = [['Spending', 'Spent'], ['Money in', 'Income'
 const KIND_ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
 const KEYBOARD = Easing.bezier(0.38, 0.7, 0.125, 1) // close to the iOS keyboard's own curve
 
+/** A second link (another tap to pay) while the composer is open reuses this screen with new params: keyed on them,
+ *  it starts over with the new amount instead of keeping the first. */
 export default function New() {
+  const link = useLocalSearchParams()
+  return <Composer key={JSON.stringify(link)} />
+}
+
+function Composer() {
   const { c, tint } = useTheme()
   const insets = useSafeAreaInsets()
   const t = useTally()
@@ -62,6 +70,9 @@ export default function New() {
   const link = useLocalSearchParams<{ fav?: string; from?: string; date?: string; amount?: string; what?: string; card?: string; account?: string; category?: string }>()
   const { fav, from, date } = link
   const { d, set, reset } = useDraft()
+  const owner = useDraftOwner()
+  const busy = useBusy()
+  const closeHere = useCloseHere()
   const history = useTransactions({ limit: 600 }, !!t.b)
   // "Recent" suggests what has happened, not the bills scheduled weeks ahead that topped it.
   const past = useMemo(() => (history.data?.items ?? []).filter((x) => !t.b || x.date <= t.b.today), [history.data, t.b])
@@ -69,7 +80,7 @@ export default function New() {
   // it starts on the first step still missing something).
   const makeSeed = () => {
     if (!t.b) return null
-    const base = { ...blank(date ?? t.b.today), from_id: from && t.acct.has(Number(from)) ? Number(from) : null }
+    const base = { ...blank(date ?? t.today), from_id: from && t.acct.has(Number(from)) ? Number(from) : null }
     const f = fav ? t.b.favorites.find((x) => x.id === Number(fav)) : undefined
     if (f) return { ...base, ...fill(f.id) }
     return link.amount || link.what ? { ...base, ...fromLink(link, t.b, history.data?.items ?? []) } : base
@@ -91,7 +102,7 @@ export default function New() {
     loaded.current = true
     // Opened before anything had loaded (no cache yet): seed now, so a quick action or account isn't lost.
     const s = seed ?? makeSeed()!
-    reset(s)
+    reset(s, owner)
     if (!seed && s.amount) setStep(nextStep('amount', s, new Set())) // eslint-disable-line react-hooks/set-state-in-effect
   }, [t.b]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -198,8 +209,9 @@ export default function New() {
   const [catching, setCatching] = useState(false)
   const catchUp = () => { Keyboard.dismiss(); Haptics.selectionAsync().catch(() => {}); setCatching(true) }
 
-  async function save() {
-    if (!t.b || saving) return
+  const save = () => busy(saveNow) // a second tap while the first is saving does nothing
+  async function saveNow() {
+    if (!t.b) return
     const lines = toInputs(d)
     const errs: string[] = []
     if (!cents) errs.push('Enter an amount.')
@@ -225,10 +237,10 @@ export default function New() {
       play(d.kind === 'Money in' && !d.refund ? 'income' : 'add')
       markFresh(saved.map((x) => x.id))
       if (quick != null) useQuickFloat.getState().show(quick, cents)
-      await invalidateAll()
+      invalidateAll().catch(() => {}) // refreshes behind the check: waiting on it made Add feel slow
       setDone(true) // the button draws a check before the sheet goes
       await new Promise((r) => setTimeout(r, 560))
-      close()
+      closeHere()
       // Catching up on a week at once: Add another starts the next entry on the same day.
       toast(lost ? { text: `Added ${formatCents(cents)}, but the receipt photo didn't upload. Add it from the entry.`, tone: 'error', action: again }
         : { text: `Added ${formatCents(cents)}${cat ? ` to ${cat.name}` : ''}`, action: again })

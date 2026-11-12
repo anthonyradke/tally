@@ -6,6 +6,7 @@ import Animated from 'react-native-reanimated'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import type { Account, CatType, Kind, Txn } from '@/lib/api'
 import { otherSide, suggest, usualCategories } from '@/lib/catchup'
+import { daysSince, useCaughtUp } from '@/lib/caughtUp'
 import { dayLabel, fromISO } from '@/lib/dates'
 import { press, toCents, useDraft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
@@ -58,13 +59,15 @@ export function AccountLine({ a, count }: { a: Account; count: number }) {
 }
 
 /** First page: pick the account, then see its newest entries, which is where the bank's list picks up. */
-export function LeftOff({ accounts, acct, onAcct, rows, loading, added }: {
-  accounts: Account[]; acct: Account; onAcct: (id: number) => void; rows: Txn[]; loading: boolean; added: number
+export function LeftOff({ accounts, acct, onAcct, rows, loading, added, onCheck }: {
+  accounts: Account[]; acct: Account; onAcct: (id: number) => void; rows: Txn[]; loading: boolean; added: number; onCheck: () => void
 }) {
   const { c } = useTheme()
   const t = useTally()
+  const at = useCaughtUp((s) => s.at[String(acct.id)])
   if (!t.b) return null
-  const today = t.b.today
+  const today = t.today
+  const since = at ? daysSince(at) : null
   const newest = rows[0]?.date
   const ago = newest ? Math.round((fromISO(today).getTime() - fromISO(newest).getTime()) / 864e5) : 0
   return (
@@ -80,6 +83,9 @@ export function LeftOff({ accounts, acct, onAcct, rows, loading, added }: {
             : `The newest entry on ${acct.name} is from ${ago === 0 ? 'today' : ago === 1 ? 'yesterday' : `${dayLabel(newest, today)}, ${ago} days ago`}. Pick up after it in the bank's app.`}
         </Txt>
         {added > 0 && <Txt variant="callout" tone="label2">{added === 1 ? '1 entry' : `${added} entries`} added to it just now.</Txt>}
+        {since != null && added === 0 && (
+          <Txt variant="callout" tone="label2">{`Last caught up ${since === 0 ? 'today' : since === 1 ? 'yesterday' : `${since} days ago`}.`}</Txt>
+        )}
       </View>
       {rows.length > 0 && (
         <View style={{ marginHorizontal: space.l, backgroundColor: c.panel, borderRadius: radius.panel, borderCurve: 'continuous', overflow: 'hidden' }}>
@@ -92,6 +98,9 @@ export function LeftOff({ accounts, acct, onAcct, rows, loading, added }: {
           ))}
         </View>
       )}
+      <View style={{ marginHorizontal: space.l }}>
+        <Row label="Check the balance against the bank" sub="Or match a statement file, line by line" sf="checkmark.seal" md="verified" onPress={onCheck} />
+      </View>
     </ScrollView>
   )
 }
@@ -148,8 +157,8 @@ export function What({ acct, history, count, last, onUndo, onPick, onSubmit }: {
 
 /** The amount on the keypad, with the category as a row of chips (this account's usual ones) and, for a transfer,
  *  the other account. A lookalike already in Tally is pointed out, not refused. */
-export function Amount({ acct, history, count, lookalike, errors, shake, onWhat, onCategory, onMoreCategories, onOther, onFlip, onRefuse }: {
-  acct: Account; history: Txn[]; count: number; lookalike: Txn | null; errors: string[]; shake: object
+export function Amount({ acct, history, count, lookalike, errors, shake, after, onWhat, onCategory, onMoreCategories, onOther, onFlip, onRefuse }: {
+  acct: Account; history: Txn[]; count: number; lookalike: Txn | null; errors: string[]; shake: object; after: number | null
   onWhat: () => void; onCategory: (id: number) => void; onMoreCategories: () => void; onOther: () => void; onFlip: () => void; onRefuse: () => void
 }) {
   const { c, tint } = useTheme()
@@ -172,6 +181,11 @@ export function Amount({ acct, history, count, lookalike, errors, shake, onWhat,
         <Tap feedback="opacity" onPress={onWhat} hitSlop={8} accessibilityLabel={`${d.what || 'No name'}. Change`}>
           <Txt variant="callout" tone="label2" numberOfLines={1}>{d.what || 'Add a name'}</Txt>
         </Tap>
+        {after != null && cents > 0 && (
+          <Txt variant="foot" tone="label2" num numberOfLines={1}>
+            {`${acct.name} after this: ${acct.kind === 'card' ? `${formatCents(after)} owed` : formatCents(after)}, ${dayLabel(d.date, t.today)}`}
+          </Txt>
+        )}
         {lookalike && (
           <Txt variant="foot" tone="warn" numberOfLines={2} style={{ textAlign: 'center' }} accessibilityLiveRegion="polite">
             {`Already in Tally? ${lookalike.what || t.catOf(lookalike).name}, ${dayLabel(lookalike.date, t.b?.today)}, is the same amount.`}

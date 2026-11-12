@@ -1,8 +1,8 @@
 // The API client against a fake fetch: how answers become data, refusals or "unreachable".
 import { afterEach, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { api, ApiError, unreachable } from '@/lib/api'
-import { useServer } from '@/lib/server'
+import { api, ApiError, locked, unreachable } from '@/lib/api'
+import { cleanServer, useServer } from '@/lib/server'
 
 const realFetch = globalThis.fetch
 let calls: { url: string; init: RequestInit }[] = []
@@ -41,6 +41,10 @@ test('refusals carry the server message', async () => {
 test('a page that is not Tally counts as unreachable', async () => {
   respond(200, '<html>captive portal</html>', 'text/html')
   await assert.rejects(api.bootstrap(), (e: unknown) => unreachable(e))
+  respond(403, '<html>blocked by a proxy</html>', 'text/html') // not a refusal: the outbox keeps it
+  await assert.rejects(api.bootstrap(), (e: unknown) => unreachable(e))
+  respond(401, { detail: 'bad or missing token' })
+  await assert.rejects(api.bootstrap(), (e: unknown) => locked(e) && !unreachable(e))
 })
 
 test('204 is fine and query strings skip empty values', async () => {
@@ -69,4 +73,10 @@ test('the saved token goes out on every request, and only once one is saved', as
   } finally {
     useServer.setState({ token: '' })
   }
+})
+
+test('a typed address is tidied: https added, no trailing slash or /api', () => {
+  assert.equal(cleanServer(' tally.test:8443/api/ '), 'https://tally.test:8443')
+  assert.equal(cleanServer('http://127.0.0.1:8000/'), 'http://127.0.0.1:8000')
+  assert.equal(cleanServer(''), '')
 })

@@ -21,7 +21,7 @@ export const useServer = create<ServerState>((set) => ({
   url: DEFAULT,
   token: '',
   set: (url) => {
-    const clean = url.trim().replace(/\/+$/, '')
+    const clean = cleanServer(url)
     set({ url: clean })
     AsyncStorage.setItem(KEY, clean).catch(() => {})
   },
@@ -31,6 +31,14 @@ export const useServer = create<ServerState>((set) => ({
     if (!WEB) (clean ? SecureStore.setItemAsync(TOKEN_KEY, clean) : SecureStore.deleteItemAsync(TOKEN_KEY)).catch(() => {})
   },
 }))
+
+/** An address as typed, tidied: https:// added when there's no scheme, and no trailing slash or /api (requests add
+ *  /api themselves, so "…:8443/api" went to /api/api/…). */
+export function cleanServer(url: string): string {
+  let u = url.trim().replace(/\/+$/, '').replace(/\/api$/i, '').replace(/\/+$/, '')
+  if (u && !/^https?:\/\//i.test(u)) u = `https://${u}`
+  return u
+}
 
 export const getServer = () => useServer.getState().url
 export const defaultServer = DEFAULT

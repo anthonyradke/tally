@@ -104,3 +104,26 @@ test('client ids fit the server pattern', () => {
   Object.defineProperty(globalThis, 'crypto', { value: undefined, configurable: true })
   try { assert.match(newClientId(), /^[A-Za-z0-9-]{8,64}$/) } finally { Object.defineProperty(globalThis, 'crypto', { value: saved, configurable: true }) }
 })
+
+test('discarding one while an earlier one is sending keeps it from going', async () => {
+  enqueue({ cid: 'a', lines: [line(1)], label: 'A' })
+  enqueue({ cid: 'b', lines: [line(2)], label: 'B' })
+  api.createTxn = async (_t, cid) => { sent.push({ cid: cid!, lines: 1 }); if (cid === 'a') discard('b'); return {} as never }
+  assert.equal(await flush(), 1)
+  assert.deepEqual(sent.map((s) => s.cid), ['a'])
+})
+
+test('a refused entry waits for Send now; a refused token keeps everything queued', async () => {
+  enqueue({ cid: 'a', lines: [line(1)], label: 'A' })
+  answer = () => new ApiError(422, ['Pick a category.'])
+  await flush()
+  sent = []
+  answer = () => ({})
+  assert.equal(await flush(), 0) // the every-20-seconds flush skips it
+  assert.equal(sent.length, 0)
+  assert.equal(await flush(true), 1) // Send now tries it again
+  enqueue({ cid: 'b', lines: [line(2)], label: 'B' })
+  answer = () => new ApiError(401, ['Tally wants its token.'])
+  assert.equal(await flush(), 0)
+  assert.deepEqual(useOutbox.getState().items.map((q) => [q.cid, q.error]), [['b', undefined]])
+})

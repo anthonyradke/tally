@@ -61,11 +61,14 @@ export const fromTxn = (t: Txn, type: CatType): Draft => ({
   amount: fromCents(t.amount), refund: t.amount < 0, note: t.note, tags: t.tags, receipt: t.receipt, kind: type,
 })
 
-interface S { d: Draft; set: (p: Partial<Draft>) => void; reset: (d: Draft) => void; setLine: (key: string, p: Partial<Line>) => void }
+/** `owner`: the screen that last started a draft (lib/draftOwner). The composer, the editor and Catch up share this
+ *  one store, so one opened over another (Add another from a toast, a link) took over the draft underneath. */
+interface S { d: Draft; owner: string | null; set: (p: Partial<Draft>) => void; reset: (d: Draft, owner?: string) => void; setLine: (key: string, p: Partial<Line>) => void }
 export const useDraft = create<S>((set) => ({
   d: blank(),
+  owner: null,
   set: (p) => set((s) => ({ d: { ...s.d, ...p } })),
-  reset: (d) => set({ d }),
+  reset: (d, owner) => set({ d, owner: owner ?? null }),
   setLine: (key, p) => set((s) => ({ d: { ...s.d, split: s.d.split?.map((l) => (l.key === key ? { ...l, ...p } : l)) ?? null } })),
 }))
 

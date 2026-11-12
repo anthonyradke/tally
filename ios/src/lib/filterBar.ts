@@ -22,8 +22,8 @@ export function ranges(today: string): [Range, string, Partial<Filters>][] {
     ['all', 'All time', { start: undefined, end: undefined }],
     ['month', 'This month', { start: monthOf(today), end: lastOfMonth(today) }], // not next month's scheduled entries
     ['last', 'Last month', { start: monthBefore(today), end: addDays(monthOf(today), -1) }],
-    ['90', '90 days', { start: addDays(today, -90), end: undefined }],
-    ['year', 'This year', { start: `${today.slice(0, 4)}-01-01`, end: undefined }],
+    ['90', '90 days', { start: addDays(today, -90), end: today }], // what happened: not the bills scheduled ahead
+    ['year', 'This year', { start: `${today.slice(0, 4)}-01-01`, end: `${today.slice(0, 4)}-12-31` }],
     ['upcoming', 'Upcoming', { start: addDays(today, 1), end: undefined, sort: 'date', dir: 'asc' }],
   ]
 }

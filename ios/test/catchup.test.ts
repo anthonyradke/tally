@@ -79,3 +79,28 @@ test('catchup: lookalikes are the same amount on the account within three days',
   assert.deepEqual(lookalikes(h, { date: '2026-11-04', amount: 15000 }, CARD), [])
   assert.deepEqual(lookalikes(h, { date: '2026-11-02', amount: 0 }, CARD), [])
 })
+
+import { daysSince, staleAccounts, STALE_DAYS } from '@/lib/caughtUp'
+import { balanceOn, effect } from '@/lib/balances'
+
+test('caught-up nudges only accounts done before, oldest first', () => {
+  const now = new Date(2026, 10, 20, 9)
+  const at = { 1: new Date(2026, 10, 18, 22).toISOString(), 2: new Date(2026, 10, 1, 8).toISOString(), 3: new Date(2026, 10, 10, 8).toISOString() }
+  assert.equal(daysSince(at[1], now), 2)
+  assert.deepEqual(staleAccounts(at, [1, 2, 3, 4], now), [{ id: 2, days: 19 }, { id: 3, days: 10 }])
+  assert.ok(STALE_DAYS > 7)
+})
+
+test('balance on a day follows cash and card signs', () => {
+  const cash = { id: 1, kind: 'cash', start_balance: 1000 } as never
+  const card = { id: 2, kind: 'card', start_balance: 0 } as never
+  const rows = [
+    { date: '2026-09-01', from_id: null, to_id: 1, amount: 500 },
+    { date: '2026-09-02', from_id: 2, to_id: null, amount: 300 },
+    { date: '2026-09-03', from_id: 1, to_id: 2, amount: 200 },
+    { date: '2026-09-09', from_id: 1, to_id: null, amount: 50 },
+  ] as never[]
+  assert.equal(balanceOn(cash, rows, '2026-08-01', '2026-09-03'), 1000 + 500 - 200)
+  assert.equal(balanceOn(card, rows, '2026-08-01', '2026-09-03'), 300 - 200)
+  assert.equal(effect(card, { from_id: 2, to_id: null, amount: 45 }), 45)
+})

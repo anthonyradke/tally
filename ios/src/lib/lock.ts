@@ -5,7 +5,7 @@ import { AppState } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { create } from 'zustand'
 
-type Auth = { hasHardwareAsync: () => Promise<boolean>; isEnrolledAsync: () => Promise<boolean>; authenticateAsync: (o: object) => Promise<{ success: boolean }> }
+type Auth = { hasHardwareAsync: () => Promise<boolean>; isEnrolledAsync: () => Promise<boolean>; authenticateAsync: (o: object) => Promise<{ success: boolean; error?: string }> }
 let auth: Auth | null = null
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 try { auth = process.env.EXPO_OS === 'web' ? null : (require('expo-local-authentication') as Auth) } catch { auth = null }
@@ -13,8 +13,10 @@ try { auth = process.env.EXPO_OS === 'web' ? null : (require('expo-local-authent
 const KEY = 'tally.lock'
 const AWAY_MS = 60_000
 
-interface Lock { enabled: boolean; locked: boolean; cover: boolean }
-export const useLock = create<Lock>(() => ({ enabled: false, locked: false, cover: false }))
+/** `held`: a tally:// link that arrived while locked (or about to lock). It opens once Tally is unlocked: shown
+ *  straight away, its sheet sat above the lock screen with balances and recent entries. */
+interface Lock { enabled: boolean; locked: boolean; cover: boolean; ready: boolean; held: string | null }
+export const useLock = create<Lock>(() => ({ enabled: false, locked: false, cover: false, ready: false, held: null }))
 
 export async function canLock(): Promise<boolean> {
   if (!auth) return false
@@ -25,8 +27,10 @@ export async function unlock(): Promise<boolean> {
   if (!auth) { useLock.setState({ locked: false }); return true }
   try {
     const r = await auth.authenticateAsync({ promptMessage: 'Unlock Tally', fallbackLabel: 'Use passcode' })
-    if (r.success) useLock.setState({ locked: false })
-    return r.success
+    // The phone's passcode was turned off since: there's nothing left to unlock with, and nothing the lock adds.
+    const open = r.success || r.error === 'passcode_not_set'
+    if (open) useLock.setState({ locked: false })
+    return open
   } catch { return false }
 }
 
@@ -41,9 +45,23 @@ export async function setLockEnabled(on: boolean): Promise<boolean> {
 }
 
 let away = 0
+
+/** Locked, or about to be: a link can arrive before the 'active' event that sets `locked` after a while away. */
+export function lockedNow(): boolean {
+  const s = useLock.getState()
+  if (!s.ready) return true // before the setting has loaded: hold it, it opens a moment later if the lock is off
+  return s.locked || (s.enabled && !!away && Date.now() - away > AWAY_MS)
+}
+
+/** Keeps a link for after unlocking (app/+native-intent.tsx). `path` is the link as it came in. */
+export function holdLink(path: string) {
+  const route = path.replace(/^[a-z][\w+.-]*:\/\//i, '/') // tally://new?amount=1 → /new?amount=1
+  useLock.setState({ held: route.startsWith('/') ? route : `/${route}` })
+}
+
 export async function loadLock() {
   const on = (await AsyncStorage.getItem(KEY).catch(() => null)) === '1'
-  useLock.setState({ enabled: on && !!auth, locked: on && !!auth })
+  useLock.setState({ enabled: on && !!auth, locked: on && !!auth, ready: true })
   AppState.addEventListener('change', (s) => {
     if (s === 'active') {
       const long = away && Date.now() - away > AWAY_MS
