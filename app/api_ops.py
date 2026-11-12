@@ -1,10 +1,12 @@
 """JSON API — reconcile and month-end. Moved out of api.py to keep files short; same conventions."""
 from __future__ import annotations
+import json
 import os
+import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
-from . import db, service
+from . import db, service, statement
 from .api import Con, _txn
 from .engine import Txn, month_end as eom, validate
 from .inputs import bad, body, money, month as parse_month, whole
@@ -28,6 +30,34 @@ async def reconcile(account_id: int, request: Request, con: Con):
     return {"expected": d.expected, "actual": d.actual, "gap": d.gap, "saved": bool(b.get("save")),
             "doubled": [_txn(t) for t in d.doubled], "single": [_txn(t) for t in d.single],
             "future": [_txn(t) for t in d.future]}
+
+
+@router.post("/reconcile/{account_id}/statement")
+async def reconcile_statement(account_id: int, request: Request, con: Con):
+    """Body: {"csv": the text of a bank or card statement export}. Pairs each statement line with an entry on the
+    account (statement.match) and returns what's on the statement but not in Tally, and the other way round."""
+    b = await body(request)
+    raw = b.get("csv")
+    if not isinstance(raw, str) or not raw.strip():
+        bad("Pick a statement file (CSV).")
+    if len(raw) > 2_000_000:
+        bad("That file is too large. Export a shorter range.")
+    st = service.load(con)
+    a = st.acct.get(account_id)
+    if not a:
+        raise HTTPException(404)
+    try:
+        lines = statement.parse(raw)
+    except ValueError as e:
+        bad(str(e))
+    r = statement.match(lines, [t for t in st.txns if t.date <= st.today], a.id)
+    line = lambda x: {"line": x.n, "date": x.date.isoformat(), "what": x.what, "amount": x.amount}
+    meta = {m["id"]: dict(m) for m in con.execute(
+        "SELECT id, note, tags, split_group, receipt, recurring_id FROM transactions")}
+    entry = lambda t: _txn(t, meta.get(t.id))
+    return {"account_id": a.id, "first": r["first"].isoformat(), "last": r["last"].isoformat(),
+            "matched": [{"statement": line(x), "entry": entry(t)} for x, t in r["pairs"]],
+            "missing": [line(x) for x in r["missing"]], "extra": [entry(t) for t in r["extra"]]}
 
 
 @router.get("/reconciliations")
@@ -119,3 +149,24 @@ def backups():
     return {"latest": {"name": files[0].name, "size": st.st_size,
                        "at": datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()},
             "count": len(files), "folder": str(folder)}
+
+
+def _version() -> str:
+    try:
+        return tomllib.loads((Path(__file__).parent.parent / "pyproject.toml").read_text())["project"]["version"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError):
+        return "unknown"
+
+
+@router.get("/health")
+def health(con: Con):
+    """What Settings shows about the server: its version, whether the database reads back clean, the newest nightly
+    snapshot on x1 (backups()) and the last good off-site backup (cellar's status file, if it's there)."""
+    ok = con.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+    offsite = None
+    try:
+        s = json.loads(Path(os.environ.get("TALLY_CELLAR_STATUS", "/var/lib/cellar/status.json")).read_text())
+        offsite = {"last_success": s.get("last_success"), "result": (s.get("backup") or {}).get("result")}
+    except (OSError, ValueError, AttributeError):
+        pass
+    return {"version": _version(), "database": "ok" if ok else "damaged", "backups": backups(), "offsite": offsite}

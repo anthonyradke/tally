@@ -228,3 +228,46 @@ def test_skip_once_and_undo(client, world, monkeypatch):
     assert client.delete(f"/api/recurring/{t['id']}/skip/2026-11-01").status_code == 204
     assert "2026-11-01" in _rent_dates(client)
     assert client.post(f"/api/recurring/{t['id']}/skip", json={"date": "2026-01-01"}).status_code == 422
+
+
+def test_health(client, tmp_path, monkeypatch):
+    status = tmp_path / "status.json"
+    status.write_text('{"last_success": "2026-11-12T03:46:50+00:00", "backup": {"result": "ok"}}')
+    monkeypatch.setenv("TALLY_CELLAR_STATUS", str(status))
+    h = client.get("/api/health").json()
+    assert h["database"] == "ok" and h["version"] != "unknown"
+    assert h["offsite"] == {"last_success": "2026-11-12T03:46:50+00:00", "result": "ok"}
+    assert h["backups"]["latest"] is None
+    monkeypatch.setenv("TALLY_CELLAR_STATUS", str(tmp_path / "none.json"))
+    assert client.get("/api/health").json()["offsite"] is None
+
+
+CHASE = """Transaction Date,Post Date,Description,Category,Type,Amount,Memo
+09/03/2026,09/04/2026,MARKET,Groceries,Sale,-12.34,
+09/05/2026,09/06/2026,COFFEE SHOP,Food & Drink,Sale,-4.50,
+09/09/2026,09/09/2026,MARKET,Groceries,Sale,-12.34,
+09/12/2026,09/12/2026,Payment Thank You,,Payment,100.00,
+"""
+
+
+def test_statement_matches_lines_to_entries(client, world, monkeypatch):
+    freeze(monkeypatch, TODAY)
+    client.post("/api/transactions", json=txn(world, date="2026-09-02"))  # a day before the statement's line
+    client.post("/api/transactions", json=txn(world, date="2026-09-10"))
+    client.post("/api/transactions", json=txn(world, date="2026-09-08", amount=60, what="Shoes"))
+    r = client.post(f"/api/reconcile/{world['card']}/statement", json={"csv": CHASE}).json()
+    assert r["first"] == "2026-09-03" and r["last"] == "2026-09-12"
+    assert [(m["statement"]["date"], m["entry"]["date"]) for m in r["matched"]] == [("2026-09-03", "2026-09-02"),
+                                                                                    ("2026-09-09", "2026-09-10")]
+    assert [(x["what"], x["amount"]) for x in r["missing"]] == [("COFFEE SHOP", -450), ("Payment Thank You", 10000)]
+    assert [x["what"] for x in r["extra"]] == ["Shoes"]
+
+
+def test_statement_debit_credit_columns_and_bad_files(client, world):
+    from app.statement import parse
+    lines = parse("Bank export\nDate,Description,Debit,Credit,Balance\n2026-09-01,Rent,\"1,400.00\",,\n"
+                  "2026-09-15,Paycheck,,2384.73,\n")
+    assert [(x.what, x.amount) for x in lines] == [("Rent", -140000), ("Paycheck", 238473)]
+    assert client.post(f"/api/reconcile/{world['chk']}/statement", json={"csv": "a,b\n1,2"}).status_code == 422
+    assert client.post(f"/api/reconcile/{world['chk']}/statement", json={"csv": ""}).status_code == 422
+    assert client.post("/api/reconcile/999/statement", json={"csv": CHASE}).status_code == 404
