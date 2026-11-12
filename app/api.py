@@ -235,6 +235,8 @@ async def restore(request: Request, con: Con):
             raise HTTPException(409, {"errors": ["That entry is already back."]})
         if t.category_id not in st.cat or any(a and a not in st.acct for a in (t.from_id, t.to_id)):
             raise HTTPException(422, {"errors": ["Its category or account no longer exists."]})
+        if errs := validate(t, st.cat[t.category_id].type, st.acct):  # its category's type changed since
+            raise HTTPException(422, {"errors": [f"It no longer fits {st.cat[t.category_id].name}.", *errs]})
         receipt = b.get("receipt") if isinstance(b.get("receipt"), str) and has_receipt(b["receipt"]) else None
         rid = opt_id(b.get("recurring_id"), "recurring_id")
         if rid and not con.execute("SELECT 1 FROM recurring WHERE id=?", (rid,)).fetchone():

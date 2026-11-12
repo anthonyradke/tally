@@ -65,16 +65,16 @@ async def upload_receipt(txn_id: int, con: Con, file: UploadFile = File(...)):
     row = con.execute("SELECT receipt FROM transactions WHERE id=?", (txn_id,)).fetchone()
     if not row:
         raise HTTPException(404)
-    data = await file.read()
+    data = await file.read(MAX_BYTES + 1)  # no more than the cap into memory
     if len(data) > MAX_BYTES:
         raise HTTPException(413, {"errors": ["That file is over 12 MB."]})
     RECEIPTS.mkdir(parents=True, exist_ok=True)
     name = f"{txn_id}-{uuid.uuid4().hex[:8]}.{ext}"
     (RECEIPTS / name).write_bytes(data)
-    if row["receipt"]:
-        remove_receipt(row["receipt"])
     con.execute("UPDATE transactions SET receipt=? WHERE id=?", (name, txn_id))
     con.commit()
+    if row["receipt"]:  # only once the row points at the new file
+        remove_receipt(row["receipt"])
     return {"receipt": name}
 
 
@@ -92,4 +92,7 @@ def delete_receipt(txn_id: int, con: Con):
 def get_receipt(name: str):
     if not has_receipt(name):
         raise HTTPException(404)
-    return FileResponse(RECEIPTS / name, headers={"Cache-Control": "private, max-age=31536000, immutable"})
+    # The type comes from the file's extension, which the upload picked from its declared type; nosniff keeps a
+    # browser from reading a file labelled as an image as anything else.
+    return FileResponse(RECEIPTS / name, headers={"Cache-Control": "private, max-age=31536000, immutable",
+                                                  "X-Content-Type-Options": "nosniff"})

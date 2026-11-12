@@ -15,6 +15,11 @@ def bad(msg: str) -> NoReturn:
 
 
 async def body(request: Request) -> dict:
+    """The JSON object a request carries. Only `application/json`: a browser sends `text/plain` from any web page
+    without asking first (no CORS preflight), and parsing that as JSON let a page on another site post here."""
+    kind = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if kind != "application/json":
+        raise HTTPException(415, {"errors": ["Send the request as JSON (Content-Type: application/json)."]})
     try:
         b = await request.json()
     except ValueError:
@@ -105,21 +110,29 @@ def far(today: date) -> date:
 def month(ym: str) -> date:
     """A 'YYYY-MM' path segment."""
     m = re.fullmatch(r"(\d{4})-(\d{2})", ym)
-    if not m or not 1 <= int(m[2]) <= 12:
+    if not m or not 1 <= int(m[2]) <= 12 or int(m[1]) < 1900:
         bad("The month must look like 2026-09.")
     return date(int(m[1]), int(m[2]), 1)
+
+
+MAX_IDS = 5000  # SQLite refuses a query with more than 32,766 values; nobody selects this many by hand
 
 
 def ids(v: Any, what: str = "ids") -> list[int]:
     if not isinstance(v, list):
         bad(f"{what} must be a list.")
+    if len(v) > MAX_IDS:
+        bad(f"Pick at most {MAX_IDS:,} entries at once.")
     return [whole(x, what) for x in v]
 
 
 def tag_set(v: Any) -> set[str]:
     """Tags typed any way ("trip, gift #work" or a list): lowercase, no "#", split on spaces and commas. A comma
     used to stay on the tag ("trip,")."""
-    return {t.lstrip("#").lower() for x in words(v) for t in re.split(r"[\s,]+", x) if t.lstrip("#")}
+    tags = {t.lstrip("#").lower() for x in words(v) for t in re.split(r"[\s,]+", x) if t.lstrip("#")}
+    if len(" ".join(tags)) > 500 or any(len(t) > 50 for t in tags):
+        bad("Tags are too long (at most 50 characters each).")
+    return tags
 
 
 def words(v: Any, what: str = "Tags") -> list[str]:

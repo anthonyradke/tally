@@ -88,7 +88,8 @@ def test_sweep_keeps_files_in_use(client, entry, tmp_path):
 def _rows(client, path):
     r = client.get(path)
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
-    return list(csv.reader(io.StringIO(r.text)))
+    assert r.text.startswith("\ufeff")  # a BOM, so Excel reads UTF-8
+    return list(csv.reader(io.StringIO(r.text.removeprefix("\ufeff"))))
 
 
 def test_log_export_round_trips(client, world):
@@ -105,7 +106,8 @@ def test_log_export_round_trips(client, world):
     cats = {c["id"]: c["name"] for c in client.get("/api/admin").json()["categories"]}
     assert len(body) == len(api_rows)
     for line, t in zip(body, api_rows, strict=True):
-        assert line[0] == t["date"] and line[1] == t["what"] and line[2] == cats[t["category_id"]]
+        shown = "'" + t["what"] if t["what"][:1] in ("=", "+", "-", "@") else t["what"]  # formulas don't run
+        assert line[0] == t["date"] and line[1] == shown and line[2] == cats[t["category_id"]]
         assert line[3] == (names[t["from_id"]] if t["from_id"] else "") and line[4] == (names[t["to_id"]] if t["to_id"] else "")
         assert cents(line[5]) == t["amount"]  # dollars in the file, exact to the cent
         assert line[6] == t["date"][:8] + "01"

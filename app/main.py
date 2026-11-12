@@ -2,9 +2,9 @@
 The web apps were retired: Jinja + HTMX on 2026-09-18, the React PWA on 2026-09-24 (see git history).
 Run: uvicorn app.main:app --host 127.0.0.1 --port 8000"""
 from __future__ import annotations
-import csv, io
+import csv, decimal, io, sqlite3
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from . import auth, service
 from .api import Con, router as api_router
 from .api_ops import router as ops_router
@@ -25,11 +25,31 @@ for r in (api_router, ops_router, admin_router, recurring_router, files_router):
     app.include_router(r)
 
 
+@app.exception_handler(OverflowError)
+@app.exception_handler(decimal.InvalidOperation)
+async def _too_big(request: Request, exc: Exception):
+    """A number past what SQLite or Decimal holds (an id of 2^63, a 30-digit amount) is a bad request, not a 500."""
+    return JSONResponse({"detail": {"errors": ["That number is too large."]}}, status_code=422)
+
+
+@app.exception_handler(sqlite3.OperationalError)
+async def _too_many(request: Request, exc: sqlite3.OperationalError):
+    if "too many SQL variables" in str(exc):
+        return JSONResponse({"detail": {"errors": ["Too many entries at once."]}}, status_code=422)
+    raise exc
+
+
 # ---------- export ----------
+def _cell(v):
+    """Text a spreadsheet would run as a formula (=, +, -, @, tab, CR at the start) gets a leading apostrophe."""
+    return "'" + v if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") else v
+
+
 def _csv(rows, name):
     buf = io.StringIO()
-    csv.writer(buf).writerows(rows)
-    return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
+    buf.write("\ufeff")  # a BOM, so Excel reads the file as UTF-8 (accented names came out garbled)
+    csv.writer(buf).writerows([[_cell(v) for v in row] for row in rows])
+    return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv; charset=utf-8",
                              headers={"Content-Disposition": f"attachment; filename={name}"})
 
 

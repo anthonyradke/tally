@@ -15,7 +15,7 @@ from .engine import cents, month_end
 MONTHS = {name: i + 1 for i, names in enumerate(
     ("jan january", "feb february", "mar march", "apr april", "may", "jun june", "jul july", "aug august",
      "sep sept september", "oct october", "nov november", "dec december")) for name in names.split()}
-AMOUNT = re.compile(r"(>=|<=|>|<)\$?(\d[\d,]*(?:\.\d{1,2})?)")
+AMOUNT = re.compile(r"(>=|<=|>|<)\$?(\d[\d,]{0,15}(?:\.\d{1,2})?)")  # 27+ digits overflowed cents() into a 500
 
 
 @dataclass

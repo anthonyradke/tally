@@ -62,7 +62,7 @@ class State:
 
     # ----- month-end -----
     def month_end_status(self, m: date) -> dict:
-        inv = self.by_kind("investment")
+        inv = [a for a in self.by_kind("investment") if not a.opened or a.opened <= m]  # not yet opened: nothing to type
         typed = {a.id: self.typed.get((a.id, m)) for a in inv}
         income = self.category_for("interest_category", "Other Income")
         hysas = [a for a in self.by_kind("cash") if a.apy] if income is not None else []  # None: no interest step

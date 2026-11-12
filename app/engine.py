@@ -219,8 +219,8 @@ def emergency_fund(rows: list[MonthRow], accounts: list[Account], ef_months: int
                    today: date) -> tuple[int, int]:
     """(goal, progress). Goal averages completed months only; a part month never drags it."""
     done = [r.spent for r in rows if r.month < month_of(today)]
-    if not done:
-        done = [r.spent for r in rows]
+    if not done:  # the first month: what it has so far, not the empty months scheduled rows add after it
+        done = [r.spent for r in rows if r.month <= month_of(today)]
     avg = sum(done) // len(done) if done else 0
     goal = avg * ef_months
     # Today's month, not the last row: a future-dated entry adds later months to the table.

@@ -80,15 +80,34 @@ def _get(con, table: str, id: int) -> dict:
     return dict(r)
 
 
-def _delete(con, table: str, id: int):
+def _delete(con, table: str, id: int, before=None):
+    """`before` runs in the same transaction first (clearing what may go with the row), so a refused delete keeps it."""
     try:
+        if before:
+            before()
         con.execute(f"DELETE FROM {table} WHERE id=?", (id,))
         con.commit()
     except sqlite3.IntegrityError:
         con.rollback()
-        raise HTTPException(409, {"errors": ["It's still used by entries, quick actions, recurring or budgets. "
+        raise HTTPException(409, {"errors": [f"It's still used by {_users(con, table, id)}. "
                                              "Switch off Active to hide it instead."]})
     return Response(status_code=204)
+
+
+USERS = {  # what can hold on to an account or category, for the message when a delete is refused
+    "accounts": [("transactions", "from_account_id = :id OR to_account_id = :id", "entries"),
+                 ("favorites", "from_account_id = :id OR to_account_id = :id", "quick actions"),
+                 ("recurring", "from_account_id = :id OR to_account_id = :id", "recurring"),
+                 ("typed_balances", "account_id = :id", "month-end balances")],
+    "categories": [("transactions", "category_id = :id", "entries"), ("favorites", "category_id = :id", "quick actions"),
+                   ("recurring", "category_id = :id", "recurring"), ("budgets", "category_id = :id", "budgets")],
+}
+
+
+def _users(con, table: str, id: int) -> str:
+    found = [name for t, where, name in USERS.get(table, [])
+             if con.execute(f"SELECT 1 FROM {t} WHERE {where} LIMIT 1", {"id": id}).fetchone()]
+    return " and ".join(found) if found else "other rows"
 
 
 def _reorder(con, table: str, ids: list[int]):
@@ -168,7 +187,8 @@ def _uses(con, id: int) -> str:
 
 @router.delete("/accounts/{id}", status_code=204)
 def delete_account(id: int, con: Con):
-    return _delete(con, "accounts", id)
+    # Saved reconciliations are a log of checks, not entries: they go with the account (they used to block it forever).
+    return _delete(con, "accounts", id, lambda: con.execute("DELETE FROM reconciliations WHERE account_id=?", (id,)))
 
 
 # ---------- categories ----------
@@ -231,7 +251,10 @@ async def update_category(id: int, request: Request, con: Con):
 
 @router.delete("/categories/{id}", status_code=204)
 def delete_category(id: int, con: Con):
-    return _delete(con, "categories", id)
+    # Roth and interest point at a category by id: left pointing at a deleted one, they'd follow its id to whatever
+    # category is created next. Off ("") instead, as in Settings.
+    return _delete(con, "categories", id, lambda: con.execute(
+        "UPDATE settings SET value='' WHERE key IN ('roth_category','interest_category') AND value=?", (str(id),)))
 
 
 # ---------- budgets ----------
@@ -340,6 +363,8 @@ async def put_settings(request: Request, con: Con):
                 raise HTTPException(422, {"errors": ["The start month must be a date like 2026-08-01."]})
             if v > month_of(date.today()):  # this month would have no row, and nothing could be counted yet
                 raise HTTPException(422, {"errors": ["The start month can't be later than this month."]})
+            if v.year < 1970:  # centuries of monthly loan interest overflowed and broke every screen
+                raise HTTPException(422, {"errors": ["The start month can't be before 1970."]})
             v = v.isoformat()
         elif k == "roth_limit":
             v = money(v or 0, "Roth limit")
@@ -352,8 +377,12 @@ async def put_settings(request: Request, con: Con):
                 raise HTTPException(422, {"errors": ["Months of spending must be between 1 and 24."]})
         elif k in ("roth_category", "interest_category"):
             v = str(whole(v, "Category")) if v else ""
-            if v and not con.execute("SELECT 1 FROM categories WHERE id=?", (int(v),)).fetchone():
+            row = con.execute("SELECT type FROM categories WHERE id=?", (int(v),)).fetchone() if v else None
+            if v and not row:
                 raise HTTPException(422, {"errors": ["That category doesn't exist."]})
+            want = {"roth_category": ("Saving", "Transfer"), "interest_category": ("Money in",)}[k]  # as the app offers
+            if row and row["type"] not in want:  # interest rows are Money in: one in a Spending category broke its rules
+                raise HTTPException(422, {"errors": [f"Pick a {' or '.join(want)} category."]})
         elif k in ("home_layout", "activity_filters", "merchant_marks") and not isinstance(v, str):
             v = json.dumps(v)
         elif not isinstance(v, str):

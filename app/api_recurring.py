@@ -70,7 +70,8 @@ async def create_recurring(request: Request, con: Con):
 async def update_recurring(id: int, request: Request, con: Con):
     old = _get(con, "recurring", id)
     f = _fields(con, await body(request))
-    if f["next_date"] == old["next_date"] and old["anchor_day"]:
+    same_cadence = f["freq"] == old["freq"]
+    if f["next_date"] == old["next_date"] and old["anchor_day"] and same_cadence:
         f["anchor_day"] = old["anchor_day"]  # unchanged date: keep aiming for the 31st even if next is Feb 28
     # Rows it already posted for dates still ahead are replaced: they're posted again with the new amount, category and
     # accounts (or not at all while paused). Leaving them made an edit post a second row next to an old one, and a
@@ -86,6 +87,8 @@ async def update_recurring(id: int, request: Request, con: Con):
         con.execute(f"DELETE FROM transactions WHERE {same}", args)
         if f["next_date"] == old["next_date"]:  # date untouched: start again from the first one that hadn't happened
             f["next_date"] = min(ahead[0]["date"], f["next_date"])
+            if not same_cadence:  # weekly to monthly: aim for the day it now starts on, not the day it was created on
+                f["anchor_day"] = date.fromisoformat(f["next_date"]).day
     if f["active"] and not old["active"]:
         f["next_date"] = first_on_or_after(date.fromisoformat(f["next_date"]), f["freq"], f["anchor_day"],
                                            date.today()).isoformat()
@@ -123,7 +126,9 @@ async def restore_recurring(request: Request, con: Con):
     if con.execute("SELECT 1 FROM recurring WHERE id=?", (id,)).fetchone():
         raise HTTPException(409, {"errors": ["It's already back."]})
     f = _fields(con, {**t, "amount": whole(t.get("amount"), "Amount") / 100})
-    f["anchor_day"] = t.get("anchor_day") if isinstance(t.get("anchor_day"), int) else f["anchor_day"]
+    a = t.get("anchor_day")
+    if isinstance(a, int) and not isinstance(a, bool) and 1 <= a <= 31:  # -3 made every bootstrap fail
+        f["anchor_day"] = a
     _upsert(con, "recurring", {"id": id, **f}, None)
     con.commit()
     return _get(con, "recurring", id)
