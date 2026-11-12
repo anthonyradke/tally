@@ -36,15 +36,20 @@ The repo has two halves:
 - Adding an entry uses a large keypad, merchant memory (a known name fills in its category and account), date
   shortcuts, refunds, splits, notes, tags and receipt photos.
 - Catch up adds a backlog for one account at a time: it shows the account's newest entries as the place to resume,
-  keeps the account and day from one entry to the next, and flags a same-amount entry already in Tally.
+  keeps the account and day from one entry to the next, flags a same-amount entry already in Tally, and shows the
+  balance after each line to compare with the bank's running balance. Home points out an account not caught up for
+  nine days.
 - Entries made without a connection wait on the phone and send themselves later, exactly once.
 - Entries can start from a link, `tally://new?amount=6.50&what=Starbucks&card=Amex`, so an iOS Shortcuts automation
   can open a prefilled entry after every tap to pay.
 - Accounts shows assets against debts, a balance chart per account, and reconciliation against the bank with a
-  diagnosis when the numbers don't match. Loans show a payoff date and what extra monthly payments would save.
+  diagnosis when the numbers don't match, or line by line against a statement CSV exported from the bank. Loans show
+  a payoff date and what extra monthly payments would save.
+- Deleted entries stay in Recently deleted for 30 days, after their Undo toast has gone.
 - Insights has a month-by-month spending donut, budgets, cash flow, net worth, a month-end checklist and CSV export.
-- Recurring entries (with suggestions from repeating ones), budgets suggested from past spending, goals, a
-  configurable Home layout, and eight color themes in light and dark.
+- Recurring entries (with suggestions from repeating ones, and skipping a single date), budgets suggested from past
+  spending, goals, a configurable Home layout, eight color themes in light and dark, and the server's backup status
+  in Settings.
 
 <p align="center">
   <img src="docs/themes.png" width="860" alt="Insights, New entry and Home in three other themes">
@@ -55,6 +60,18 @@ The repo has two halves:
 - A machine to run the backend: Python 3.13 and [uv](https://docs.astral.sh/uv/). SQLite is the only datastore.
 - An iPhone with Expo Go, or a Mac with Xcode for a standalone build. There is no App Store or TestFlight build.
 - A private network between the two. The setup below uses Tailscale.
+
+## Install
+
+There is no App Store, TestFlight or published build. The backend runs from a checkout, and the app runs in Expo Go
+or as a standalone build made with Xcode; both are covered under Build from source and in
+[docs/development.md](docs/development.md).
+
+Without `TALLY_DB` the backend starts with an empty database, and `scripts/seed_demo.py` fills one with made-up data.
+Without `TALLY_TOKEN` there is no login, which suits a local copy. Set `TALLY_TOKEN` to require
+`Authorization: Bearer <token>` on every request, and `TALLY_OWNER` to also require the `Tailscale-User-Login` header
+that Tailscale Serve adds to match that login. The app takes the token in Settings > Server and keeps it in the
+keychain.
 
 ## How it works
 
@@ -91,35 +108,18 @@ The app is built with Expo Router, one file per screen. Pending entries live in 
 client-generated id, which the server treats as idempotent, so a retry after a dropped response never creates a
 duplicate.
 
-## Running the backend
+## Build from source
 
 ```sh
-uv sync
-uv run python scripts/seed_demo.py data/demo.db       # optional: made-up data
-TALLY_DB=data/demo.db uv run uvicorn app.main:app --port 8000
-uv run pytest
-```
-
-Without `TALLY_DB` it starts with an empty database. Without `TALLY_TOKEN` there is no login, which suits a local
-copy. Set `TALLY_TOKEN` to require `Authorization: Bearer <token>` on every request, and `TALLY_OWNER` to also require
-the `Tailscale-User-Login` header that Tailscale Serve adds to match that login. The app takes the token in
-Settings > Server and keeps it in the keychain.
-
-## Running the app
-
-From `ios/`:
-
-```sh
-npm install
-echo 'EXPO_PUBLIC_TALLY_URL=https://<tally-host>:8443' > .env.local   # not committed
+uv sync && uv run pytest                                            # backend tests
+TALLY_DB=data/demo.db uv run uvicorn app.main:app --port 8000       # after: uv run python scripts/seed_demo.py data/demo.db
+cd ios && npm install && npm test                                   # app tests
+echo 'EXPO_PUBLIC_TALLY_URL=https://<tally-host>:8443' > .env.local # not committed
 npx expo start
-npm test
 ```
 
-On a phone with Expo Go and Tailscale on, open `exp://<server's Tailscale IP>:8082` or scan the QR code.
-
-[docs/development.md](docs/development.md) covers installing a standalone build on a phone and previewing layouts in
-a browser.
+On a phone with Expo Go and Tailscale on, open `exp://<server's Tailscale IP>:8081` or scan the QR code. Every push to
+`main` runs the same checks, plus ruff, the type check and lint, in GitHub Actions.
 
 ## Layout
 
@@ -129,10 +129,12 @@ a browser.
 | `app/db.py`, `app/migrate.py` | Schema, connections and migrations |
 | `app/api*.py` | The JSON API |
 | `app/recurring.py`, `app/search.py` | Recurring entries and search shortcuts (`>50`, `aug`, `#trip`) |
+| `app/statement.py` | Reading bank statement CSVs and pairing their lines with entries |
 | `app/importer.py` | Spreadsheet import |
 | `app/main.py` | App setup and CSV export |
 | `tests/` | Backend tests, each against a throwaway database |
 | `scripts/` | Demo data and backups |
+| `.github/workflows/` | The checks that run on every push |
 | `ios/src/app` | Screens, one file per route |
 | `ios/src/components` | Rolling digits, the scrub chart, rows, panels, the keypad |
 | `ios/src/lib` | API client, outbox and the money rules the screens need |
