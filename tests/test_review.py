@@ -171,3 +171,60 @@ def test_old_databases_get_ids_that_never_come_back(tmp_path):
     con.execute("DELETE FROM transactions WHERE id=7")
     new = con.execute("INSERT INTO transactions(date,category_id,from_account_id,amount) VALUES('2026-09-02',1,1,1)").lastrowid
     assert new == 8
+
+
+def _rent(client, world, **kw):
+    body = {"label": "Rent", "category_id": world["food"], "from_account_id": world["chk"], "amount": 1000,
+            "freq": "monthly", "next_date": "2026-10-01", **kw}
+    return client.post("/api/recurring", json=body).json(), body
+
+
+def _rent_dates(client):
+    return [x["date"] for x in client.get("/api/transactions?q=Rent&sort=date&dir=asc").json()["items"]]
+
+
+def test_editing_a_template_keeps_a_row_moved_by_hand(client, world, monkeypatch):
+    freeze(monkeypatch, TODAY)
+    t, body = _rent(client, world, horizon_days=120)
+    client.get("/api/bootstrap")
+    oct_row = next(x for x in client.get("/api/transactions?q=Rent").json()["items"] if x["date"] == "2026-11-01")
+    client.put(f"/api/transactions/{oct_row['id']}", json={**oct_row, "date": "2026-11-04", "amount": 10})
+    nxt = client.get("/api/admin").json()["recurring"][0]["next_date"]
+    client.put(f"/api/recurring/{t['id']}", json={**body, "amount": 1100, "next_date": nxt, "horizon_days": 120})
+    client.get("/api/bootstrap")
+    assert _rent_dates(client) == ["2026-10-01", "2026-11-04", "2026-12-01", "2027-01-01"]
+
+
+def test_a_deleted_scheduled_row_stays_skipped_after_an_edit(client, world, monkeypatch):
+    freeze(monkeypatch, TODAY)
+    t, body = _rent(client, world, horizon_days=120)
+    client.get("/api/bootstrap")
+    nov = next(x for x in client.get("/api/transactions?q=Rent").json()["items"] if x["date"] == "2026-11-01")
+    client.delete(f"/api/transactions/{nov['id']}")
+    nxt = client.get("/api/admin").json()["recurring"][0]["next_date"]
+    client.put(f"/api/recurring/{t['id']}", json={**body, "amount": 1100, "next_date": nxt, "horizon_days": 120})
+    client.get("/api/bootstrap")
+    assert "2026-11-01" not in _rent_dates(client)
+
+
+def test_skip_once_and_undo(client, world, monkeypatch):
+    freeze(monkeypatch, TODAY)
+    t, _ = _rent(client, world, horizon_days=10)  # Oct 1 is posted, Nov 1 isn't yet
+    client.get("/api/bootstrap")
+    s = client.post(f"/api/recurring/{t['id']}/skip", json={}).json()
+    assert s["date"] == "2026-10-01" and len(s["rows"]) == 1
+    assert _rent_dates(client) == []
+    assert client.get("/api/admin").json()["skips"] == [{"recurring_id": t["id"], "date": "2026-10-01"}]
+    back = [{**x, "amount": x["amount"] / 100} for x in s["rows"]]
+    assert client.post("/api/transactions/restore", json={"rows": back}).status_code == 201
+    assert _rent_dates(client) == ["2026-10-01"] and client.get("/api/admin").json()["skips"] == []
+    # A date not posted yet: skipped ahead of time, then taken back after the template moved past it.
+    s2 = client.post(f"/api/recurring/{t['id']}/skip", json={"date": "2026-11-01"}).json()
+    assert s2["rows"] == []
+    freeze(monkeypatch, date(2026, 10, 25))  # Nov 1 is now within 10 days: passed over, not posted
+    client.get("/api/bootstrap")
+    assert "2026-11-01" not in _rent_dates(client)
+    assert client.get("/api/admin").json()["recurring"][0]["next_date"] == "2026-12-01"
+    assert client.delete(f"/api/recurring/{t['id']}/skip/2026-11-01").status_code == 204
+    assert "2026-11-01" in _rent_dates(client)
+    assert client.post(f"/api/recurring/{t['id']}/skip", json={"date": "2026-01-01"}).status_code == 422

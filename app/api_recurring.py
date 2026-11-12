@@ -10,7 +10,7 @@ from .api import Con
 from .api_admin import _get, _opt_int, _upsert
 from .engine import Txn, validate
 from .inputs import bad, body, day, far, flag, money, text, whole
-from .recurring import first_on_or_after
+from .recurring import first_on_or_after, step
 
 router = APIRouter(prefix="/api")
 FREQS = ("weekly", "biweekly", "monthly", "yearly")
@@ -76,10 +76,11 @@ async def update_recurring(id: int, request: Request, con: Con):
     # Rows it already posted for dates still ahead are replaced: they're posted again with the new amount, category and
     # accounts (or not at all while paused). Leaving them made an edit post a second row next to an old one, and a
     # new amount only showed up after the rows already scheduled.
-    # Only rows still exactly as it posted them: one you changed by hand (an amount, a note, a receipt) stays, and
-    # generate() won't post a second row on its date.
+    # Only rows still exactly as it posted them: one you changed by hand (an amount, a note, a receipt, or moved to
+    # another day) stays, and generate() won't post a second row for its date.
     same = ("recurring_id=? AND date > ? AND amount=? AND category_id=? AND from_account_id IS ? AND to_account_id IS ?"
-            " AND what=? AND note='' AND tags='' AND receipt IS NULL AND split_group IS NULL")
+            " AND what=? AND note='' AND tags='' AND receipt IS NULL AND split_group IS NULL"
+            " AND (slot IS NULL OR slot = date)")
     args = (id, date.today().isoformat(), old["amount"], old["category_id"], old["from_account_id"],
             old["to_account_id"], old["what"] or old["label"])
     ahead = con.execute(f"SELECT date FROM transactions WHERE {same} ORDER BY date", args).fetchall()
@@ -111,8 +112,58 @@ def delete_recurring(id: int, con: Con):
                                        (id, date.today().isoformat()))]
     rows = _remove(con, ahead) if ahead else []
     con.execute("DELETE FROM recurring WHERE id=?", (id,))
+    con.execute("DELETE FROM recurring_skips WHERE recurring_id=?", (id,))
     con.commit()
     return {"template": template, "rows": rows}
+
+
+def _next_due(con, r, today: str) -> str:
+    """The template's next date that will happen: its earliest row still ahead, else the next date it will post
+    (past any already skipped)."""
+    posted = con.execute("SELECT MIN(COALESCE(slot, date)) FROM transactions WHERE recurring_id=? AND date > ?",
+                         (r["id"], today)).fetchone()[0]
+    if posted:
+        return posted
+    skipped = {x[0] for x in con.execute("SELECT date FROM recurring_skips WHERE recurring_id=?", (r["id"],))}
+    d = date.fromisoformat(r["next_date"])
+    while d.isoformat() in skipped or d.isoformat() <= today:
+        d = step(d, r["freq"], r["anchor_day"])
+    return d.isoformat()
+
+
+@router.post("/recurring/{id}/skip")
+async def skip_once(id: int, request: Request, con: Con):
+    """Body: {"date"?: "YYYY-MM-DD"}, the next one when left out. Skips one date without touching the template: its
+    row goes (to Recently deleted), and it isn't posted again. Returns the date and the rows removed, for Undo:
+    /transactions/restore with the rows, or DELETE /recurring/{id}/skip/{date} when nothing had posted yet."""
+    from .entries import _remove
+    b = await body(request)
+    r = _get(con, "recurring", id)
+    today = date.today().isoformat()
+    d = day(b["date"], "Date").isoformat() if b.get("date") else _next_due(con, r, today)
+    if d <= today:
+        bad("Only a date still ahead can be skipped.")
+    con.execute("INSERT OR IGNORE INTO recurring_skips(recurring_id, date) VALUES(?,?)", (id, d))
+    ids = [x[0] for x in con.execute("SELECT id FROM transactions WHERE recurring_id=? AND COALESCE(slot, date)=? "
+                                     "AND date > ?", (id, d, today))]
+    rows = _remove(con, ids) if ids else []
+    con.commit()
+    return {"date": d, "rows": rows}
+
+
+@router.delete("/recurring/{id}/skip/{ymd}")
+def unskip(id: int, ymd: str, con: Con):
+    """Takes a skip back. If the template has already moved past that date, its row is posted now."""
+    r = _get(con, "recurring", id)
+    d = day(ymd, "Date").isoformat()
+    con.execute("DELETE FROM recurring_skips WHERE recurring_id=? AND date=?", (id, d))
+    posted = con.execute("SELECT 1 FROM transactions WHERE recurring_id=? AND COALESCE(slot, date)=?", (id, d)).fetchone()
+    if r["active"] and not posted and date.today().isoformat() < d < r["next_date"]:
+        con.execute("INSERT INTO transactions(date,what,category_id,from_account_id,to_account_id,amount,recurring_id,"
+                    "slot) VALUES(?,?,?,?,?,?,?,?)", (d, r["what"] or r["label"], r["category_id"],
+                                                      r["from_account_id"], r["to_account_id"], r["amount"], id, d))
+    con.commit()
+    return Response(status_code=204)
 
 
 @router.post("/recurring/restore", status_code=201)

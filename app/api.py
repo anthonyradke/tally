@@ -243,11 +243,16 @@ async def restore(request: Request, con: Con):
         rid = opt_id(b.get("recurring_id"), "recurring_id")
         if rid and not con.execute("SELECT 1 FROM recurring WHERE id=?", (rid,)).fetchone():
             rid = None
+        kept = con.execute("SELECT json_extract(row, '$.slot') FROM deleted WHERE txn_id=?", (t.id,)).fetchone()
+        slot = kept[0] if kept and rid else None  # the date its template posted it for, kept server-side
         con.execute(
             "INSERT INTO transactions(id,date,what,category_id,from_account_id,to_account_id,amount,note,tags,"
-            "split_group,receipt,recurring_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            "split_group,receipt,recurring_id,slot) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (t.id, t.date.isoformat(), t.what, t.category_id, t.from_id, t.to_id, t.amount, meta["note"],
-             meta["tags"], meta["split_group"], receipt, rid))
+             meta["tags"], meta["split_group"], receipt, rid, slot))
+        if rid:  # back again: no longer a skipped date
+            con.execute("DELETE FROM recurring_skips WHERE recurring_id=? AND date IN (?, ?)",
+                        (rid, slot or t.date.isoformat(), t.date.isoformat()))
         ids.append(t.id)
     if ids:
         con.execute(f"DELETE FROM deleted WHERE txn_id IN ({','.join('?' * len(ids))})", ids)

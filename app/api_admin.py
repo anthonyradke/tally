@@ -127,6 +127,8 @@ def admin(con: Con):
             "recurring": rows("SELECT * FROM recurring ORDER BY active DESC, next_date"),
             "saved_views": rows("SELECT * FROM saved_views ORDER BY sort, id"),
             "budgets": rows("SELECT * FROM budgets ORDER BY month"),
+            "skips": [dict(r) for r in con.execute("SELECT * FROM recurring_skips WHERE date > ? ORDER BY date",
+                                                   (date.today().isoformat(),))],
             "settings": {r["key"]: r["value"] for r in con.execute("SELECT * FROM settings")}}
 
 

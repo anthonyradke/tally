@@ -28,7 +28,13 @@ def recently_deleted(con: Con):
     Undo that didn't reach this list, say) are left out."""
     live = {r[0] for r in con.execute("SELECT id FROM transactions")}
     rows = con.execute("SELECT * FROM deleted ORDER BY deleted_at DESC, txn_id DESC").fetchall()
-    return [{**json.loads(r["row"]), "deleted_at": r["deleted_at"]} for r in rows if r["txn_id"] not in live]
+    out = []
+    for r in rows:
+        if r["txn_id"] not in live:
+            row = json.loads(r["row"])
+            row.pop("slot", None)  # server-side only: restore reads it from here
+            out.append({**row, "deleted_at": r["deleted_at"]})
+    return out
 
 
 @router.delete("/deleted/{txn_id}", status_code=204)

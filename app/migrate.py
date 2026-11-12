@@ -13,7 +13,8 @@ COLUMNS: dict[str, list[tuple[str, str]]] = {
                      ("opened", "TEXT")],  # first month of an account opened after the start month (YYYY-MM-01)
     "transactions": [("note", "TEXT NOT NULL DEFAULT ''"), ("tags", "TEXT NOT NULL DEFAULT ''"),
                      ("split_group", "TEXT"), ("receipt", "TEXT"), ("recurring_id", "INTEGER"),
-                     ("client_id", "TEXT")],  # set by the phone's offline outbox, so a retried save can't double up
+                     ("client_id", "TEXT"),  # set by the phone's offline outbox, so a retried save can't double up
+                     ("slot", "TEXT")],  # the date a recurring template posted the row for (it may be moved since)
     "favorites":    [("icon", "TEXT"), ("color", "TEXT")],
     "recurring":    [("anchor_day", "INTEGER")],  # the day a monthly/yearly template aims for (31 stays 31 after Feb)
 }
@@ -32,6 +33,8 @@ CREATE TABLE IF NOT EXISTS recurring(
   freq TEXT NOT NULL CHECK(freq IN ('weekly','biweekly','monthly','yearly')),
   next_date TEXT NOT NULL, horizon_days INTEGER NOT NULL DEFAULT 45,
   active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')), anchor_day INTEGER);
+CREATE TABLE IF NOT EXISTS recurring_skips(
+  recurring_id INTEGER NOT NULL, date TEXT NOT NULL, PRIMARY KEY(recurring_id, date));
 CREATE TABLE IF NOT EXISTS saved_views(
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, query TEXT NOT NULL, icon TEXT,
   sort INTEGER NOT NULL DEFAULT 0);

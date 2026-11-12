@@ -49,17 +49,20 @@ def generate(con: sqlite3.Connection, today: date) -> int:
         for r in con.execute("SELECT * FROM recurring WHERE active=1").fetchall():
             nxt = date.fromisoformat(r["next_date"])
             limit = today + timedelta(days=r["horizon_days"])
-            # A date that already has its row (one kept through an edit of the template) isn't posted twice.
-            have = {x[0] for x in con.execute("SELECT date FROM transactions WHERE recurring_id=?", (r["id"],))}
+            # A date that already has its row (one kept through an edit of the template, or moved to another day by
+            # hand: its slot is the date it was posted for) isn't posted twice, and a skipped date isn't posted at all.
+            have = {x[0] for x in con.execute("SELECT COALESCE(slot, date) FROM transactions WHERE recurring_id=?",
+                                              (r["id"],))}
+            have |= {x[0] for x in con.execute("SELECT date FROM recurring_skips WHERE recurring_id=?", (r["id"],))}
             while nxt <= limit:
                 if nxt.isoformat() in have:
                     nxt = step(nxt, r["freq"], r["anchor_day"])
                     continue
                 con.execute(
-                    "INSERT INTO transactions(date,what,category_id,from_account_id,to_account_id,amount,recurring_id)"
-                    " VALUES(?,?,?,?,?,?,?)",
+                    "INSERT INTO transactions(date,what,category_id,from_account_id,to_account_id,amount,recurring_id,"
+                    "slot) VALUES(?,?,?,?,?,?,?,?)",
                     (nxt.isoformat(), r["what"] or r["label"], r["category_id"], r["from_account_id"],
-                     r["to_account_id"], r["amount"], r["id"]))
+                     r["to_account_id"], r["amount"], r["id"], nxt.isoformat()))
                 n += 1
                 nxt = step(nxt, r["freq"], r["anchor_day"])
             if nxt.isoformat() != r["next_date"]:

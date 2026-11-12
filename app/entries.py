@@ -99,10 +99,17 @@ def _remove(con, ids: list[int]) -> list[dict]:
     so Undo can bring them back; the sweep in api_files removes them a day later."""
     from .api_files import orphaned
     gone = _full(con, ids)
-    con.execute(f"DELETE FROM transactions WHERE id IN ({','.join('?' * len(ids))})", ids)
+    marks = ",".join("?" * len(ids))
+    slots = {r[0]: r[1] for r in con.execute(f"SELECT id, slot FROM transactions WHERE id IN ({marks})", ids)}
+    # A scheduled row deleted before its day is a skipped date: an edit of its template re-posts the rows ahead from
+    # the first one, and used to bring this one back. Putting the row back (restore) takes the skip away again.
+    con.executemany("INSERT OR IGNORE INTO recurring_skips(recurring_id, date) VALUES(?,?)",
+                    [(t["recurring_id"], slots.get(t["id"]) or t["date"]) for t in gone
+                     if t["recurring_id"] and t["date"] > date.today().isoformat()])
+    con.execute(f"DELETE FROM transactions WHERE id IN ({marks})", ids)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     con.executemany("INSERT OR REPLACE INTO deleted(txn_id,row,deleted_at) VALUES(?,?,?)",
-                    [(t["id"], json.dumps(t), now) for t in gone])  # Recently deleted, for 30 days
+                    [(t["id"], json.dumps({**t, "slot": slots.get(t["id"])}), now) for t in gone])  # for 30 days
     con.commit()
     orphaned([t["receipt"] for t in gone if t["receipt"]])
     return gone

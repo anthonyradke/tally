@@ -43,8 +43,8 @@ def freeze(monkeypatch, today: date) -> None:
         @classmethod
         def today(cls):
             return today
-    from app import api, api_recurring, service
-    for mod in (api, api_recurring, service):
+    from app import api, api_admin, api_recurring, entries, service
+    for mod in (api, api_admin, api_recurring, entries, service):
         monkeypatch.setattr(mod, "date", Fixed)
 
 
