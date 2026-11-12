@@ -8,8 +8,19 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## Unreleased
+## 3.6.0 (2026-11-12)
 Added
+- Recently deleted, in Settings: entries deleted in the last 30 days, each with Put back, for when the Undo toast
+  has gone or the app was closed. A put-back entry keeps its receipt and its place.
+- Skip one date of a recurring entry, in the template's settings, without changing the template. A skip can be
+  taken back.
+- Reconcile can match a statement CSV exported from the bank's site: each line is paired with an entry, and what's
+  on one but not the other is listed. A line missing from Tally opens a new entry filled in from the statement.
+- Catch up shows the account's balance after each line, to check against the bank's running balance, says when the
+  account was last caught up, and links to reconcile. Home points out an account not caught up for nine days.
+- Activity lists the entries waiting to send, dimmed, with the reason when Tally refused one.
+- Settings shows the off-site backup next to the server's own, a warning if the server's database check fails, and
+  the server's version when it differs from the app's.
 - A login for the server. When it's set up, every request needs a token, typed once in Settings > Server and kept
   in the phone's keychain; a wrong token is reported there instead of looking like Tally is down. Receipt photos
   send it too. The server's API documentation pages are no longer served.
@@ -29,6 +40,16 @@ Added
   side, a scheduled bill).
 
 Changed
+- Coming back to Tally refreshes what's on screen. It used to stay as it was until a screen opened.
+- CSV exports open the share sheet (Files, AirDrop, Numbers) and work with the login on. Excel reads accented names
+  correctly, and a name starting with = or + stays text.
+- Search waits for a pause in typing.
+- Entries Tally refused wait for Send now instead of being sent again every 20 seconds. A wrong token keeps every
+  entry waiting instead of marking them refused.
+- Settings > Server checks a new address and token before switching to them, adds https:// when it's missing and
+  drops a trailing /api.
+- The 90 days and This year chips leave out scheduled entries.
+- A link into Tally (a Wallet automation) waits while Tally is locked and opens after Face ID.
 - Accounts, categories, quick actions and Activity's filter rows and chips in Settings reorder by dragging: hold a
   row (or grab its handle in reorder mode) and drop it where it goes, instead of stepping it with up and down
   buttons. Holding it near the top or bottom of the screen scrolls the page along.
@@ -62,6 +83,34 @@ Changed
 - The month story compares a month still going with the month before up to the same day.
 
 Fixed
+- New entries default to today on the phone. After a night in the background, or offline, they took the day of the
+  last refresh, usually yesterday, with Today marked on the wrong day.
+- Editing an entry after a bulk move or tag no longer puts its old category and tags back.
+- Undo for a delete works after another entry was added in between. It used to say "That entry is already back" and
+  the entry was lost.
+- Month end keeps what was typed in one section when another is saved (the suggested interest came back, and Log
+  interest logged it).
+- Opening a new entry over the editor (Add another from the toast, a link) no longer saves the new one over the
+  entry being edited. A second Wallet link while a new entry is open starts over with the new amount.
+- A double tap no longer sends twice: Add, Save, bulk move and tag, deleting a recurring template, Catch up's Undo,
+  saving a view. A sheet swiped down while saving no longer closes the screen under it too.
+- A recurring template changed from weekly to monthly keeps the day it now starts on. It posted two charges days
+  apart, then fell on the 1st.
+- Editing a recurring template keeps a scheduled entry moved to another day by hand, and doesn't bring back one
+  that was deleted.
+- Large receipt photos upload when the server's temporary space is low, and the server reads no more than 12 MB.
+- Settings > Backups warns when no snapshot is found. It showed "None found" with no warning while the server
+  couldn't see its backups folder.
+- Month end no longer asks for an investment that hasn't opened yet. Deleting the interest or Roth category switches
+  that setting off (it passed to the next category made). An account with only saved reconciliations can be deleted.
+- The server answers with a message instead of failing on a month far outside the ledger, huge numbers and ids, long
+  tags and bodies that aren't JSON. A restored entry is checked against its category's rules.
+- The first month's emergency fund goal no longer drops when scheduled entries add months after it.
+- A waiting entry discarded while others are sending isn't sent. An error page from a proxy counts as unreachable,
+  not as Tally refusing the entry.
+- VoiceOver: toasts no longer trap it and are read out, and charts step through their values with a swipe up or
+  down. Big rolling figures don't clip at large text sizes. The keyboard no longer covers Month end's and Budgets'
+  lower fields. The app-switcher cover appears at once, so the snapshot doesn't catch the screen.
 - Typing a name, note or tags no longer sometimes jumps the cursor to the front of the field mid-word ("McD" turning
   into "onaldsMcD").
 - Header buttons answer the first tap. Catch up and the other buttons on Activity, and the X on Catch up, the
