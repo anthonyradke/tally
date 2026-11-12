@@ -114,3 +114,60 @@ def test_exports_escape_formulas(client, world):
     client.post("/api/transactions", json=txn(world, what='=HYPERLINK("http://x","y")'))
     text = client.get("/export/log.csv").text
     assert text.startswith("﻿") and "'=HYPERLINK" in text
+
+
+def test_undo_works_after_another_entry_was_added(client, world):
+    """SQLite used to give a deleted id to the next new row, so Undo found it taken ("already back") and lost it."""
+    client.post("/api/transactions", json=txn(world, what="A"))
+    b = client.post("/api/transactions", json=txn(world, what="B")).json()
+    gone = client.delete(f"/api/transactions/{b['id']}").json()
+    c = client.post("/api/transactions", json=txn(world, what="C")).json()
+    assert c["id"] != b["id"]
+    r = client.post("/api/transactions/restore", json={"rows": [{**gone, "amount": gone["amount"] / 100}]})
+    assert r.status_code == 201 and r.json()[0]["what"] == "B"
+
+
+def test_recently_deleted_keeps_entries_and_restore_takes_them_off(client, world):
+    ids = [client.post("/api/transactions", json=txn(world, what=w)).json()["id"] for w in ("A", "B", "C")]
+    client.post("/api/transactions/bulk", json={"ids": ids[:2], "action": "delete"})
+    client.delete(f"/api/transactions/{ids[2]}")
+    listed = client.get("/api/deleted").json()
+    assert [x["what"] for x in listed] == ["C", "B", "A"] and all(x["deleted_at"] for x in listed)
+    back = {k: v for k, v in listed[1].items() if k != "deleted_at"}
+    client.post("/api/transactions/restore", json={"rows": [{**back, "amount": back["amount"] / 100}]})
+    assert [x["what"] for x in client.get("/api/deleted").json()] == ["C", "A"]
+    assert client.delete("/api/deleted").status_code == 204 and client.get("/api/deleted").json() == []
+
+
+def test_old_deletions_are_purged(client, world):
+    from app import db
+    from app.api_deleted import purge
+    tid = client.post("/api/transactions", json=txn(world)).json()["id"]
+    client.delete(f"/api/transactions/{tid}")
+    con = db.connect()
+    con.execute("UPDATE deleted SET deleted_at='2020-01-01T00:00:00+00:00'")
+    con.commit()
+    assert purge(con) == 1 and client.get("/api/deleted").json() == []
+
+
+def test_old_databases_get_ids_that_never_come_back(tmp_path):
+    """A database made before AUTOINCREMENT is rebuilt once with every row, column and index kept."""
+    import sqlite3
+    from app import db
+    path = str(tmp_path / "old.db")
+    old = sqlite3.connect(path)
+    old.executescript(db.SCHEMA.replace("AUTOINCREMENT", ""))
+    old.execute("INSERT INTO categories(id,name,type) VALUES(1,'Food','Spending')")
+    old.execute("INSERT INTO accounts(id,name,kind) VALUES(1,'Card','card')")
+    old.execute("INSERT INTO transactions(id,date,category_id,from_account_id,amount) VALUES(7,'2026-09-01',1,1,500)")
+    old.commit()
+    old.close()
+    con = db.connect(path)
+    assert "AUTOINCREMENT" in con.execute("SELECT sql FROM sqlite_master WHERE name='transactions'").fetchone()[0]
+    assert "AUTOINCREMENT" in con.execute("SELECT sql FROM sqlite_master WHERE name='recurring'").fetchone()[0]
+    assert [tuple(r) for r in con.execute("SELECT id, amount, note FROM transactions")] == [(7, 500, "")]
+    idx = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='transactions'")}
+    assert {"tx_date", "tx_split", "tx_recurring", "tx_client"} <= idx
+    con.execute("DELETE FROM transactions WHERE id=7")
+    new = con.execute("INSERT INTO transactions(date,category_id,from_account_id,amount) VALUES('2026-09-02',1,1,1)").lastrowid
+    assert new == 8

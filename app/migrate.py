@@ -4,6 +4,7 @@ Nothing here changes how the engine reads rows: new transaction columns are meta
 engine input is `accounts.opened`, and an empty one (every account before 2026-10) means "since the start month".
 Split transactions are ordinary rows sharing a `split_group`; budgets/recurring/saved_views are new tables."""
 from __future__ import annotations
+import re
 import sqlite3
 
 COLUMNS: dict[str, list[tuple[str, str]]] = {
@@ -18,11 +19,13 @@ COLUMNS: dict[str, list[tuple[str, str]]] = {
 }
 
 TABLES = """
+CREATE TABLE IF NOT EXISTS deleted(
+  txn_id INTEGER PRIMARY KEY, row TEXT NOT NULL, deleted_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS budgets(
   category_id INTEGER NOT NULL REFERENCES categories(id), month TEXT NOT NULL,
   amount INTEGER NOT NULL, PRIMARY KEY(category_id, month));
 CREATE TABLE IF NOT EXISTS recurring(
-  id INTEGER PRIMARY KEY, label TEXT NOT NULL,
+  id INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT NOT NULL,
   category_id INTEGER NOT NULL REFERENCES categories(id),
   from_account_id INTEGER REFERENCES accounts(id), to_account_id INTEGER REFERENCES accounts(id),
   amount INTEGER NOT NULL, what TEXT NOT NULL DEFAULT '',
@@ -32,6 +35,7 @@ CREATE TABLE IF NOT EXISTS recurring(
 CREATE TABLE IF NOT EXISTS saved_views(
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, query TEXT NOT NULL, icon TEXT,
   sort INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS tx_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS tx_split ON transactions(split_group);
 CREATE INDEX IF NOT EXISTS tx_recurring ON transactions(recurring_id);
 CREATE UNIQUE INDEX IF NOT EXISTS tx_client ON transactions(client_id) WHERE client_id IS NOT NULL;
@@ -39,6 +43,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS tx_client ON transactions(client_id) WHERE cli
 
 # Settings that used to be found by category name. Pinning the id once means renaming the category keeps working.
 PINNED = {"roth_category": "Roth IRA", "interest_category": "Other Income"}
+
+
+def _autoincrement(con: sqlite3.Connection, table: str) -> None:
+    """Rebuild a table whose id is a plain INTEGER PRIMARY KEY with AUTOINCREMENT. Without it SQLite hands the
+    highest deleted id to the next new row, so an Undo after anything else was added found its id taken (409) and
+    the entry was lost. The rows, ids and columns are copied as they are; nothing references these tables' ids by
+    foreign key. Indexes go with the old table and are made again by TABLES."""
+    row = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+    if not row or "AUTOINCREMENT" in row[0].upper():
+        return
+    sql, n = re.subn(r"\bid INTEGER PRIMARY KEY\b", "id INTEGER PRIMARY KEY AUTOINCREMENT", row[0], count=1)
+    if not n:
+        return
+    sql = re.sub(rf'^CREATE TABLE "?{table}"?', f"CREATE TABLE {table}_rebuild", sql, count=1)
+    con.execute("BEGIN")
+    try:
+        con.execute(sql)
+        con.execute(f"INSERT INTO {table}_rebuild SELECT * FROM {table}")
+        con.execute(f"DROP TABLE {table}")
+        con.execute(f"ALTER TABLE {table}_rebuild RENAME TO {table}")
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
 
 
 def migrate(con: sqlite3.Connection) -> None:
@@ -49,6 +77,9 @@ def migrate(con: sqlite3.Connection) -> None:
         for name, ddl in cols:
             if name not in have:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+    con.commit()
+    for table in ("transactions", "recurring"):  # ids never come back, so Undo can always restore its own
+        _autoincrement(con, table)
     con.executescript(TABLES)
     for key, name in PINNED.items():
         con.execute("INSERT OR IGNORE INTO settings SELECT ?, id FROM categories WHERE name=?", (key, name))

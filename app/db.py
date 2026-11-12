@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS categories(
   type TEXT NOT NULL CHECK(type IN ('Money in','Spending','Saving','Transfer','Loan')),
   sort INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS transactions(
-  id INTEGER PRIMARY KEY, date TEXT NOT NULL, what TEXT NOT NULL DEFAULT '',
+  id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, what TEXT NOT NULL DEFAULT '',
   category_id INTEGER NOT NULL REFERENCES categories(id),
   from_account_id INTEGER REFERENCES accounts(id),
   to_account_id INTEGER REFERENCES accounts(id),

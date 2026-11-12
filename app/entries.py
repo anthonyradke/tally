@@ -1,8 +1,9 @@
 """Reading and writing entries for the transaction routes in api.py: parsing a body, validating and writing a row
 with its extras in one step, and shaping rows for the wire. Nothing here commits; each route commits once."""
 from __future__ import annotations
+import json
 import re
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 from fastapi import HTTPException
 from .engine import Txn, validate
@@ -99,6 +100,9 @@ def _remove(con, ids: list[int]) -> list[dict]:
     from .api_files import orphaned
     gone = _full(con, ids)
     con.execute(f"DELETE FROM transactions WHERE id IN ({','.join('?' * len(ids))})", ids)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    con.executemany("INSERT OR REPLACE INTO deleted(txn_id,row,deleted_at) VALUES(?,?,?)",
+                    [(t["id"], json.dumps(t), now) for t in gone])  # Recently deleted, for 30 days
     con.commit()
     orphaned([t["receipt"] for t in gone if t["receipt"]])
     return gone

@@ -49,6 +49,8 @@ def sweep(con, grace: int = GRACE, every: int = 3600) -> int:
         return 0
     _swept = now
     used = {r[0] for r in con.execute("SELECT receipt FROM transactions WHERE receipt IS NOT NULL")}
+    # Entries in Recently deleted keep their file until they're purged, so restoring one brings its receipt back.
+    used |= {r[0] for r in con.execute("SELECT json_extract(row, '$.receipt') FROM deleted") if r[0]}
     n = 0
     for p in RECEIPTS.iterdir():
         if SAFE.match(p.name) and p.name not in used and p.stat().st_mtime < now - grace:

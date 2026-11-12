@@ -50,8 +50,10 @@ def _by_id(con, table: str) -> dict[int, dict]:
 def bootstrap(con: Con):
     """Everything a screen needs except the transaction list. Also materialises due recurring rows and clears out
     receipt files no entry has pointed at for a day. Accounts and categories include hidden ones (`active`)."""
+    from .api_deleted import purge
     from .api_files import sweep
     recurring.generate(con, date.today())
+    purge(con)
     sweep(con)
     st = service.load(con)
     goal, progress = st.ef()
@@ -247,6 +249,8 @@ async def restore(request: Request, con: Con):
             (t.id, t.date.isoformat(), t.what, t.category_id, t.from_id, t.to_id, t.amount, meta["note"],
              meta["tags"], meta["split_group"], receipt, rid))
         ids.append(t.id)
+    if ids:
+        con.execute(f"DELETE FROM deleted WHERE txn_id IN ({','.join('?' * len(ids))})", ids)
     con.commit()
     return _full(con, ids) if ids else []
 
