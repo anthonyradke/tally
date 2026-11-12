@@ -6,7 +6,7 @@ import socket
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-import httpx
+import httpx2 as httpx
 import pytest
 import uvicorn
 from .conftest import txn

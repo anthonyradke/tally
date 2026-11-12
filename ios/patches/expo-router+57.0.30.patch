@@ -1,8 +1,8 @@
 diff --git a/node_modules/expo-router/ios/LinkPreview/LinkPreviewNativeView.swift b/node_modules/expo-router/ios/LinkPreview/LinkPreviewNativeView.swift
-index 562d1b9..4df610f 100644
+index e3334c9..41d09b2 100644
 --- a/node_modules/expo-router/ios/LinkPreview/LinkPreviewNativeView.swift
 +++ b/node_modules/expo-router/ios/LinkPreview/LinkPreviewNativeView.swift
-@@ -141,6 +141,9 @@ class NativeLinkPreviewView: RouterViewWithLogger, UIContextMenuInteractionDeleg
+@@ -142,6 +142,9 @@ class NativeLinkPreviewView: RouterViewWithLogger, UIContextMenuInteractionDeleg
  
        let parameters = UIPreviewParameters()
        parameters.backgroundColor = triggerView.backgroundColor ?? .clear
