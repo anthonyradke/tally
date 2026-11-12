@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 import * as Haptics from 'expo-haptics'
+import { formatCents } from '@/lib/money'
 import { useTheme } from '@/theme'
 
 const ARect = Animated.createAnimatedComponent(Rect)
@@ -56,6 +57,7 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
 }) {
   const { c } = useTheme()
   const [w, setW] = useState(0)
+  const [ax, setAx] = useState(-1) // the point VoiceOver has stepped to, or -1
   const clipId = `past${useId().replace(/[^a-zA-Z0-9]/g, '')}`
   const pad = 6
   const geo = useMemo(() => {
@@ -147,10 +149,23 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
   }, [xs, w])
 
   const primary = series[0]
+  const count = primary?.values.length ?? 0
+  const at = Math.min(ax, count - 1)
+  // VoiceOver: swipe up or down to step through the points, like dragging a finger along it.
+  const step = (e: { nativeEvent: { actionName: string } }) => {
+    if (!count) return
+    const from = at < 0 ? count - 1 : at
+    const next = e.nativeEvent.actionName === 'increment' ? Math.min(count - 1, from + 1) : Math.max(0, from - 1)
+    setAx(next)
+    scrub.set(next)
+  }
   return (
     <GestureDetector gesture={gesture}>
       <View style={{ height }} onLayout={(e) => setW(e.nativeEvent.layout.width)} collapsable={false}
-        accessibilityRole="adjustable" accessibilityLabel="Chart. Drag to read values.">
+        accessibilityRole="adjustable" accessibilityLabel="Chart. Swipe up or down to read values."
+        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]} onAccessibilityAction={step}
+        accessibilityValue={at >= 0 && primary ? { text: `${formatCents(primary.values[at])}, ${at + 1} of ${count}` }
+          : primary && count ? { text: formatCents(primary.values[count - 1]) } : undefined}>
         {w > 0 && (
           <Animated.View style={[{ height, overflow: 'hidden' }, reveal]}>
           <Svg width={w} height={height}>

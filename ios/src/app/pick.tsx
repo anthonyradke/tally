@@ -14,7 +14,7 @@ import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import { api, ApiError, type BulkBefore, type CatType, type Kind } from '@/lib/api'
-import { close } from '@/lib/nav'
+import { close, useBusy, useCloseHere } from '@/lib/nav'
 import { cachedTxn, invalidateAll } from '@/lib/data'
 import { useDraft } from '@/lib/draft'
 import { monthsNow } from '@/lib/months'
@@ -50,6 +50,8 @@ function Categories({ line, ids, checked }: { line?: string; ids?: string; check
   const t = useTally()
   const { tint, c } = useTheme()
   const { d, set, setLine } = useDraft()
+  const busy = useBusy()
+  const closeHere = useCloseHere()
   if (!t.b) return null
   const bulk = !!ids
   // In the composer, the kind chosen up top goes first; a split line only takes spending.
@@ -64,12 +66,17 @@ function Categories({ line, ids, checked }: { line?: string; ids?: string; check
   const current = bulk ? checked : line ? d.split?.find((l) => l.key === line)?.category_id : d.category_id
   const choose = async (id: number, type: CatType) => {
     if (bulk) {
-      try {
-        const r = await api.bulk({ ids: ids!.split(',').map(Number), action: 'recategorize', category_id: id })
-        await invalidateAll()
-        toast({ text: `Moved ${r.count === 1 ? '1 entry' : `${r.count} entries`}`, action: r.before ? undo(r.before) : undefined })
-      } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
-      return done()
+      // Once: a second tap sent a second move, whose Undo (its "before" already the new category) did nothing.
+      await busy(async () => {
+        try {
+          const r = await api.bulk({ ids: ids!.split(',').map(Number), action: 'recategorize', category_id: id })
+          invalidateAll().catch(() => {})
+          toast({ text: `Moved ${r.count === 1 ? '1 entry' : `${r.count} entries`}`, action: r.before ? undo(r.before) : undefined })
+        } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
+        Haptics.selectionAsync().catch(() => {})
+        closeHere()
+      })
+      return
     }
     if (line) setLine(line, { category_id: id })
     else {
@@ -154,17 +161,20 @@ const undo = (before: BulkBefore[]) => ({
 function BulkTag({ ids }: { ids: string }) {
   const { c } = useTheme()
   const [tag, setTag] = useState('')
-  const apply = async () => {
+  const busy = useBusy()
+  const closeHere = useCloseHere()
+  const apply = () => busy(async () => {
     // Commas or spaces between tags, like the placeholder shows; a comma used to stay on the tag ("trip,").
     const tags = tag.split(/[\s,]+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean)
     if (!tags.length) return
     try {
       const r = await api.bulk({ ids: ids.split(',').map(Number), action: 'tag', tags })
-      await invalidateAll()
+      invalidateAll().catch(() => {})
       toast({ text: `Tagged ${r.count === 1 ? '1 entry' : `${r.count} entries`}`, action: r.before ? undo(r.before) : undefined })
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
-    done()
-  }
+    Haptics.selectionAsync().catch(() => {})
+    closeHere()
+  })
   return (
     <View style={{ gap: space.l }}>
       <TextInput autoFocus value={tag} onChangeText={setTag} placeholder="trip, gift, work" placeholderTextColor={c.label3} autoCapitalize="none"

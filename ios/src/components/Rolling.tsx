@@ -43,7 +43,7 @@ const Digit = memo(function Digit({ d, h, style, fromZero, reduce }: { d: number
     <Animated.View style={[{ height: h, overflow: 'hidden', alignItems: 'center' }, size]}>
       <Animated.View style={[{ alignItems: 'center' }, widths && { width: Math.max(...widths) }, column]}>
         {DIGITS.map((n, i) => (
-          <Text key={n} style={[style, { height: h, lineHeight: h }]}
+          <Text key={n} allowFontScaling={false} style={[style, { height: h, lineHeight: h }]}
             onLayout={widths ? undefined : (e) => onLayout(i, e.nativeEvent.layout.width)}>{n}</Text>
         ))}
       </Animated.View>
@@ -59,9 +59,11 @@ export function RollingText({ text, style, rollIn, replay }: { text: string; sty
   const h = Math.round((style.fontSize ?? 17) * 1.2)
   const hidden = useHidden()
   if (hidden && text.includes('$')) {
-    return <Text style={[style, { height: h, lineHeight: h }]} accessibilityLabel="Amount hidden">{mask(text)}</Text>
+    return <Text allowFontScaling={false} style={[style, { height: h, lineHeight: h }]} accessibilityLabel="Amount hidden">{mask(text)}</Text>
   }
   const chars = text.split('')
+  // Each column is a fixed height worked out from the font size, so these big figures don't grow with Dynamic Type
+  // (a scaled digit was clipped by its column). VoiceOver still reads the whole figure.
   // Key columns from the right so "$999" → "$1,000" keeps the ones column where it was.
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end' }} accessible accessibilityRole="text" accessibilityLabel={text}>
@@ -70,7 +72,7 @@ export function RollingText({ text, style, rollIn, replay }: { text: string; sty
         if (ch >= '0' && ch <= '9') {
           return <Digit key={`d${key}`} d={Number(ch)} h={h} style={style} fromZero={fromZero} reduce={reduce} />
         }
-        return <Text key={`s${key}`} style={[style, { height: h, lineHeight: h }]}>{ch}</Text>
+        return <Text key={`s${key}`} allowFontScaling={false} style={[style, { height: h, lineHeight: h }]}>{ch}</Text>
       })}
     </View>
   )

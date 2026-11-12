@@ -18,7 +18,7 @@ export function DateStrip() {
   const { d, set } = useDraft()
   const [cal, setCal] = useState(false)
   if (!t.b) return null
-  const today = t.b.today
+  const today = t.today
   const days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6)).filter((x) => x >= t.b!.start)
   const inWeek = days.includes(d.date)
   return (

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Linking, RefreshControl, ScrollView, View } from 'react-native'
+import { RefreshControl, ScrollView, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import Animated, { Easing, LinearTransition, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming, ZoomIn } from 'react-native-reanimated'
@@ -35,12 +35,22 @@ import { compactCents, formatCents, pct } from '@/lib/money'
 import { usePace } from '@/lib/pace'
 import { usePullRefresh } from '@/lib/refresh'
 import { play } from '@/lib/sound'
-import { getServer } from '@/lib/server'
+import { shareCsv } from '@/lib/exportCsv'
 import { useTally } from '@/lib/tally'
 import { font as ramp, radius, space, useTheme } from '@/theme'
 
 const name = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'long' })
 const shortName = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'short' })
+
+// One element for good: Insights re-renders with every refresh, and a new toolbar rebuilds its button (lib/nav).
+const HEADER = (
+  <Stack.Toolbar placement="right">
+    <Stack.Toolbar.Menu icon="square.and.arrow.up" accessibilityLabel="Export">
+      <Stack.Toolbar.MenuAction icon="list.bullet.rectangle" onPress={() => shareCsv('/export/log.csv', 'tally-entries.csv')}>Export every entry (CSV)</Stack.Toolbar.MenuAction>
+      <Stack.Toolbar.MenuAction icon="calendar" onPress={() => shareCsv('/export/months.csv', 'tally-months.csv')}>Export months (CSV)</Stack.Toolbar.MenuAction>
+    </Stack.Toolbar.Menu>
+  </Stack.Toolbar>
+)
 
 export default function Insights() {
   const { q, b } = useTally()
@@ -49,12 +59,7 @@ export default function Insights() {
   const [waited] = useState(!b) // the skeleton showed first
   return (
     <>
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon="square.and.arrow.up">
-          <Stack.Toolbar.MenuAction icon="list.bullet.rectangle" onPress={() => Linking.openURL(`${getServer()}/export/log.csv`)}>Export every entry (CSV)</Stack.Toolbar.MenuAction>
-          <Stack.Toolbar.MenuAction icon="calendar" onPress={() => Linking.openURL(`${getServer()}/export/months.csv`)}>Export months (CSV)</Stack.Toolbar.MenuAction>
-        </Stack.Toolbar.Menu>
-      </Stack.Toolbar>
+      {HEADER}
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
         refreshControl={<RefreshControl {...pull} />}>
         <Glow />

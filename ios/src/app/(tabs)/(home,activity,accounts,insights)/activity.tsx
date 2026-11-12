@@ -68,7 +68,13 @@ export default function Activity() {
     if (t.b && f.account != null && !t.b.accounts.some((a) => a.id === f.account)) set({ account: undefined })
   }, [t.b, f.account]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const query = toQuery(f)
+  // Search waits for a pause in typing: every keystroke was a request, and a cached list kept on the phone.
+  const [qText, setQText] = useState(f.q)
+  useEffect(() => {
+    const id = setTimeout(() => setQText(f.q), f.q ? 250 : 0)
+    return () => clearTimeout(id)
+  }, [f.q])
+  const query = toQuery({ ...f, q: qText })
   const q = useInfiniteQuery({
     queryKey: ['transactions', 'feed', query],
     queryFn: ({ pageParam }) => api.transactions({ ...query, limit: PAGE, offset: pageParam }),
@@ -78,7 +84,11 @@ export default function Activity() {
     placeholderData: keepPreviousData,
   })
   const pull = usePullRefresh(() => Promise.all([q.refetch(), t.q.refetch()]))
-  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data])
+  // Once each: a recurring row posted between two page fetches shifts the offsets, and a row could come twice.
+  const rows = useMemo(() => {
+    const seen = new Set<number>()
+    return (q.data?.pages.flatMap((p) => p.items) ?? []).filter((r) => !seen.has(r.id) && !!seen.add(r.id))
+  }, [q.data])
   const first = q.data?.pages[0]
 
   // Newest first, the scheduled entries (recurring bills a month out) used to fill the top of the list before anything
@@ -149,10 +159,22 @@ export default function Activity() {
       )}
       <FilterBar />
       {queued.length > 0 && (
-        <View style={{ marginHorizontal: space.l, padding: space.m, borderRadius: radius.input, backgroundColor: c.panel, flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
-          <Icon sf="icloud.and.arrow.up" md="cloud_upload" size={16} color={c.warn} />
-          <Txt variant="sub" style={{ flex: 1 }}>{queued.length === 1 ? '1 entry is' : `${queued.length} entries are`} {"waiting to reach Tally. They'll send when you're back on Tailscale."}</Txt>
-        </View>
+        // Each waiting entry, dimmed like a scheduled one, so a week caught up offline still reads as done.
+        <Tap feedback="opacity" onPress={() => router.push('/settings/server')} accessibilityHint="Opens Settings, Server"
+          style={{ marginHorizontal: space.l, padding: space.m, borderRadius: radius.input, backgroundColor: c.panel, gap: space.s }}>
+          <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
+            <Icon sf="icloud.and.arrow.up" md="cloud_upload" size={16} color={c.warn} />
+            <Txt variant="sub" style={{ flex: 1 }}>{queued.length === 1 ? '1 entry is' : `${queued.length} entries are`} {"waiting to reach Tally. They'll send when you're back on Tailscale."}</Txt>
+          </View>
+          {queued.slice(0, 6).map((x) => (
+            <View key={x.cid} style={{ flexDirection: 'row', gap: space.s, paddingLeft: 16 + space.s, opacity: 0.6 }}>
+              <Txt variant="sub" numberOfLines={1} style={{ flex: 1 }}>{x.error ? `${x.label}: ${x.error}` : x.label}</Txt>
+              <Txt variant="sub" tone="label2">{dayLabel(x.lines[0]?.date ?? t.today, t.today)}</Txt>
+              <Txt variant="sub" num>{formatCents(x.lines.reduce((n, l) => n + l.amount, 0))}</Txt>
+            </View>
+          ))}
+          {queued.length > 6 && <Txt variant="foot" tone="label2" style={{ paddingLeft: 16 + space.s }}>{`and ${queued.length - 6} more`}</Txt>}
+        </Tap>
       )}
       {place && (
         <Tap feedback="opacity" href={{ pathname: '/merchant/[key]', params: { key: place.key } }}

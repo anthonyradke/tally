@@ -188,7 +188,7 @@ export function Amount({ acct, history, count, lookalike, errors, shake, after, 
         )}
         {lookalike && (
           <Txt variant="foot" tone="warn" numberOfLines={2} style={{ textAlign: 'center' }} accessibilityLiveRegion="polite">
-            {`Already in Tally? ${lookalike.what || t.catOf(lookalike).name}, ${dayLabel(lookalike.date, t.b?.today)}, is the same amount.`}
+            {`Already in Tally? ${lookalike.what || t.catOf(lookalike).name}, ${dayLabel(lookalike.date, t.today)}, is the same amount.`}
           </Txt>
         )}
         {errors.map((e) => <Txt key={e} variant="foot" tone="neg" style={{ textAlign: 'center' }}>{e}</Txt>)}

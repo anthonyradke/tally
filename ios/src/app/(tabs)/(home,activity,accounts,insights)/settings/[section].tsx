@@ -1,6 +1,6 @@
 // Every Settings list in one route: accounts, categories, quick actions, recurring, saved views, budgets, goals,
 // the Home layout, Activity's filter rows, the theme, the app icon and the server. Item editors open as the `edit` modal.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Switch, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import Constants from 'expo-constants'
@@ -19,7 +19,10 @@ import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
-import { api, ApiError, probe, type AdminData, type CatType, type Kind } from '@/lib/api'
+import { api, ApiError, probe, type AdminData, type CatType, type DeletedTxn, type Kind } from '@/lib/api'
+import { useBusy } from '@/lib/nav'
+import { play } from '@/lib/sound'
+import { useQuery } from '@tanstack/react-query'
 import { suggestBudgets } from '@/lib/budgets'
 import { invalidateAll, queryClient, useTransactions } from '@/lib/data'
 import { commitments } from '@/lib/commitments'
@@ -36,6 +39,7 @@ import { radius, space, useTheme } from '@/theme'
 const TITLES: Record<string, string> = {
   accounts: 'Accounts', categories: 'Categories', quick: 'Quick actions', recurring: 'Recurring', views: 'Saved views',
   budgets: 'Budgets', general: 'Goals', home: 'Home screen', activity: 'Activity filters', server: 'Server', theme: 'Theme', icon: 'App icon', capture: 'Add from Wallet',
+  deleted: 'Recently deleted',
 }
 
 export default function SettingsSection() {
@@ -46,7 +50,8 @@ export default function SettingsSection() {
   const canAdd = ['accounts', 'categories', 'quick', 'recurring'].includes(section)
   const canOrder = ['accounts', 'categories', 'quick', 'activity'].includes(section)
   const editKind = { accounts: 'account', categories: 'category', quick: 'quick', recurring: 'recurring' }[section]
-  return (
+  // Kept between renders: Settings data refreshing re-rendered this, and a new toolbar lost taps on + (lib/nav).
+  const header = useMemo(() => (
     <>
       <Stack.Screen options={{ title: TITLES[section] ?? 'Settings', headerLargeTitle: false }} />
       {(canAdd || canOrder) && (
@@ -55,9 +60,14 @@ export default function SettingsSection() {
           {canAdd && !reorder && <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add" onPress={() => router.push({ pathname: '/edit', params: { kind: editKind! } })} />}
         </Stack.Toolbar>
       )}
+    </>
+  ), [section, reorder, canAdd, canOrder, editKind])
+  return (
+    <>
+      {header}
       <DragScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 100 }}>
-        {section === 'activity' ? <FilterBarSettings reorder={reorder} /> : section === 'capture' ? <Capture /> : section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
+        {section === 'activity' ? <FilterBarSettings reorder={reorder} /> : section === 'capture' ? <Capture /> : section === 'deleted' ? <Deleted /> : section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
           <>
             {section === 'accounts' && <Accounts a={admin.data} reorder={reorder} />}
             {section === 'categories' && <Categories a={admin.data} reorder={reorder} />}
@@ -432,6 +442,34 @@ function Server() {
         </Group>
       )}
     </>
+  )
+}
+
+/** Entries deleted in the last 30 days (the server keeps them), each with Put back: for when the Undo toast had gone,
+ *  or the app was closed. */
+function Deleted() {
+  const t = useTally()
+  const q = useQuery({ queryKey: ['deleted'], queryFn: api.deleted })
+  const busy = useBusy()
+  if (!q.data) return <StateView q={q} shape="list" />
+  if (!q.data.length) {
+    return <Txt variant="callout" tone="label2" style={{ paddingHorizontal: space.xs }}>Nothing was deleted in the last 30 days.</Txt>
+  }
+  const putBack = (row: DeletedTxn) => busy(async () => {
+    const { deleted_at: _gone, ...entry } = row
+    if (await write(() => api.restore([entry]), 'Put back')) {
+      play('undo')
+      q.refetch()
+    }
+  })
+  return (
+    <Group footer="Kept for 30 days after they're deleted, then gone for good. Putting one back keeps its receipt and its place.">
+      {q.data.map((x) => (
+        <Row key={x.id} label={x.what || t.catOf(x).name} chevron={false}
+          sub={`${formatCents(x.amount)} · ${t.catOf(x).name}, ${dayLabel(x.date, t.today)} · deleted ${dayLabel(toISO(new Date(x.deleted_at)), t.today).toLowerCase()}`}
+          trailing={<Tap feedback="opacity" hitSlop={8} onPress={() => putBack(x)}><Txt variant="callout" style={{ fontWeight: '600' }}>Put back</Txt></Tap>} />
+      ))}
+    </Group>
   )
 }
 

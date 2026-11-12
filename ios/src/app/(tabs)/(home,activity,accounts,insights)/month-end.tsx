@@ -1,6 +1,6 @@
 // Month end, three steps: type investment balances, confirm savings interest, reconcile cash and cards. Loans work
 // themselves out, and a statement balance can be typed over one at the bottom.
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ScrollView, TextInput, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -33,19 +33,21 @@ export default function MonthEnd() {
     return monthOf(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`).slice(0, 7)
   })() : '')
   const q = useQuery({ queryKey: ['month-end', ym], queryFn: () => api.monthEnd(ym), enabled: !!ym })
-  const [typed, setTyped] = useState<Record<string, string>>({})
-  const [interest, setInterest] = useState<Record<string, string>>({})
-  const [loans, setLoans] = useState<Record<string, string>>({})
   // One save at a time: a double tap on Log interest used to log it twice.
   const [busy, setBusy] = useState<'typed' | 'loans' | 'interest' | null>(null)
-  // The fields start from each fresh answer (set while rendering, React's pattern for state that follows a prop).
-  const [seeded, setSeeded] = useState<typeof q.data>(undefined)
-  if (q.data && q.data !== seeded) {
-    setSeeded(q.data)
-    setTyped(Object.fromEntries(Object.entries(q.data.typed).map(([k, v]) => [k, v == null ? '' : fromCents(v)])))
-    setLoans(Object.fromEntries(Object.entries(q.data.loans).map(([k, v]) => [k, v.typed == null ? '' : fromCents(v.typed)])))
-    setInterest(Object.fromEntries(Object.entries(q.data.interest).map(([k, v]) => [k, v.logged.length ? '' : v.proposed ? fromCents(v.proposed) : ''])))
-  }
+  // Each field shows what the server has, or what was typed into it since. Only a section's own save clears what was
+  // typed there: refilling every field from each fresh answer put the suggested interest back after saving the
+  // balances, and Log interest then logged that.
+  const base = useMemo(() => q.data ? {
+    typed: Object.fromEntries(Object.entries(q.data.typed).map(([k, v]) => [k, v == null ? '' : fromCents(v)])),
+    loans: Object.fromEntries(Object.entries(q.data.loans).map(([k, v]) => [k, v.typed == null ? '' : fromCents(v.typed)])),
+    interest: Object.fromEntries(Object.entries(q.data.interest).map(([k, v]) => [k, v.logged.length ? '' : v.proposed ? fromCents(v.proposed) : ''])),
+  } : { typed: {}, loans: {}, interest: {} }, [q.data])
+  type Section = 'typed' | 'loans' | 'interest'
+  const [edits, setEdits] = useState<Record<Section, Record<string, string>>>({ typed: {}, loans: {}, interest: {} })
+  const typed = { ...base.typed, ...edits.typed }, loans = { ...base.loans, ...edits.loans }, interest = { ...base.interest, ...edits.interest }
+  const edit = (sec: Section, k: string, v: string) => setEdits((e) => ({ ...e, [sec]: { ...e[sec], [k]: v } }))
+  const saved = (sec: Section) => setEdits((e) => ({ ...e, [sec]: {} }))
   const b = t.b
   const d = q.data
   const [waited] = useState(!b || !d) // the skeleton showed first
@@ -67,6 +69,7 @@ export default function MonthEnd() {
     setBusy(which)
     try {
       await api.monthEndTyped(ym, cents, cleared)
+      saved(which)
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       play('add'); toast({ text: 'Balances saved' }); await refresh()
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
@@ -79,6 +82,7 @@ export default function MonthEnd() {
     setBusy('interest')
     try {
       await api.monthEndInterest(ym, cents)
+      saved('interest')
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       play('income'); toast({ text: 'Interest logged' }); await refresh()
     } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
@@ -97,7 +101,7 @@ export default function MonthEnd() {
   return (
     <>
       <Stack.Screen options={{ title: `${monthLabel(`${ym}-01`, 'long')} close`, headerLargeTitle: false }} />
-      <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" automaticallyAdjustKeyboardInsets style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
         <Arrive on={waited} style={{ gap: space.xxl }}>
         {Object.keys(d.typed).length > 0 && (
           <View style={{ gap: space.m }}>
@@ -105,7 +109,7 @@ export default function MonthEnd() {
             <Group>
               {Object.keys(d.typed).map((k) => (
                 <Row key={k} label={acct(k)?.name ?? k} chevron={false} value={
-                  <Field value={typed[k] ?? ''} placeholder={carried(k)} onChange={(v) => setTyped((s) => ({ ...s, [k]: v }))} />} />
+                  <Field value={typed[k] ?? ''} placeholder={carried(k)} onChange={(v) => edit('typed', k, v)} />} />
               ))}
             </Group>
             <Button label={busy === 'typed' ? 'Saving…' : 'Save balances'} onPress={() => saveTyped('typed', typed, d.typed)} disabled={!!busy} secondary={d.typed_done} />
@@ -119,7 +123,7 @@ export default function MonthEnd() {
                 <Row key={k} label={acct(k)?.name ?? k} chevron={false} value={`${formatCents(v.logged.reduce((n, x) => n + x.amount, 0))} logged`}
                   trailing={<Icon sf="checkmark.circle.fill" md="check_circle" size={18} color={c.pos} />} />
               ) : (
-                <Row key={k} label={acct(k)?.name ?? k} chevron={false} value={<Field value={interest[k] ?? ''} onChange={(val) => setInterest((s) => ({ ...s, [k]: val }))} />} />
+                <Row key={k} label={acct(k)?.name ?? k} chevron={false} value={<Field value={interest[k] ?? ''} onChange={(val) => edit('interest', k, val)} />} />
               ))}
             </Group>
             {!d.interest_done && <Button label={busy === 'interest' ? 'Logging…' : 'Log interest'} onPress={saveInterest} disabled={!!busy} />}
@@ -145,7 +149,7 @@ export default function MonthEnd() {
             <Group>
               {Object.entries(d.loans).map(([k, v]) => (
                 <Row key={k} label={acct(k)?.name ?? k} chevron={false} value={
-                  <Field value={loans[k] ?? ''} placeholder={fromCents(v.balance)} onChange={(val) => setLoans((s) => ({ ...s, [k]: val }))} />} />
+                  <Field value={loans[k] ?? ''} placeholder={fromCents(v.balance)} onChange={(val) => edit('loans', k, val)} />} />
               ))}
             </Group>
             <Button label={busy === 'loans' ? 'Saving…' : 'Save loan balances'} disabled={!!busy} onPress={() => saveTyped('loans', loans, Object.fromEntries(Object.entries(d.loans).map(([k, v]) => [k, v.typed])))} secondary />

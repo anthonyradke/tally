@@ -11,7 +11,7 @@ import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import { api } from '@/lib/api'
-import { close } from '@/lib/nav'
+import { close, useBusy } from '@/lib/nav'
 import { invalidateAll } from '@/lib/data'
 import { activeRange, ranges, SORTS } from '@/lib/filterBar'
 import { extraCount, fromViewQuery, useFilters, viewQuery } from '@/lib/filters'
@@ -29,15 +29,16 @@ export default function FiltersSheet() {
   // The field keeps what's typed ("#Trip"); the filter gets it tidied. Writing the tidied text back into the field
   // moved the cursor and made "#" impossible to type.
   const [tagText, setTagText] = useState(f.tag ?? '')
+  const busy = useBusy()
   if (!t.b) return null
   const active = activeRange(f, t.b.today)
   const cat = f.category ? t.cat.get(f.category) : undefined
   const acct = f.account ? t.acct.get(f.account) : undefined
 
-  const saveView = async () => {
+  const saveView = () => busy(async () => { // once, however many taps
     try { await api.saveView({ name: viewName.trim(), query: viewQuery(f) }); await invalidateAll(); setViewName(''); toast({ text: `Saved "${viewName.trim()}"` }) }
     catch { toast({ text: 'Could not save the view.', tone: 'error' }) }
-  }
+  })
   const applyView = (query: string) => {
     reset()
     set(fromViewQuery(query))

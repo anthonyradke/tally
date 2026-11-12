@@ -2,7 +2,7 @@
 // Swipe it down to put it away early. It lives in its own overlay window above the native screens and modals; as a
 // plain sibling view it drew on top but its taps fell through to whatever row was underneath.
 import { useEffect, useState, type ReactNode } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { FullWindowOverlay } from 'react-native-screens'
 import Animated, { Easing, FadeOut, SlideInDown, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
@@ -17,7 +17,8 @@ import { Txt } from './Txt'
 const glass = isLiquidGlassAvailable()
 
 function Overlay({ children }: { children: ReactNode }) {
-  if (process.env.EXPO_OS === 'ios') return <FullWindowOverlay>{children}</FullWindowOverlay>
+  // Not modal for VoiceOver: by default the overlay window let it reach only the toast for as long as it showed.
+  if (process.env.EXPO_OS === 'ios') return <FullWindowOverlay unstable_accessibilityContainerViewIsModal={false}>{children}</FullWindowOverlay>
   return <View style={StyleSheet.absoluteFill} pointerEvents="box-none">{children}</View>
 }
 
@@ -31,6 +32,8 @@ export function Toaster() {
   const [t, setT] = useState(current)
   if (current && current !== t) setT(current)
   if (!current && t && reduce) setT(null)
+  // iOS ignores accessibilityLiveRegion (Android only): say each new toast out loud ("Added $12.00", an error).
+  useEffect(() => { if (current) AccessibilityInfo.announceForAccessibility(current.text) }, [current?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const y = useSharedValue(0)
   const gone = useSharedValue(0)
   useEffect(() => {

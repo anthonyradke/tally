@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { ScrollView, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useSharedValue } from 'react-native-reanimated'
@@ -35,6 +36,18 @@ export default function CategoryDetail() {
   const rows = useTransactions({ category: Number(id), limit: 40 }, !!x)
   const all = useAllTxns(!!x)
   const typical = useTypical(b, 3, x?.type === 'Spending')
+  // Kept between renders: the full list arriving right after the page opens re-rendered it, and a new toolbar
+  // rebuilt "Set budget" under a tap (lib/nav).
+  const header = useMemo(() => x && (
+    <>
+      <Stack.Screen options={{ title: x.name, headerLargeTitle: false }} />
+      {x.type === 'Spending' && (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button icon="gauge.with.needle" accessibilityLabel="Set budget" onPress={() => router.push({ pathname: '/edit', params: { kind: 'budget', id: String(x.id) } })} />
+        </Stack.Toolbar>
+      )}
+    </>
+  ), [x?.id, x?.name, x?.type]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!x || !b) return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}><StateView q={t.q} /></ScrollView>
   const v = categoryVisual(x)
   const color = tint(v.tint)
@@ -52,12 +65,7 @@ export default function CategoryDetail() {
 
   return (
     <>
-      <Stack.Screen options={{ title: x.name, headerLargeTitle: false }} />
-      {x.type === 'Spending' && (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button icon="gauge.with.needle" accessibilityLabel="Set budget" onPress={() => router.push({ pathname: '/edit', params: { kind: 'budget', id: String(x.id) } })} />
-        </Stack.Toolbar>
-      )}
+      {header}
       <ScrollView onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
         <View style={{ gap: space.m, marginBottom: space.section - 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.xs }}>

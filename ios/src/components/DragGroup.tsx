@@ -35,7 +35,7 @@ export function DragScrollView({ children, ...props }: Omit<ScrollViewProps, 'sc
   const value = useMemo(() => ({ lock: setDragging, ref, offset }), [ref, offset])
   return (
     <DragScroll value={value}>
-      <Animated.ScrollView ref={ref} {...props} scrollEnabled={!dragging}>{children}</Animated.ScrollView>
+      <Animated.ScrollView ref={ref} automaticallyAdjustKeyboardInsets {...props} scrollEnabled={!dragging}>{children}</Animated.ScrollView>
     </DragScroll>
   )
 }

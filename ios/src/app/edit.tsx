@@ -18,10 +18,10 @@ import { Txt } from '@/components/Txt'
 import { LOGO_IDS, LOGOS } from '@/icons/banks'
 import { categoryVisual, GLYPH_NAMES, GLYPHS, KIND_SYMBOL } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
-import { close, useLatest } from '@/lib/nav'
-import { api, ApiError, type AdminData, type CatType, type Freq, type Kind } from '@/lib/api'
+import { close, useBusy, useCloseHere, useLatest } from '@/lib/nav'
+import { api, ApiError, type AdminData, type CatType, type Freq, type Kind, type Txn } from '@/lib/api'
 import { budgetAmount, initial, pctStr, type Form } from '@/lib/forms'
-import { monthOf } from '@/lib/dates'
+import { dayLabel, monthOf } from '@/lib/dates'
 import { SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
@@ -40,6 +40,8 @@ export default function Edit() {
   const t = useTally()
   const [f, setF] = useState<Form | null>(null)
   const [busy, setBusy] = useState(false)
+  const once = useBusy() // a ref, not the state above: two quick taps both saw busy as false
+  const closeHere = useCloseHere()
   const set = (p: Form) => setF((s) => ({ ...s!, ...p }))
   const a = admin.data
 
@@ -50,7 +52,8 @@ export default function Edit() {
     setF({ ...initial(kind, id ? Number(id) : undefined, a, t.b.today), ...extra })
   }
 
-  const save = async () => {
+  const save = () => once(saveNow)
+  async function saveNow() {
     if (!f) return
     setBusy(true)
     const n = id ? Number(id) : undefined
@@ -78,9 +81,12 @@ export default function Edit() {
       }
     }, 'Saved')
     setBusy(false)
-    if (ok) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); close() }
+    if (ok) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); closeHere() }
   }
-  const remove = async () => {
+  // Once: a second tap on a recurring delete got a 204, whose toast (no Undo) replaced the first one's Undo, and its
+  // close() popped Settings too.
+  const remove = () => once(removeNow)
+  async function removeNow() {
     const n = Number(id)
     // Quick actions, views and recurring templates come back with Undo (no confirm dialogs anywhere). Accounts and
     // categories can only be deleted when nothing uses them, so there's nothing to lose.
@@ -104,7 +110,7 @@ export default function Edit() {
     })
     if (!ok) return
     toast({ text: 'Deleted', action: back ? { label: 'Undo', run: async () => { await write(back!) } } : undefined })
-    close()
+    closeHere()
   }
 
   const [newTitle, editTitle] = TITLE[kind] ?? ['Edit', 'Edit']
@@ -137,6 +143,7 @@ export default function Edit() {
               {kind === 'category' && <CategoryForm f={f} set={set} />}
               {kind === 'quick' && <QuickForm f={f} set={set} a={a} />}
               {kind === 'recurring' && <RecurringForm f={f} set={set} a={a} />}
+              {kind === 'recurring' && id && <Skips id={Number(id)} a={a} />}
               {kind === 'view' && <Group><Field label="Name" value={String(f.name ?? '')} onChange={(v) => set({ name: v })} /></Group>}
               {kind === 'budget' && <BudgetForm f={f} set={set} a={a} id={Number(id)} />}
               {id && kind !== 'budget' && (
@@ -149,6 +156,35 @@ export default function Edit() {
         </ScrollView>
       </KeyboardAvoidingView>
     </>
+  )
+}
+
+/** Skip one date of a template (a bill paid another way this month) without changing it, and take a skip back. */
+function Skips({ id, a }: { id: number; a: AdminData }) {
+  const t = useTally()
+  const once = useBusy()
+  const r = a.recurring.find((x) => x.id === id)
+  if (!r || !r.active) return null
+  const skipped = a.skips.filter((x) => x.recurring_id === id)
+  const skip = () => once(async () => {
+    let out: { date: string; rows: Txn[] } | undefined
+    const ok = await write(async () => { out = await api.skipRecurring(id) })
+    if (!ok || !out) return
+    const { date, rows } = out
+    Haptics.selectionAsync().catch(() => {})
+    toast({ text: `Skipping ${dayLabel(date, t.today)}`, action: { label: 'Undo', run: async () => {
+      await write(() => (rows.length ? api.restore(rows) : api.unskipRecurring(id, date)))
+    } } })
+  })
+  return (
+    <Group header="Skip one date" footer="Skips the next date only, say a bill paid another way this time. The template stays as it is.">
+      <Row label="Skip the next one" sf="forward.end" md="skip_next" chevron={false} onPress={skip} />
+      {skipped.map((x) => (
+        <Row key={x.date} label={`Skipping ${dayLabel(x.date, t.today)}`} chevron={false}
+          trailing={<Tap feedback="opacity" hitSlop={8} onPress={() => once(() => write(() => api.unskipRecurring(id, x.date), 'It will post again'))}>
+            <Txt variant="callout" style={{ fontWeight: '600' }}>Undo</Txt></Tap>} />
+      ))}
+    </Group>
   )
 }
 

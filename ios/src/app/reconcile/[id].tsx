@@ -2,7 +2,9 @@
 // they differ, points at the likely causes: possible duplicates, a single entry the size of the gap, future rows.
 import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
-import { useLocalSearchParams } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
+import * as DocumentPicker from 'expo-document-picker'
+import { File } from 'expo-file-system'
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
 import { useQueryClient } from '@tanstack/react-query'
@@ -15,11 +17,12 @@ import { Keypad } from '@/components/Keypad'
 import { Hairline } from '@/components/Panel'
 import { RollingText } from '@/components/Rolling'
 import { useShake } from '@/components/Shake'
-import { Button } from '@/components/Tap'
+import { Button, Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
-import { api, ApiError, type Diagnosis, type Txn } from '@/lib/api'
-import { close } from '@/lib/nav'
+import { api, ApiError, type Diagnosis, type StatementLine, type StatementMatch, type Txn } from '@/lib/api'
+import { close, useBusy } from '@/lib/nav'
+import { Group, Row } from '@/components/Row'
 import { dayLabel } from '@/lib/dates'
 import { fromCents, press, toCents } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
@@ -41,6 +44,8 @@ export default function Reconcile() {
   const [busy, setBusy] = useState(false)
   const [party, setParty] = useState(0)
   const [shakeStyle, shake] = useShake()
+  const [sm, setSm] = useState<StatementMatch | null>(null)
+  const once = useBusy()
   if (!a || !t.b) return null
   const owed = a.kind === 'card'
 
@@ -65,6 +70,39 @@ export default function Reconcile() {
     } finally { setBusy(false) }
   }
 
+  // A statement exported from the bank's site (CSV): every line paired with an entry, and what's on one but not the
+  // other. Missing lines open the composer filled in.
+  const pickStatement = () => once(async () => {
+    try {
+      const r = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'text/plain', 'public.comma-separated-values-text'], copyToCacheDirectory: true })
+      if (r.canceled || !r.assets[0]) return
+      const text = await new File(r.assets[0].uri).text()
+      const m = await api.statement(a.id, text)
+      setSm(m)
+      Haptics.notificationAsync(m.missing.length || m.extra.length ? Haptics.NotificationFeedbackType.Warning : Haptics.NotificationFeedbackType.Success).catch(() => {})
+      if (!m.missing.length && !m.extra.length) { setParty((n) => n + 1); play('success') }
+    } catch (e) {
+      toast({ text: e instanceof ApiError ? e.errors.join(' ') : "Couldn't read that file.", tone: 'error' })
+    }
+  })
+
+  if (sm) {
+    return (
+      <Reveal.Provider value>
+      <View style={{ flex: 1, backgroundColor: c.bg }}>
+        <ScrollView contentContainerStyle={{ padding: space.l, paddingTop: space.xl, gap: space.l }}>
+          <StatementResult m={sm} acctId={a.id} name={a.name} />
+        </ScrollView>
+        <View style={{ paddingHorizontal: space.l, paddingBottom: 34, flexDirection: 'row', gap: space.s }}>
+          <Button label="Another file" secondary onPress={pickStatement} style={{ flex: 1, height: 52 }} />
+          <Button label="Done" onPress={() => close()} style={{ flex: 1, height: 52 }} />
+        </View>
+        <Confetti fire={party} origin={{ x: 0.5, y: 0.25 }} />
+      </View>
+      </Reveal.Provider>
+    )
+  }
+
   return (
     <Reveal.Provider value>
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -77,6 +115,11 @@ export default function Reconcile() {
           <Animated.View style={shakeStyle}><RollingText text={formatCents(toCents(amount) * (neg ? -1 : 1))} style={{ fontSize: 52, fontWeight: '700', letterSpacing: -1.2, color: amount ? c.label : c.label3 }} /></Animated.View>
           {!dx && <Chip label={owed ? 'In credit' : 'Below zero'} selected={neg} onDark onPress={() => setNeg(!neg)} />}
         </View>
+        {!dx && (
+          <Tap feedback="opacity" onPress={pickStatement} hitSlop={8} style={{ alignSelf: 'center' }} accessibilityLabel="Match a statement file, line by line">
+            <Txt variant="callout" style={{ fontWeight: '600' }}>Match a statement file instead</Txt>
+          </Tap>
+        )}
         {dx && <Animated.View entering={FadeIn.duration(260)}><Result dx={dx} /></Animated.View>}
       </ScrollView>
       {/* The keypad fades away once there's an answer and comes back for "Change amount"; the buttons fade across.
@@ -112,6 +155,39 @@ export default function Reconcile() {
       <Confetti fire={party} origin={{ x: 0.5, y: 0.32 }} />
     </View>
     </Reveal.Provider>
+  )
+}
+
+function StatementResult({ m, acctId, name }: { m: StatementMatch; acctId: number; name: string }) {
+  const { c } = useTheme()
+  const t = useTally()
+  const clean = !m.missing.length && !m.extra.length
+  const add = (x: StatementLine) => {
+    Haptics.selectionAsync().catch(() => {})
+    router.push({ pathname: '/new', params: { amount: (Math.abs(x.amount) / 100).toFixed(2), what: x.what, date: x.date, from: String(acctId) } })
+  }
+  return (
+    <View style={{ gap: space.l }}>
+      <View style={{ flexDirection: 'row', gap: space.m, alignItems: 'center', padding: space.l, borderRadius: radius.panel, backgroundColor: c.panel }}>
+        {clean ? <CheckDraw size={30} color={c.pos} /> : <Icon sf="doc.text.magnifyingglass" md="plagiarism" size={28} color={c.warn} />}
+        <View style={{ flex: 1, gap: 2 }}>
+          <Txt variant="headline">{clean ? 'Every line is in Tally' : `${m.missing.length} missing, ${m.extra.length} not on the statement`}</Txt>
+          <Txt variant="sub" tone="label2">{`${m.matched.length} of ${m.matched.length + m.missing.length} lines matched, ${dayLabel(m.first, t.today)} to ${dayLabel(m.last, t.today)}.`}</Txt>
+        </View>
+      </View>
+      {m.missing.length > 0 && (
+        <Group header={`On the statement, not in ${name}`} footer="Tap Add to enter one, filled in from the statement.">
+          {m.missing.map((x) => (
+            <Row key={x.line} label={x.what || 'No description'} sub={dayLabel(x.date, t.today)} chevron={false}
+              value={<Txt variant="body" num>{formatCents(Math.abs(x.amount))}</Txt>}
+              trailing={<Tap feedback="opacity" hitSlop={8} onPress={() => add(x)}><Txt variant="callout" style={{ fontWeight: '600' }}>Add</Txt></Tap>} />
+          ))}
+        </Group>
+      )}
+      {m.extra.length > 0 && (
+        <Rows title={`In ${name}, not on the statement`} rows={m.extra} why="A typo in the amount, a duplicate, or one the bank hasn't posted yet." />
+      )}
+    </View>
   )
 }
 

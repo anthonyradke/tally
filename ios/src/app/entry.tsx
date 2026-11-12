@@ -254,7 +254,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
 
   // Kept from one render to the next (this screen renders on every key): a new one rebuilds the header's buttons, and a
   // tap in between was lost.
-  const live = useLatest({ row: one.data, today: t.b?.today })
+  const live = useLatest({ row: one.data, today: t.today })
   const header = useMemo(() => (
     <>
       {!embedded && <Stack.Screen options={{ title: editing ? 'Edit entry' : 'New entry' }} />}
@@ -347,14 +347,14 @@ export function Entry({ embedded }: { embedded?: boolean }) {
             {shape.to !== 'blank' && (
               <Row label={shape.to === 'optional' ? 'To (optional)' : 'To'} value={acctName(d.to_id)} sf="arrow.down.left" md="south_west" onPress={() => router.push({ pathname: '/pick', params: { kind: 'to' } })} />
             )}
-            <Row label="Date" value={dayLabel(d.date, t.b?.today)} sf="calendar" md="calendar_today" onPress={() => router.push({ pathname: '/pick', params: { kind: 'date' } })} />
+            <Row label="Date" value={dayLabel(d.date, t.today)} sf="calendar" md="calendar_today" onPress={() => router.push({ pathname: '/pick', params: { kind: 'date' } })} />
           </Group>
 
           {t.b && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l, marginTop: -space.s }} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
-              <Chip label="Today" selected={d.date === t.b.today} onPress={() => set({ date: t.b!.today })} />
-              <Chip label="Yesterday" selected={d.date === addDays(t.b.today, -1)} onPress={() => set({ date: addDays(t.b!.today, -1) })} />
-              <Chip label={dayLabel(addDays(t.b.today, -2), t.b.today)} selected={d.date === addDays(t.b.today, -2)} onPress={() => set({ date: addDays(t.b!.today, -2) })} />
+              <Chip label="Today" selected={d.date === t.today} onPress={() => set({ date: t.today })} />
+              <Chip label="Yesterday" selected={d.date === addDays(t.today, -1)} onPress={() => set({ date: addDays(t.today, -1) })} />
+              <Chip label={dayLabel(addDays(t.today, -2), t.today)} selected={d.date === addDays(t.today, -2)} onPress={() => set({ date: addDays(t.today, -2) })} />
             </ScrollView>
           )}
 
