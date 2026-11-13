@@ -143,8 +143,9 @@ function Composer() {
   function settle() {
     if (!calc) return true
     const sum = total(calc, d.amount)
-    if (sum <= 0) { refuse(); return false }
-    set({ amount: fromCents(sum) })
+    // A sum below zero is a refund ("− 12" on spending); only spending has refunds.
+    if (!sum || (sum < 0 && d.kind !== 'Spending')) { refuse(); return false }
+    set({ amount: fromCents(sum), refund: sum < 0 })
     setCalc(null)
     return true
   }
@@ -152,7 +153,7 @@ function Composer() {
   settleRef.current = settle
   const op = (sign: 1 | -1) => {
     Haptics.selectionAsync().catch(() => {}); play('tick', 0.6)
-    setCalc(operate(calc, d.amount, sign))
+    setCalc(operate(calc, d.amount, sign, d.refund ? -1 : 1)) // a refund already typed starts the sum below zero
     set({ amount: '' })
   }
   const next = () => {
@@ -304,14 +305,14 @@ function Composer() {
                 )}
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xs }}>
                   <Animated.View style={shakeStyle}>
-                    <RollingText text={formatCents(calc ? total(calc, d.amount) : cents)} style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: d.amount || calc ? c.label : c.label3 }} />
+                    <RollingText text={formatCents(calc ? total(calc, d.amount) : d.refund ? -cents : cents)} style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: d.amount || calc ? c.label : c.label3 }} />
                   </Animated.View>
                   {/* Always there (a blank line when there's nothing to say), so the figure doesn't jump when a sum starts. */}
                   <Txt variant="callout" tone="label2" num={!!calc} numberOfLines={1}>{calc ? expression(calc, d.amount) : d.what || '\u00a0'}</Txt>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space.s, marginBottom: -space.s }}>
                   {calc && <OpKey label="=" hint="Total" onPress={() => { Haptics.selectionAsync().catch(() => {}); settle() }} />}
-                  <OpKey label="−" hint="Subtract the next amount" onPress={() => op(-1)} on={calc?.sign === -1} />
+                  <OpKey label="−" hint={calc || d.amount ? 'Subtract the next amount' : 'A refund: type the amount back'} onPress={() => op(-1)} on={calc?.sign === -1} />
                   <OpKey label="+" hint="Add another amount" onPress={() => op(1)} on={calc?.sign === 1} />
                 </View>
                 <Keypad onKey={(k) => {

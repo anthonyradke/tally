@@ -13,3 +13,12 @@ test('calc: a running total with + and −', () => {
   assert.equal(expression(c, ''), '12.50 + 4.25 +')
   assert.equal(total(null, '3.00'), 300)
 })
+
+test('calc: − first, or a refund already typed, goes below zero', () => {
+  let c = operate(null, '', -1)
+  assert.equal(expression(c, '12.00'), '− 12.00')
+  assert.equal(total(c, '12.00'), -1200)
+  c = operate(null, '12.00', 1, -1)
+  assert.equal(total(c, '2.00'), -1000)
+  assert.equal(expression(c, ''), '− 12.00 +')
+})

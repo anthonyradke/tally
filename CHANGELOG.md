@@ -8,6 +8,11 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## Unreleased
+Fixed
+- A refund can be typed on the new entry keypad again: − and then the amount (or a sum that comes out below zero)
+  saves as a refund instead of shaking. The figure shows the − for a refund.
+
 ## 3.6.1 (2026-11-13)
 Fixed
 - Tally opened Safari instead of itself at launch. A plain launch was held as a link for after Face ID unlock, and

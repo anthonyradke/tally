@@ -9,10 +9,11 @@ export const total = (c: Calc | null, typed: string) =>
   (c ? c.terms.reduce((n, x) => n + x.sign * x.cents, 0) + c.sign * toCents(typed) : toCents(typed))
 
 /** An operator pressed with `typed` on the keypad: the typed amount joins the sum and the next one starts. Pressing
- *  an operator again before typing just switches it. */
-export function operate(c: Calc | null, typed: string, sign: 1 | -1): Calc {
+ *  an operator again before typing just switches it. `first` is the sign of an amount already there (−1 for a
+ *  refund). − with nothing typed starts a sum below zero: a refund. */
+export function operate(c: Calc | null, typed: string, sign: 1 | -1, first: 1 | -1 = 1): Calc {
   const cents = toCents(typed)
-  if (!c) return { terms: cents ? [{ cents, sign: 1 }] : [], sign }
+  if (!c) return { terms: cents ? [{ cents, sign: first }] : [], sign }
   return { terms: cents ? [...c.terms, { cents, sign: c.sign }] : c.terms, sign }
 }
 
