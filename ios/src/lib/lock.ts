@@ -53,10 +53,12 @@ export function lockedNow(): boolean {
   return s.locked || (s.enabled && !!away && Date.now() - away > AWAY_MS)
 }
 
-/** Keeps a link for after unlocking (app/+native-intent.tsx). `path` is the link as it came in. */
+/** Keeps a link for after unlocking (app/+native-intent.tsx). `path` is the link as it came in. A plain launch
+ *  comes in as tally:/// and holds nothing: kept as "//", expo-router opened it as https:// in Safari. */
 export function holdLink(path: string) {
-  const route = path.replace(/^[a-z][\w+.-]*:\/\//i, '/') // tally://new?amount=1 → /new?amount=1
-  useLock.setState({ held: route.startsWith('/') ? route : `/${route}` })
+  const route = '/' + path.replace(/^[a-z][\w+.-]*:\/\//i, '').replace(/^\/+/, '') // tally://new?amount=1 → /new?amount=1
+  if (route === '/' || route.startsWith('/?')) return
+  useLock.setState({ held: route })
 }
 
 export async function loadLock() {
