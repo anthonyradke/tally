@@ -105,7 +105,7 @@ def test_month_end_leaves_out_investments_not_yet_opened(client, world):
 
 def test_receipts_are_served_with_nosniff(client, world):
     tid = client.post("/api/transactions", json=txn(world)).json()["id"]
-    up = client.post(f"/api/transactions/{tid}/receipt", files={"file": ("r.png", b"\x89PNG....", "image/png")}).json()
+    up = client.post(f"/api/transactions/{tid}/receipt", files={"file": ("r.png", b"\x89PNG\r\n\x1a\n....", "image/png")}).json()
     r = client.get(f"/api/receipts/{up['receipt']}")
     assert r.headers["x-content-type-options"] == "nosniff"
 
@@ -271,3 +271,19 @@ def test_statement_debit_credit_columns_and_bad_files(client, world):
     assert client.post(f"/api/reconcile/{world['chk']}/statement", json={"csv": "a,b\n1,2"}).status_code == 422
     assert client.post(f"/api/reconcile/{world['chk']}/statement", json={"csv": ""}).status_code == 422
     assert client.post("/api/reconcile/999/statement", json={"csv": CHASE}).status_code == 404
+
+
+def test_statement_debit_and_credit_amount_columns():
+    # "Debit Amount" also contains "amount": it was read as the one amount column, so credits were dropped and
+    # debits came out as money in.
+    from app.statement import parse
+    lines = parse("Posting Date,Description,Debit Amount,Credit Amount\n11/01/2026,COFFEE,4.50,\n"
+                  "11/02/2026,PAYCHECK,,1000.00\n")
+    assert [(x.what, x.amount) for x in lines] == [("COFFEE", -450), ("PAYCHECK", 100000)]
+
+
+def test_statement_without_a_header_row():
+    from app.statement import parse
+    lines = parse('"11/01/2026","-4.50","*","","COFFEE SHOP"\n"11/03/2026","1000.00","*","","PAYROLL"\n\n')
+    assert [(x.n, x.date.isoformat(), x.what, x.amount) for x in lines] == [
+        (1, "2026-11-01", "COFFEE SHOP", -450), (2, "2026-11-03", "PAYROLL", 100000)]

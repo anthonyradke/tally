@@ -69,6 +69,12 @@ def _cents(v: str) -> Optional[int]:
     return -c if neg else c
 
 
+def _headerless(rows: list[list[str]]) -> bool:
+    """A file with no header row whose lines all start with a date and then an amount."""
+    lines = [r for r in rows if any(c.strip() for c in r)]
+    return bool(lines) and all(len(r) >= 3 and _date(r[0]) and _cents(r[1]) is not None for r in lines)
+
+
 def parse(text: str) -> list[Line]:
     """The statement's lines. Raises ValueError with words the app can show when the columns can't be found."""
     rows = list(csv.reader(io.StringIO(text.lstrip("﻿"))))
@@ -76,11 +82,16 @@ def parse(text: str) -> list[Line]:
         head = [c.strip().lower() for c in row]
         d, a = _find(head, DATE_HEADS), _find(head, AMOUNT_HEADS)
         dr, cr = _find(head, DEBIT_HEADS), _find(head, CREDIT_HEADS)
+        if a is not None and a in (dr, cr):  # "Debit Amount" and "Credit Amount" are two columns, not one amount
+            a = None
         if d is not None and (a is not None or dr is not None or cr is not None):
+            t = _find(head, TEXT_HEADS)
             break
     else:
-        raise ValueError("Couldn't find the date and amount columns. Export the statement as CSV.")
-    t = _find(head, TEXT_HEADS)
+        if not _headerless(rows):
+            raise ValueError("Couldn't find the date and amount columns. Export the statement as CSV.")
+        # Wells Fargo's export has no header: date, amount, "*", check number, description.
+        h, d, a, dr, cr, t = -1, 0, 1, None, None, -1  # t: the last column
     out: list[Line] = []
     for n, row in enumerate(rows[h + 1:], start=h + 2):
         if len(out) >= MAX_LINES:
