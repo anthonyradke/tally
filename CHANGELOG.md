@@ -8,10 +8,15 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## Unreleased
+## 3.6.2 (2026-11-20)
 Fixed
 - A refund can be typed on the new entry keypad again: − and then the amount (or a sum that comes out below zero)
   saves as a refund instead of shaking. The figure shows the − for a refund.
+- Receipt uploads are checked by their contents, not only by the type the phone says they are: a file that isn't
+  really the JPEG, PNG, WebP, HEIC or PDF it claims to be is refused, and the receipt already attached stays.
+- Statement matching read a bank export with "Debit Amount" and "Credit Amount" columns as one amount column, so
+  every credit was left out and every debit counted as money in. Both columns count now.
+- Statement matching takes exports with no header row (Wells Fargo's CSV: date, amount, then the description).
 
 ## 3.6.1 (2026-11-13)
 Fixed
