@@ -93,7 +93,7 @@ def test_budgets_and_receipts(client):
 
     t = client.post("/api/transactions", json={"date": "2026-09-02", "what": "Costco", "category_id": groc["id"],
                                                "from_id": card["id"], "to_id": None, "amount": 1}).json()
-    r = client.post(f"/api/transactions/{t['id']}/receipt", files={"file": ("r.png", b"\x89PNG fake", "image/png")})
+    r = client.post(f"/api/transactions/{t['id']}/receipt", files={"file": ("r.png", b"\x89PNG\r\n\x1a\n fake", "image/png")})
     assert r.status_code == 200
     name = r.json()["receipt"]
     assert client.get(f"/api/receipts/{name}").status_code == 200

@@ -19,6 +19,22 @@ SAFE = re.compile(r"^[\w-]+\.[a-z0-9]{2,5}$")
 MAX_BYTES = 12 * 1024 * 1024
 GRACE = 24 * 3600
 _swept = 0.0
+HEIF_BRANDS = {b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"hevm", b"hevs", b"mif1", b"msf1"}
+
+
+def sniff(data: bytes) -> Optional[str]:
+    """The file's real type from its first bytes, or None for anything that isn't one of the allowed types."""
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data[4:8] == b"ftyp" and data[8:12] in HEIF_BRANDS:  # ISO media box; the major brand says HEIF, not video
+        return "image/heic"
+    if data.startswith(b"%PDF-"):
+        return "application/pdf"
+    return None
 
 
 def remove_receipt(name: str) -> None:
@@ -70,6 +86,9 @@ async def upload_receipt(txn_id: int, con: Con, file: UploadFile = File(...)):
     data = await file.read(MAX_BYTES + 1)  # no more than the cap into memory
     if len(data) > MAX_BYTES:
         raise HTTPException(413, {"errors": ["That file is over 12 MB."]})
+    # The declared type picks the extension the file is later served as, so the bytes must agree with it.
+    if sniff(data) != file.content_type:
+        raise HTTPException(422, {"errors": ["That file isn't the image or PDF it says it is."]})
     RECEIPTS.mkdir(parents=True, exist_ok=True)
     name = f"{txn_id}-{uuid.uuid4().hex[:8]}.{ext}"
     (RECEIPTS / name).write_bytes(data)
@@ -94,7 +113,8 @@ def delete_receipt(txn_id: int, con: Con):
 def get_receipt(name: str):
     if not has_receipt(name):
         raise HTTPException(404)
-    # The type comes from the file's extension, which the upload picked from its declared type; nosniff keeps a
+    # The type comes from the file's extension, which the upload picked from its declared type once the bytes
+    # matched it; nosniff keeps a
     # browser from reading a file labelled as an image as anything else.
     return FileResponse(RECEIPTS / name, headers={"Cache-Control": "private, max-age=31536000, immutable",
                                                   "X-Content-Type-Options": "nosniff"})

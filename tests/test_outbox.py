@@ -116,7 +116,7 @@ def test_editing_a_split_line_keeps_it_in_the_split(client, world):
 def test_editing_keeps_the_receipt_and_recurring_link(client, world, tmp_path):
     t = client.post("/api/transactions", json=txn(world)).json()
     name = client.post(f"/api/transactions/{t['id']}/receipt",
-                       files={"file": ("r.png", b"\x89PNG", "image/png")}).json()["receipt"]
+                       files={"file": ("r.png", b"\x89PNG\r\n\x1a\n", "image/png")}).json()["receipt"]
     r = client.put(f"/api/transactions/{t['id']}", json=txn(world, amount=1)).json()
     assert r["receipt"] == name
 

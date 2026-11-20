@@ -8,6 +8,13 @@ from app.engine import cents
 from .conftest import txn
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 64
+SAMPLES = {  # the first bytes of a real file of each allowed type
+    "image/jpeg": b"\xff\xd8\xff\xe0\x00\x10JFIF\x00",
+    "image/png": PNG,
+    "image/webp": b"RIFF\x24\x00\x00\x00WEBPVP8 ",
+    "image/heic": b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic",
+    "application/pdf": b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n",
+}
 
 
 def upload(client, tid, data=PNG, name="r.png", ctype="image/png"):
@@ -20,8 +27,8 @@ def entry(client, world):
 
 
 def test_upload_limit(client, entry):
-    assert upload(client, entry["id"], b"0" * api_files.MAX_BYTES).status_code == 200
-    r = upload(client, entry["id"], b"0" * (api_files.MAX_BYTES + 1))
+    assert upload(client, entry["id"], PNG.ljust(api_files.MAX_BYTES, b"0")).status_code == 200
+    r = upload(client, entry["id"], PNG.ljust(api_files.MAX_BYTES + 1, b"0"))
     assert r.status_code == 413 and "12 MB" in r.json()["detail"]["errors"][0]
 
 
@@ -32,8 +39,31 @@ def test_wrong_types_are_refused(client, entry, ctype):
 
 @pytest.mark.parametrize("ctype,ext", list(api_files.EXT.items()))
 def test_allowed_types_keep_their_extension(client, entry, ctype, ext):
-    name = upload(client, entry["id"], ctype=ctype).json()["receipt"]
+    name = upload(client, entry["id"], SAMPLES[ctype], ctype=ctype).json()["receipt"]
     assert name.startswith(f"{entry['id']}-") and name.endswith("." + ext)
+
+
+@pytest.mark.parametrize("data,ctype", [
+    (b"<html><script>alert(1)</script>", "image/png"),  # a page passed off as an image
+    (b"<svg xmlns='http://www.w3.org/2000/svg'/>", "image/jpeg"),
+    (b"0" * 64, "application/pdf"),
+    (SAMPLES["image/png"], "image/jpeg"),  # a real image, but not the declared one
+    (SAMPLES["application/pdf"], "image/heic"),
+    (b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00", "image/heic"),  # an MP4 video, same box layout as HEIC
+    (b"GIF89a" + b"0" * 32, "image/png"),
+    (b"", "image/png"),
+])
+def test_contents_must_match_the_declared_type(client, entry, tmp_path, data, ctype):
+    r = upload(client, entry["id"], data, ctype=ctype)
+    assert r.status_code == 422 and "says it is" in r.json()["detail"]["errors"][0]
+    assert not (tmp_path / "receipts").exists() or not any((tmp_path / "receipts").iterdir())
+    assert client.get(f"/api/transactions/{entry['id']}").json()["receipt"] is None
+
+
+def test_a_mismatched_upload_keeps_the_existing_receipt(client, entry):
+    name = upload(client, entry["id"]).json()["receipt"]
+    assert upload(client, entry["id"], b"<html>", ctype="image/png").status_code == 422
+    assert client.get(f"/api/receipts/{name}").status_code == 200
 
 
 @pytest.mark.parametrize("filename", ["../../etc/passwd.png", "..\\..\\x.png", "/abs/path.png", "a\x00b.png", "ü.png"])

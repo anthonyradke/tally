@@ -65,7 +65,7 @@ def test_bulk_recategorize_respects_from_to_rules(client):
 def test_delete_then_restore_is_exact(client):
     chk, card, groc, pay, t = _setup(client)
     name = client.post(f"/api/transactions/{t['id']}/receipt",
-                       files={"file": ("r.jpg", b"\xff\xd8x", "image/jpeg")}).json()["receipt"]
+                       files={"file": ("r.jpg", b"\xff\xd8\xffx", "image/jpeg")}).json()["receipt"]
     gone = client.delete(f"/api/transactions/{t['id']}").json()
     assert gone["receipt"] == name and client.get(f"/api/receipts/{name}").status_code == 200
     back = client.post("/api/transactions/restore", json={"rows": [{**gone, "amount": gone["amount"] / 100}]}).json()
