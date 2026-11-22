@@ -44,11 +44,26 @@ test('steps: a required step shown but left empty is asked again', () => {
   assert.equal(needed('to', { ...d, kind: 'Transfer' }), true)
 })
 
-test('steps: Next goes one page on, even past steps already filled', () => {
-  const d = { ...blank('2026-09-25'), amount: '40', what: 'Shell', category_id: 4, from_id: 2 }
+test('steps: Next goes one page on, never to a page in the middle', () => {
+  const d = { ...blank('2026-09-25'), amount: '40', what: 'Shell', category_id: 4, from_id: null }
   assert.equal(stepAfter('amount', d), 'what')
-  assert.equal(stepAfter('what', d), 'category')
+  assert.equal(stepAfter('what', d), 'category') // the category is filled but From isn't: no leap to From
   assert.equal(stepAfter('category', d), 'from')
-  assert.equal(stepAfter('from', d), 'review')
-  assert.equal(stepAfter('from', { ...d, kind: 'Transfer' }), 'to')
+  assert.equal(stepAfter('from', { ...d, from_id: 2 }), 'review')
+  assert.equal(stepAfter('from', { ...d, from_id: 2, kind: 'Transfer' }), 'to')
+  assert.equal(stepAfter('amount', { ...blank('2026-09-25'), amount: '40' }), 'what') // a fresh entry: one at a time
+})
+
+test('steps: Next goes to the review once everything after is answered', () => {
+  // A Coffee chip with no saved amount: once the amount is typed, nothing else is left.
+  const d = { ...blank('2026-09-25'), amount: '40', what: 'Coffee', category_id: 4, from_id: 2 }
+  assert.equal(stepAfter('amount', d), 'review')
+  assert.equal(stepAfter('what', d), 'review')
+  // A Gas chip that leaves the name for you: the name page first, then the review.
+  assert.equal(stepAfter('amount', { ...d, what: '' }), 'what')
+  assert.equal(stepAfter('what', { ...d, what: '' }, new Set<Step>(['what'])), 'review')
+  // An optional To not yet shown is still a page to see; once shown and left empty, it's answered.
+  const s = { ...d, kind: 'Saving' as const }
+  assert.equal(stepAfter('amount', s), 'what')
+  assert.equal(stepAfter('amount', s, new Set<Step>(['to'])), 'review')
 })
