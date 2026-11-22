@@ -14,6 +14,7 @@ import { play, useSounds } from '@/lib/sound'
 import { setLockEnabled, useLock } from '@/lib/lock'
 import { toast } from '@/lib/toast'
 import { shareCsv } from '@/lib/exportCsv'
+import { useBusy } from '@/lib/nav'
 import { useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
 import { space, themeById, useTheme } from '@/theme'
@@ -52,6 +53,7 @@ export default function Settings() {
   const hidden = usePrivacy((s) => s.hidden)
   const sounds = useSounds((s) => s.on)
   const locking = useLock((s) => s.enabled)
+  const exporting = useBusy() // a double tap made two downloads and two share sheets
   const health = useQuery({ queryKey: ['health'], queryFn: loadHealth })
   const h = health.data
   const last = h?.backups.latest
@@ -109,8 +111,8 @@ export default function Settings() {
           )}
         </Group>
         <Group header="Export" footer="A CSV file through the share sheet: save it to Files, AirDrop it, or open it in Numbers.">
-          <Row label="Every entry" value="CSV" sf="list.bullet.rectangle" md="list_alt" chevron={false} onPress={() => shareCsv('/export/log.csv', 'tally-entries.csv')} />
-          <Row label="Months" value="CSV" sf="calendar" md="calendar_month" chevron={false} onPress={() => shareCsv('/export/months.csv', 'tally-months.csv')} />
+          <Row label="Every entry" value="CSV" sf="list.bullet.rectangle" md="list_alt" chevron={false} onPress={() => { exporting(() => shareCsv('/export/log.csv', 'tally-entries.csv')) }} />
+          <Row label="Months" value="CSV" sf="calendar" md="calendar_month" chevron={false} onPress={() => { exporting(() => shareCsv('/export/months.csv', 'tally-months.csv')) }} />
         </Group>
         <View style={{ alignItems: 'center', gap: 2 }}>
           <Txt variant="foot" tone="label2">Tally {Constants.expoConfig?.version ?? ''}{h?.version && h.version !== Constants.expoConfig?.version ? ` · server ${h.version}` : ''}</Txt>
