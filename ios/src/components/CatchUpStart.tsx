@@ -5,7 +5,7 @@ import { ScrollView, View } from 'react-native'
 import type { Account, Txn } from '@/lib/api'
 import { balanceWords } from '@/lib/balances'
 import { midSentence } from '@/lib/catchup'
-import { daysSince, useCaughtUp } from '@/lib/caughtUp'
+import { daysSince, suggestCatchUp, useCaughtUp } from '@/lib/caughtUp'
 import { dayLabel, fromISO } from '@/lib/dates'
 import { useTally } from '@/lib/tally'
 import { radius, space, useTheme } from '@/theme'
@@ -14,7 +14,7 @@ import { CheckDraw } from './CheckDraw'
 import { Chip } from './Chip'
 import { Hairline } from './Panel'
 import { Row } from './Row'
-import { Button } from './Tap'
+import { Button, Tap } from './Tap'
 import { TxnRow } from './TxnRow'
 import { Txt } from './Txt'
 
@@ -72,6 +72,7 @@ export function LeftOff({ accounts, acct, onAcct, rows, loading, added, session,
   const { c } = useTheme()
   const t = useTally()
   const at = useCaughtUp((s) => s.at[String(acct.id)])
+  const off = useCaughtUp((s) => !!s.off[String(acct.id)]) // "Not for this account" on Home's nudge
   if (!t.b) return null
   const today = t.today
   const since = at ? daysSince(at) : null
@@ -92,6 +93,13 @@ export function LeftOff({ accounts, acct, onAcct, rows, loading, added, session,
         </Txt>
         {since != null && !caught && (
           <Txt variant="callout" tone="label2">{`Last caught up ${since === 0 ? 'today' : since === 1 ? 'yesterday' : `${since} days ago`}.`}</Txt>
+        )}
+        {off && (
+          <Tap feedback="opacity" onPress={() => suggestCatchUp(acct.id, true)} hitSlop={8} accessibilityLabel={`Home doesn't suggest catching up ${acct.name}. Suggest it again`}>
+            <Txt variant="callout" tone="label2">
+              {"Home doesn't suggest catching it up. "}<Txt variant="callout" style={{ fontWeight: '600' }}>Suggest again</Txt>
+            </Txt>
+          </Tap>
         )}
       </View>
       {caught && balance != null && (
