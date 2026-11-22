@@ -67,13 +67,6 @@ export function suggest(history: Txn[], acct: number, text: string, n = 8): Txn[
     .map((v) => v.row)
 }
 
-/** The place typed, when it's exactly one of the suggestions (same merchant): Return then copies it as a tap would. */
-export function exactPlace(history: Txn[], acct: number, text: string): Txn | null {
-  const want = merchantKey(text)
-  if (!want) return null
-  return suggest(history, acct, text).find((x) => merchantKey(x.what) === want) ?? null
-}
-
 /** The category chips for an account: the ones it uses, most recently used first, then (with `spending`, which says
  *  whether a category is Spending) the most used Spending categories anywhere, so a checking account whose own
  *  entries are all transfers still offers everyday ones. */

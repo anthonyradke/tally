@@ -13,7 +13,6 @@ import { formatCents } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
 import { SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
-import { rowAmount } from '@/lib/txn'
 import { radius, space, useTheme } from '@/theme'
 import { AccountMark } from './AccountMark'
 import { CheckDraw } from './CheckDraw'
@@ -25,6 +24,7 @@ import { Keypad } from './Keypad'
 import { Mark } from './Mark'
 import { Money } from './Money'
 import { PAGE_MS } from './Pages'
+import { CatMark, PlaceRow } from './PlaceRow'
 import { RollingText } from './Rolling'
 import { Group, Row } from './Row'
 import { Button, Tap } from './Tap'
@@ -36,15 +36,6 @@ const check = (on: boolean, color: string) => (on ? <Icon sf="checkmark" md="che
 
 function Heading({ text }: { text: string }) {
   return <Txt variant="title2" accessibilityRole="header" style={{ paddingHorizontal: space.xs, marginBottom: -space.xs }}>{text}</Txt>
-}
-
-function CatMark({ id, size = 30 }: { id: number; size?: number }) {
-  const t = useTally()
-  const { tint } = useTheme()
-  const x = t.cat.get(id)
-  if (!x) return null
-  const v = categoryVisual(x)
-  return <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={size} />
 }
 
 /** The account being caught up, small, at the top of a line's pages. "N added" opens what this session added. */
@@ -122,11 +113,7 @@ export function What({ acct, history, count, last, missing, onUndo, onPick, onSu
         maxFontSizeMultiplier={1.4} style={{ fontSize: 22, fontWeight: '600', color: c.label, paddingVertical: space.s, paddingHorizontal: space.xs }} />
       {list.length > 0 && (
         <Group header={d.what ? 'Matches' : `Usual on ${acct.name}`}>
-          {list.map((x) => {
-            const a = rowAmount(t.catOf(x).type, x.amount) // signed as Activity signs it: a refund is a green +
-            return <Row key={x.id} label={x.what} sub={t.catOf(x).name} chevron={false} onPress={() => pick(x)} leading={<CatMark id={x.category_id} />}
-              value={<Money cents={a.cents} sign={a.sign} tone={a.tone} muted variant="callout" />} />
-          })}
+          {list.map((x) => <PlaceRow key={x.id} x={x} sub={t.catOf(x).name} onPress={() => pick(x)} />)}
         </Group>
       )}
     </ScrollView>

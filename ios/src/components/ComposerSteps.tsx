@@ -12,6 +12,7 @@ import { Icon } from './Icon'
 import { Mark } from './Mark'
 import { Money } from './Money'
 import { PAGE_MS } from './Pages'
+import { PlaceRow } from './PlaceRow'
 import { Receipt } from './Receipt'
 import { Group, Row } from './Row'
 import { TagField } from './TagField'
@@ -25,7 +26,6 @@ import { useDraft } from '@/lib/draft'
 import { monthsNow } from '@/lib/months'
 import { SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
-import { rowAmount } from '@/lib/txn'
 import { radius, space, useTheme } from '@/theme'
 
 const KIND_ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
@@ -81,15 +81,6 @@ export function Dot({ on, done, label, onPress }: { on: boolean; done: boolean; 
   )
 }
 
-export function CatMark({ id, size = 30 }: { id: number; size?: number }) {
-  const t = useTally()
-  const { tint } = useTheme()
-  const x = t.cat.get(id)
-  if (!x) return null
-  const v = categoryVisual(x)
-  return <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={size} />
-}
-
 /** What the composer's Next button calls on "What was it?", so it does what Return does. */
 export interface WhatHandle { submit: () => void }
 
@@ -110,7 +101,7 @@ export function What({ ref, history, fixing, onPick, onSubmit }: { ref?: Ref<Wha
   const picked = useRef(false)
   const pick = (x: Txn) => { picked.current = true; input.current?.blur(); onPick(x) }
   const submit = () => {
-    const x = fixing ? undefined : exactPlace(history, t.catOf, d.what, d.kind)
+    const x = fixing ? undefined : exactPlace(history, d.what, (x) => t.catOf(x).type === d.kind)
     if (x) pick(x)
     else onSubmit()
   }
@@ -126,11 +117,7 @@ export function What({ ref, history, fixing, onPick, onSubmit }: { ref?: Ref<Wha
         <Group header={d.what ? 'Matches' : 'Recent'}>
           {list.map((x) => {
             const xc = t.catOf(x)
-            const a = rowAmount(xc.type, x.amount) // signed as Activity signs it: a refund is a green +
-            return (
-              <Row key={x.id} label={x.what} sub={xc.type === d.kind ? xc.name : `${xc.name}, in ${KIND_NAME[xc.type]}`} chevron={false} onPress={() => pick(x)}
-                leading={<CatMark id={x.category_id} />} value={<Money cents={a.cents} sign={a.sign} tone={a.tone} muted variant="callout" />} />
-            )
+            return <PlaceRow key={x.id} x={x} sub={xc.type === d.kind ? xc.name : `${xc.name}, in ${KIND_NAME[xc.type]}`} onPress={() => pick(x)} />
           })}
         </Group>
       )}

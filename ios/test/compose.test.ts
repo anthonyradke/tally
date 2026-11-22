@@ -71,13 +71,13 @@ test('places: typing matches every kind, this kind first, the full name on top',
 })
 
 test('exactPlace: a name typed in full is that place, case aside', () => {
-  assert.equal(exactPlace(history, catOf, 'CHIPOTLE', 'Spending')?.what, 'chipotle')
-  assert.equal(exactPlace(history, catOf, 'Chevron', 'Spending')?.date, '2026-09-18') // the newest
-  assert.equal(exactPlace(history, catOf, 'Chev', 'Spending'), undefined)
-  assert.equal(exactPlace(history, catOf, '', 'Spending'), undefined)
-  assert.equal(exactPlace(history, catOf, 'transfer to savings', 'Transfer')?.category_id, 5)
-  assert.equal(exactPlace(history, catOf, 'transfer to savings', 'Spending'), undefined) // only under Saving and Transfer
-  assert.equal(exactPlace(history, catOf, 'acme corp', 'Spending'), undefined) // Return doesn't switch the kind
+  assert.equal(exactPlace(history, 'CHIPOTLE', (x) => catOf(x).type === 'Spending')?.what, 'chipotle')
+  assert.equal(exactPlace(history, 'Chevron', (x) => catOf(x).type === 'Spending')?.date, '2026-09-18') // the newest
+  assert.equal(exactPlace(history, 'Chev', (x) => catOf(x).type === 'Spending'), undefined)
+  assert.equal(exactPlace(history, '', (x) => catOf(x).type === 'Spending'), undefined)
+  assert.equal(exactPlace(history, 'transfer to savings', (x) => catOf(x).type === 'Transfer')?.category_id, 5)
+  assert.equal(exactPlace(history, 'transfer to savings', (x) => catOf(x).type === 'Spending'), undefined) // only under Saving and Transfer
+  assert.equal(exactPlace(history, 'acme corp', (x) => catOf(x).type === 'Spending'), undefined) // Return doesn't switch the kind
 })
 
 test('the figure reads like Activity: money in and refunds green with a +', () => {

@@ -14,7 +14,8 @@ import { Pages } from '@/components/Pages'
 import { useShake } from '@/components/Shake'
 import { merchantKey } from '@/icons/merchants'
 import { api, ApiError, type Txn } from '@/lib/api'
-import { balanceAfter, catchable, duplicateOf, exactPlace, flip, hintFor, lastShown, otherSide, queuedRows, sides, touches } from '@/lib/catchup'
+import { balanceAfter, catchable, duplicateOf, flip, hintFor, lastShown, otherSide, queuedRows, sides, touches } from '@/lib/catchup'
+import { exactPlace } from '@/lib/compose'
 import { refreshCatchUp, useBankMatch, useCatchUpSession, useKeyboardBar } from '@/lib/catchupHooks'
 import { offerCatchUp } from '@/lib/caughtUp'
 import { useTransactions } from '@/lib/data'
@@ -158,7 +159,7 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
     filledFor.current = null
     const renamed = before != null && merchantKey(before) !== merchantKey(d.what)
     if (before == null || renamed) {
-      const match = exactPlace(historyRows, acct!.id, d.what)
+      const match = exactPlace(historyRows, d.what, undefined, (x) => touches(x, acct!.id)) // as it went on this account, if it did
       if (match) { pickPast(match); return }
     }
     if (renamed) {

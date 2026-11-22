@@ -91,11 +91,20 @@ export function places(history: Txn[], catOf: (x: Txn) => CatInfo, o: { text: st
     .map((v) => v.row)
 }
 
-/** A name typed in full that is a past place of this kind (case and punctuation aside): Return on it acts like
- *  tapping its row. A place only seen under another kind isn't picked by Return, which would switch the kind unasked. */
-export function exactPlace(history: Txn[], catOf: (x: Txn) => CatInfo, text: string, kind: CatType): Txn | undefined {
+/** A name typed in full that is a past place (case and punctuation aside): Return on it acts like tapping its row.
+ *  `history` newest first. `fits` says which rows count (the composer: only the kind picked, since Return switching
+ *  the kind unasked would surprise); of those, the newest that is `preferred` (Catch up: how it went on this account),
+ *  else the newest. */
+export function exactPlace(history: Txn[], text: string, fits: (x: Txn) => boolean = () => true, preferred?: (x: Txn) => boolean): Txn | undefined {
   const want = merchantKey(text)
-  return want ? history.find((x) => merchantKey(x.what) === want && catOf(x).type === kind) : undefined
+  if (!want) return undefined
+  let first: Txn | undefined
+  for (const x of history) {
+    if (merchantKey(x.what) !== want || !fits(x)) continue
+    if (!preferred || preferred(x)) return x
+    first ??= x
+  }
+  return first
 }
 
 /** The figure as Activity will show it (lib/txn rowAmount): money in and refunds green with a +, spending plain,

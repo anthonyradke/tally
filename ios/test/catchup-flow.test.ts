@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { balanceAfter, duplicateOf, exactPlace, hintFor, midSentence, runningBalances, sessionRows, sides, usualCategories } from '@/lib/catchup'
+import type { Txn } from '@/lib/api'
+import { balanceAfter, duplicateOf, hintFor, midSentence, runningBalances, sessionRows, sides, touches, usualCategories } from '@/lib/catchup'
+import { exactPlace } from '@/lib/compose'
 import { balanceWords } from '@/lib/balances'
 import { markCaughtUp, staleAccounts, unmarkCaughtUp, useCaughtUp } from '@/lib/caughtUp'
 import { formatCents } from '@/lib/money'
@@ -26,9 +28,14 @@ test('catchup: a card payment picked on the card comes in, from how the last one
 
 test('catchup: Return on an exact name copies that place, a partial one does not', () => {
   const h = [row('2026-10-30', 4780, { what: 'Safeway', from_id: CHK, category_id: 5 }), row('2026-10-29', 900, { what: 'Safeway Fuel', from_id: CHK, category_id: 6 })]
-  assert.equal(exactPlace(h, CHK, 'safeway ')?.category_id, 5)
-  assert.equal(exactPlace(h, CHK, 'Safe'), null)
-  assert.equal(exactPlace(h, CHK, ''), null)
+  const mine = (x: Txn) => touches(x, CHK)
+  assert.equal(exactPlace(h, 'safeway ', undefined, mine)?.category_id, 5)
+  assert.equal(exactPlace(h, 'Safe', undefined, mine), undefined)
+  assert.equal(exactPlace(h, '', undefined, mine), undefined)
+  // The newest on this account wins over a newer one elsewhere; with none here, the newest anywhere.
+  const elsewhere = row('2026-11-02', 5200, { what: 'Safeway', from_id: 9, category_id: 7 })
+  assert.equal(exactPlace([elsewhere, ...h], 'Safeway', undefined, mine)?.category_id, 5)
+  assert.equal(exactPlace([elsewhere, ...h], 'Safeway', undefined, (x) => touches(x, 4))?.category_id, 7)
 })
 
 test('catchup: chips are the account\'s own by recency, then everyday spending', () => {
