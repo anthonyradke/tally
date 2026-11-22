@@ -12,7 +12,8 @@ Changes to anything below get written here first.
 - **Charts you can touch.** Trend lines have no axes; dragging reads a day, and the figure above follows the finger.
   Past the finger the line dims. Releasing goes back to now.
 - **Merchants, not rows.** Every entry leads with a round mark: the brand's own glyph where one exists, a
-  brand-colored monogram otherwise, the category symbol as a fallback. Category symbols sit white on a solid tint.
+  brand-colored monogram otherwise, the category symbol as a fallback. Category symbols sit white on a solid tint. A tagged entry shows its tag after the
+  category; tapping it lists that tag's entries.
 - **Grouped by day, inset panels.** Activity reads like a statement: day headers with the day's spending, entries on
   rounded panels, the account under each amount.
 - **What's coming, drawn ahead.** Scheduled entries carry a cash account's line past today as a dashed path (red
