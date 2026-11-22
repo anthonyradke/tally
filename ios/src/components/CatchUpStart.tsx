@@ -130,6 +130,7 @@ export function LeftOff({ accounts, acct, onAcct, rows, loading, added, session,
 /** What this session added to the account, newest first, each with the balance after it. Tapping one opens it to fix,
  *  and a swipe deletes it with Undo, as anywhere else. */
 export function Session({ acct, rows, running }: { acct: Account; rows: Txn[]; running: Map<number, number> | null }) {
+  const newest = [...rows].sort((x, z) => (x.date < z.date ? 1 : x.date > z.date ? -1 : z.id - x.id))
   return (
     <ScrollView contentContainerStyle={{ paddingVertical: space.s, gap: space.m }}>
       <View style={{ paddingHorizontal: space.l + space.xs, gap: 4 }}>
@@ -138,7 +139,7 @@ export function Session({ acct, rows, running }: { acct: Account; rows: Txn[]; r
           {rows.length ? `Tap one to fix it, or swipe it away. The balance after each is ${acct.name}'s, to check against the bank's list.` : `Nothing added to ${acct.name} yet.`}
         </Txt>
       </View>
-      {rows.length > 0 && <Ledger acct={acct} rows={rows} running={running} session={new Set()} />}
+      {rows.length > 0 && <Ledger acct={acct} rows={newest} running={running} session={new Set()} />}
     </ScrollView>
   )
 }

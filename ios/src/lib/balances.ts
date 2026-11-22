@@ -9,7 +9,8 @@ import { formatCents } from './money'
 
 /** Every row, oldest first, reused by Accounts and account detail (one cached request). The limit is far past any
  *  real ledger (about a thousand rows a year); the server sorts oldest first, so a cut would drop the newest. */
-export const useAllTxns = (enabled = true) => useTransactions({ limit: 1_000_000, sort: 'date', dir: 'asc' }, enabled)
+export const ALL_TXNS = { limit: 1_000_000, sort: 'date', dir: 'asc' } as const
+export const useAllTxns = (enabled = true) => useTransactions(ALL_TXNS, enabled)
 
 export interface Series { dates: string[]; values: number[] }
 

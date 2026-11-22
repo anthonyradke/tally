@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { balanceWords, exactPlace, hintFor, midSentence, runningBalances, sides, usualCategories } from '@/lib/catchup'
-import { staleAccounts } from '@/lib/caughtUp'
+import { balanceAfter, duplicateOf, exactPlace, hintFor, midSentence, runningBalances, sessionRows, sides, usualCategories } from '@/lib/catchup'
+import { balanceWords } from '@/lib/balances'
+import { markCaughtUp, staleAccounts, unmarkCaughtUp, useCaughtUp } from '@/lib/caughtUp'
 import { formatCents } from '@/lib/money'
 import { acct, row } from './fixtures'
 
@@ -64,9 +65,9 @@ test('catchup: running balances follow the bank\'s order, day then entry', () =>
 })
 
 test('catchup: a card past zero reads in credit, not negative owed', () => {
-  assert.equal(balanceWords('card', -63526, (c) => formatCents(c)), '$635.26 in credit')
-  assert.equal(balanceWords('card', 63526, (c) => formatCents(c)), '$635.26 owed')
-  assert.equal(balanceWords('cash', -500, (c) => formatCents(c)), formatCents(-500))
+  assert.equal(balanceWords(-63526, 'card'), '$635.26 in credit')
+  assert.equal(balanceWords(63526, 'card'), '$635.26 owed')
+  assert.equal(balanceWords(-500, 'cash'), formatCents(-500))
   assert.equal(midSentence('2026-11-22', '2026-11-22'), 'today')
   assert.equal(midSentence('2026-11-21', '2026-11-22'), 'yesterday')
   assert.match(midSentence('2026-11-13', '2026-11-22'), /^Fri, Nov 13$/)
@@ -77,4 +78,58 @@ test('caught-up nudges an account never caught up once its newest entry is a wee
   const at = { 2: new Date(2026, 10, 1, 8).toISOString() }
   const newest = { 1: '2026-11-12', 2: '2026-11-19', 3: '2026-11-16' }
   assert.deepEqual(staleAccounts(at, [1, 2, 3, 4], now, newest), [{ id: 2, days: 19 }, { id: 1, days: 8, never: true }])
+})
+
+test('catchup: a suggested amount only flags the same place on the same day, a typed one any lookalike', () => {
+  const coffee = row('2026-11-14', 540, { what: 'Starbucks', from_id: CARD })
+  const fee = row('2026-11-15', 540, { what: 'Annual fee', from_id: CARD })
+  const none = () => false
+  const line = (date: string) => ({ date, amount: 540, what: 'starbucks' })
+  // Copied from Nov 14's coffee, dated Nov 16: the amount was copied, so it's no evidence (nor is the fee's).
+  assert.equal(duplicateOf([coffee, fee], line('2026-11-16'), CARD, none, true), null)
+  // The same place on the same day is still the likely duplicate.
+  assert.equal(duplicateOf([coffee], line('2026-11-14'), CARD, none, true)?.id, coffee.id)
+  // Typed, any entry of that amount within a few days counts, unless the session added or took it back.
+  assert.equal(duplicateOf([coffee, fee], line('2026-11-16'), CARD, none)?.id, coffee.id)
+  assert.equal(duplicateOf([coffee, fee], line('2026-11-16'), CARD, (id) => id === coffee.id)?.id, fee.id)
+})
+
+test('catchup: session rows survive a list fetched before they went in, and an Undo drops them at once', () => {
+  const old = row('2026-11-10', 100, { from_id: CHK })
+  const x = { ...row('2026-11-12', 250, { from_id: CHK }), by: 3 } // added while version 3 was on its way
+  // Version 3 (the fetch already going when it was added) lacks it: still in.
+  assert.deepEqual(sessionRows([x], [old], 3, new Set()).live.map((r) => r.id), [x.id])
+  assert.deepEqual(sessionRows([x], [old], 3, new Set()).rows?.map((r) => r.id), [old.id, x.id])
+  // A later list without it means it was deleted elsewhere.
+  assert.deepEqual(sessionRows([x], [old], 4, new Set()).live, [])
+  // Taken back with Undo: gone from the rows too, though a list fetched before the Undo still has it.
+  const r = sessionRows([x], [old, x], 4, new Set([x.id]))
+  assert.deepEqual([r.live, r.rows?.map((y) => y.id)], [[], [old.id]])
+  // No full list yet: the session's own rows.
+  assert.deepEqual(sessionRows([x], undefined, 0, new Set()), { rows: null, live: [x] })
+})
+
+test('catchup: the balance after a line counts it as money out until a category says otherwise', () => {
+  const chk = acct(CHK, 'cash', 10000)
+  const rows = [row('2026-11-01', 2500, { from_id: CHK }), row('2026-11-05', 700, { from_id: CHK })]
+  const pay = { date: '2026-11-02', from_id: null, to_id: CHK, amount: 1000 }
+  assert.equal(balanceAfter(chk, rows, '2026-10-01', pay, false), 10000 - 2500 - 1000)
+  assert.equal(balanceAfter(chk, rows, '2026-10-01', pay, true), 10000 - 2500 + 1000)
+  assert.equal(balanceAfter(acct(9, 'loan'), rows, '2026-10-01', pay, true), null)
+})
+
+test('catchup: a loan payment picked on a card goes out, one on the loan comes in', () => {
+  assert.deepEqual(sides('Loan', CARD, hintFor([], card, 9, 'Loan', blankSides)), { from_id: CARD, to_id: null })
+  assert.deepEqual(sides('Transfer', 4, hintFor([], acct(4, 'loan'), 8, 'Transfer', blankSides)), { from_id: null, to_id: 4 })
+})
+
+test('caught-up: a matching reconcile marks the account, and its Undo puts the old time back', () => {
+  const was = new Date(2026, 10, 1, 8)
+  markCaughtUp(7, was)
+  const before = markCaughtUp(7, new Date(2026, 10, 20, 9))
+  assert.equal(before, was.toISOString())
+  unmarkCaughtUp(7, before)
+  assert.equal(useCaughtUp.getState().at['7'], was.toISOString())
+  unmarkCaughtUp(8, markCaughtUp(8)) // never caught up before: back to never
+  assert.equal(useCaughtUp.getState().at['8'], undefined)
 })

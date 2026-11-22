@@ -2,7 +2,7 @@
 // The pure parts live here so the tests can run them.
 import { merchantKey } from '@/icons/merchants'
 import type { Account, CatType, Txn } from './api'
-import { effect } from './balances'
+import { balanceOn, effect } from './balances'
 import { dayLabel, fromISO } from './dates'
 import { SHAPES } from './shapes'
 
@@ -26,13 +26,13 @@ export function sides(kind: CatType, acct: number, hint: Sides = { from_id: null
 
 /** The direction to start a category in, when it's picked on its own (a chip or the full list) rather than copied
  *  from a past entry: how the latest entry with that category on this account went, else a lean from the account. A
- *  transfer or loan payment on a card or a loan is nearly always a payment onto it, so money comes in; anything else
- *  keeps `fallback` (the draft as it is). */
+ *  transfer on a card or a loan, or a loan payment on a loan, is nearly always a payment onto it, so money comes in
+ *  (a loan payment on a card is the card paying a loan: money out). Anything else keeps `fallback` (the draft). */
 export function hintFor(history: Txn[], acct: Pick<Account, 'id' | 'kind'>, categoryId: number, kind: CatType, fallback: Sides): Sides {
   const past = history.find((x) => x.category_id === categoryId && touches(x, acct.id)) // newest first
   if (past) return { from_id: past.from_id, to_id: past.to_id }
-  const owed = acct.kind === 'card' || acct.kind === 'loan'
-  if (owed && (kind === 'Transfer' || kind === 'Loan')) return { from_id: null, to_id: acct.id }
+  const onto = (acct.kind === 'card' && kind === 'Transfer') || (acct.kind === 'loan' && (kind === 'Transfer' || kind === 'Loan'))
+  if (onto) return { from_id: null, to_id: acct.id }
   return fallback
 }
 
@@ -100,17 +100,18 @@ export function runningBalances(acct: Account, rows: Txn[], start: string): Map<
   return out
 }
 
+/** A cash account's or a card's balance once `line` is in, on its day, to check against the bank's running balance.
+ *  Before a category says which way it goes (`sided` false), it counts as money out. Null for other kinds. */
+export function balanceAfter(acct: Account, rows: Txn[], start: string, line: Pick<Txn, 'date' | 'from_id' | 'to_id' | 'amount'>, sided: boolean): number | null {
+  if (acct.kind !== 'cash' && acct.kind !== 'card') return null
+  const way = sided ? line : { from_id: acct.id, to_id: null, amount: line.amount }
+  return balanceOn(acct, rows, start, line.date) + (line.amount ? effect(acct, way) : 0)
+}
+
 /** A day for the middle of a sentence: "through today", "since yesterday", "through Fri, Nov 20". */
 export const midSentence = (iso: string, today: string): string => {
   const s = dayLabel(iso, today)
   return /^(Today|Yesterday|Tomorrow)$/.test(s) ? s.toLowerCase() : s
-}
-
-/** A balance in words, as the account's own app would put it: a card or loan owes, and one paid past zero is in
- *  credit (not "−$635.26 owed"). */
-export function balanceWords(kind: Account['kind'], cents: number, format: (c: number) => string): string {
-  if (kind !== 'card' && kind !== 'loan') return format(cents)
-  return cents < 0 ? `${format(-cents)} in credit` : `${format(cents)} owed`
 }
 
 const daysApart = (a: string, b: string) => Math.abs(Math.round((fromISO(a).getTime() - fromISO(b).getTime()) / 864e5))
@@ -120,5 +121,32 @@ const daysApart = (a: string, b: string) => Math.abs(Math.round((fromISO(a).getT
 export function lookalikes(rows: Txn[], line: { date: string; amount: number }, acct: number, days = 3): Txn[] {
   if (!line.amount) return []
   return rows.filter((x) => touches(x, acct) && x.amount === line.amount && daysApart(x.date, line.date) <= days)
+}
+
+/** The lookalike to point out for the line being added, if any (`skip`: rows this session added or took back).
+ *  While the figure is only a suggestion copied from a past entry, a matching amount is no evidence (it was copied),
+ *  so only that same place on the same day counts: a fixed-price coffee bought every other day isn't a duplicate. */
+export function duplicateOf(rows: Txn[], line: { date: string; amount: number; what: string }, acct: number,
+  skip: (id: number) => boolean, suggested = false): Txn | null {
+  const hits = lookalikes(rows, line, acct).filter((x) => !skip(x.id))
+  const want = merchantKey(line.what)
+  return (suggested ? hits.filter((x) => x.date === line.date && merchantKey(x.what) === want) : hits)[0] ?? null
+}
+
+/** A row a catch-up added, with the full list's `dataUpdateCount` after which that list must have it: a list already
+ *  on its way when the row was added may not. */
+export type Added = Txn & { by: number }
+
+/** The rows with this session's in them, before the full list (`items`, at data version `version`) refreshes, and the
+ *  session's rows as they are now (`live`, current versions). A session row missing from a list fetched after it was
+ *  added was deleted elsewhere (a swipe in the session list, the editor). `gone`: rows the session took back itself
+ *  (Undo), left out even while a list fetched before the Undo still has them. */
+export function sessionRows(added: Added[], items: Txn[] | undefined, version: number, gone: ReadonlySet<number>): { rows: Txn[] | null; live: Txn[] } {
+  const kept = added.filter((x) => !gone.has(x.id))
+  if (!items) return { rows: null, live: kept }
+  const base = gone.size ? items.filter((x) => !gone.has(x.id)) : items
+  const byId = new Map(base.map((x) => [x.id, x]))
+  const live = kept.filter((x) => byId.has(x.id) || version <= x.by).map((x) => byId.get(x.id) ?? x)
+  return { rows: [...base, ...live.filter((x) => !byId.has(x.id))], live }
 }
 
