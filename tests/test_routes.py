@@ -55,6 +55,33 @@ def test_bulk_actions(client, world):
     assert len(d["deleted"]) == 3
 
 
+def test_bulk_account_change_is_checked_and_can_be_undone(client, world):
+    spend = [ok(client.post("/api/transactions", json=txn(world)), 201)["id"] for _ in range(2)]
+    pay = ok(client.post("/api/transactions", json=txn(world, "in")), 201)["id"]
+    move = ok(client.post("/api/transactions", json=txn(world, "move")), 201)["id"]
+    bulk = lambda **b: client.post("/api/transactions/bulk", json=b)
+    r = ok(bulk(ids=spend, action="account", side="from", account_id=world["chk"]))
+    assert r["count"] == 2 and {x["from_id"] for x in r["before"]} == {world["card"]}
+    assert ok(client.get(f"/api/transactions?account={world['chk']}"))["total"] == 4  # with the paycheck and transfer
+    # Money in has no From, and a transfer can't go to the account it came from: refused whole, nothing moves.
+    assert bulk(ids=[*spend, pay], action="account", side="from", account_id=world["sav"]).status_code == 422
+    assert bulk(ids=[move], action="account", side="to", account_id=world["chk"]).status_code == 422
+    assert ok(client.get(f"/api/transactions?account={world['sav']}"))["total"] == 1
+    assert bulk(ids=spend, action="account", side="sideways", account_id=world["chk"]).status_code == 422
+    assert bulk(ids=spend, action="account", side="from", account_id=99999).status_code == 422
+    ok(bulk(ids=[pay], action="account", side="to", account_id=world["sav"]))
+    # Undo puts the accounts back.
+    ok(bulk(action="revert", rows=r["before"]))
+    rows = ok(client.get("/api/transactions", params={"account": world["card"]}))["items"]
+    assert sorted(x["id"] for x in rows) == sorted(spend)
+    # A recategorize's Undo leaves accounts alone, even ones changed after it.
+    rc = ok(bulk(ids=spend[:1], action="recategorize", category_id=world["gas"]))
+    assert "from_id" not in rc["before"][0]
+    ok(bulk(ids=spend[:1], action="account", side="from", account_id=world["chk"]))
+    ok(bulk(action="revert", rows=rc["before"]))
+    assert ok(client.get(f"/api/transactions/{spend[0]}"))["from_id"] == world["chk"]
+
+
 def test_filters(client, world):
     ok(client.post("/api/transactions", json=txn(world, date="2026-08-31", amount=5, what="Early")), 201)
     ok(client.post("/api/transactions", json=txn(world, date="2026-09-01", amount=50, what="Late", note="receipt")), 201)

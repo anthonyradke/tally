@@ -259,14 +259,16 @@ async def restore(request: Request, con: Con):
 
 @router.post("/transactions/bulk")
 async def bulk(request: Request, con: Con):
-    """Body: {"ids": [...], "action": "delete" | "recategorize" | "tag", "category_id"?: int, "tags"?: [..]}, or
-    {"action": "revert", "rows": [{"id", "category_id", "tags"}]} to undo a recategorize or tag.
-    Delete returns the removed rows for Undo; recategorize and tag return `before` (each row's category and tags as
-    they were) for revert. Recategorize checks every row against the new category's From/To rules first: moving
-    spending into an income category would count it as income. `count` is the rows that exist."""
+    """Body: {"ids": [...], "action": "delete" | "recategorize" | "tag" | "account", "category_id"?: int,
+    "tags"?: [..], "account_id"?: int, "side"?: "from" | "to"}, or {"action": "revert", "rows": before} to undo a
+    recategorize, tag or account change. Delete returns the removed rows for Undo; the others return `before` (each
+    row's category and tags as they were, and its accounts after an account change) for revert. Recategorize and
+    account changes check every row against its category's From/To rules first: moving spending into an income
+    category would count it as income. `count` is the rows that exist."""
+    from . import bulk as bulk_edit
     b = await body(request)
     if b.get("action") == "revert":
-        return _revert(con, b.get("rows"))
+        return bulk_edit.revert(con, b.get("rows"))
     ids = id_list(b.get("ids", []))
     if not ids:
         raise HTTPException(422, {"errors": ["No rows selected."]})
@@ -274,11 +276,16 @@ async def bulk(request: Request, con: Con):
     if b.get("action") == "delete":
         gone = _remove(con, ids)
         return {"ok": True, "count": len(gone), "deleted": gone}
-    before = [{"id": r["id"], "category_id": r["category_id"], "tags": (r["tags"] or "").split()}
-              for r in con.execute(f"SELECT id, category_id, tags FROM transactions WHERE id IN ({marks})", ids)]
+    accounts = b.get("action") == "account"  # only then does `before` carry them: Undo leaves the rest alone
+    before = [{"id": r["id"], "category_id": r["category_id"], "tags": (r["tags"] or "").split(),
+               **({"from_id": r["from_account_id"], "to_id": r["to_account_id"]} if accounts else {})}
+              for r in con.execute("SELECT id, category_id, tags, from_account_id, to_account_id FROM transactions "
+                                   f"WHERE id IN ({marks})", ids)]
     if not before:
         raise HTTPException(404, {"errors": ["Those entries are gone. Pull to refresh."]})
-    if b.get("action") == "recategorize":
+    if accounts:
+        bulk_edit.move(con, ids, b)
+    elif b.get("action") == "recategorize":
         st = service.load(con)
         c = st.cat.get(opt_id(b.get("category_id"), "Category") or 0)
         if not c:
@@ -299,22 +306,3 @@ async def bulk(request: Request, con: Con):
         raise HTTPException(422, {"errors": ["Unknown action."]})
     con.commit()
     return {"ok": True, "count": len(before), "before": before}
-
-
-def _revert(con, raw) -> dict:
-    """Undo for a bulk recategorize or tag: puts each row's category and tags back as `before` had them."""
-    if not isinstance(raw, list) or not raw or not all(isinstance(x, dict) for x in raw):
-        raise HTTPException(422, {"errors": ["rows must be a list."]})
-    st = service.load(con)
-    txns = {t.id: t for t in st.txns}
-    for x in raw:
-        t = txns.get(whole(x.get("id"), "id"))
-        c = st.cat.get(whole(x.get("category_id"), "Category"))
-        if t is None or c is None:
-            continue  # deleted since: nothing to put back
-        if validate(replace(t, category_id=c.id), c.type, st.acct):
-            continue  # edited since so that it no longer fits: leave it
-        con.execute("UPDATE transactions SET category_id=?, tags=? WHERE id=?",
-                    (c.id, " ".join(sorted(tag_set(x.get("tags")))), t.id))
-    con.commit()
-    return {"ok": True, "count": len(raw)}
