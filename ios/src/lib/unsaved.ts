@@ -18,10 +18,14 @@ let kept: Unsaved | null = null
 export const peekUnsaved = (): Unsaved | null => kept
 export const forgetUnsaved = () => { kept = null }
 
-/** What the editor knows when it closes: whether it's leaving on purpose (saved, saving or deleted: nothing to
- *  offer back), whether it had loaded, the snap it was filled with, the row it came from, and the route params that
- *  reopen it (id, mode, fav, from). */
-export interface Closing { leaving: boolean; loaded: boolean; seed: string | null; from: string | null; params: Record<string, string | undefined> }
+/** What the editor knows when it closes: whether it's leaving on purpose (saved or deleted: nothing to offer back),
+ *  a save still under way (resolves true once it's in: the draft is offered back only if it failed), whether it had
+ *  loaded, the snap it was filled with, the row it came from, and the route params that reopen it (id, mode, fav,
+ *  from). */
+export interface Closing {
+  leaving: boolean; pending: Promise<boolean> | null; loaded: boolean; seed: string | null; from: string | null
+  params: Record<string, string | undefined>
+}
 
 /** For the editor (not when it's embedded in the composer). Both ways of closing just unmount the screen, so this
  *  watches for that. It keeps the last draft the screen owned (a sheet over it may own the store by then) and checks
@@ -43,10 +47,15 @@ export function useUnsaved(on: boolean, owner: string, read: () => Closing) {
       if (now.leaving || !now.loaded || !last || snap(last) === now.seed) return
       const stash: Unsaved = { d: last, seed: now.seed, from: now.from, dup: now.params.mode === 'duplicate' }
       const p = Object.fromEntries(Object.entries({ ...now.params, restore: '1' }).filter(([, v]) => v)) as Record<string, string>
-      setTimeout(() => {
-        if (alive.current) return
+      const offer = () => {
         kept = stash
         toast({ text: 'Changes not saved', action: { label: 'Restore', run: () => { router.push({ pathname: '/entry', params: p }) } } })
+      }
+      // Swiped down while it saves: nothing to say unless the save then fails, which the closed screen can't show.
+      setTimeout(() => {
+        if (alive.current) return
+        if (now.pending) now.pending.then((saved) => { if (!saved) offer() })
+        else offer()
       }, 0)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

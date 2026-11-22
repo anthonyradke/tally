@@ -2,9 +2,12 @@
 // whether a draft has changed.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { repeatFields } from '@/lib/actions'
+import { todayISO } from '@/lib/dates'
 import { blank } from '@/lib/draft'
-import { addTag, balanceFirst, nextMonthly, parseTags, tagSuggestions } from '@/lib/txn'
+import { addTag, balanceFirst, nextMonthly, parseTags, putLine, tagSuggestions } from '@/lib/txn'
 import { snap } from '@/lib/unsaved'
+import { row } from './fixtures.ts'
 
 test('the first split line takes what the others leave', () => {
   const lines = [{ key: 'a', category_id: 1, amount: '120.00' }, { key: 'b', category_id: null, amount: '40.00' }]
@@ -16,14 +19,36 @@ test('the first split line takes what the others leave', () => {
   assert.deepEqual(balanceFirst([lines[0]], 500), [lines[0]])
 })
 
+test('line 1 stops balancing once typed into, and the draft remembers it', () => {
+  const start = [{ key: 'a', category_id: 1, amount: '120.00' }, { key: 'b', category_id: null, amount: '' }]
+  let lines = putLine(start, 'a', '50.00', 12000)
+  assert.equal(lines[0].typed, true)
+  lines = putLine(lines, 'b', '40.00', 12000)
+  assert.deepEqual(lines.map((l) => l.amount), ['50.00', '40.00'])
+  // A restored draft is a copy of the store's: the flag travels with it, so line 1 keeps the $50 typed into it.
+  const restored = JSON.parse(JSON.stringify(lines))
+  assert.deepEqual(putLine(restored, 'b', '45.00', 12000).map((l) => l.amount), ['50.00', '45.00'])
+  // Untouched, it still takes what's left.
+  assert.deepEqual(putLine(start, 'b', '40.00', 12000).map((l) => l.amount), ['80', '40.00'])
+})
+
 test('a repeat starts on the same day of the month after today', () => {
   assert.equal(nextMonthly('2026-10-05', '2026-11-22'), '2026-12-05')
   assert.equal(nextMonthly('2026-11-22', '2026-11-22'), '2026-12-22')
   assert.equal(nextMonthly('2026-11-25', '2026-11-22'), '2026-12-25')
-  // The 31st lands on a short month's last day, and comes back to the 31st after it.
+  // The 31st lands on a short month's last day (the template's anchor_day brings it back to the 31st after).
   assert.equal(nextMonthly('2027-01-31', '2027-02-01'), '2027-02-28')
   assert.equal(nextMonthly('2027-01-31', '2027-02-28'), '2027-03-31')
   assert.equal(nextMonthly('2026-12-15', '2026-12-20'), '2027-01-15')
+})
+
+test('repeating an entry from the 31st keeps aiming for the 31st', () => {
+  const r = repeatFields(row('2099-01-31', 4000, { what: 'Gym' }), '2099-02-01', 'Gym')
+  assert.equal(r.next_date, '2099-02-28')
+  assert.equal(r.anchor_day, 31)
+  assert.equal(r.amount, '40')
+  // A list's day can be yesterday's: the template still starts after the phone's today.
+  assert.ok(repeatFields(row('2000-01-05', 100), '2000-01-06', 'X').next_date > todayISO())
 })
 
 test('tags parse loosely and suggestions follow the tag being typed', () => {

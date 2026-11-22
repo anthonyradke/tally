@@ -7,6 +7,7 @@ import { commitments } from '@/lib/commitments'
 import { monthOf } from '@/lib/dates'
 import { formatCents } from '@/lib/money'
 import { useTally } from '@/lib/tally'
+import { FREQ_LABEL } from '@/lib/txn'
 import { font as ramp, space, useTheme } from '@/theme'
 import { Mark } from './Mark'
 import { Money } from './Money'
@@ -14,7 +15,6 @@ import { Hairline, Panel, Section } from './Panel'
 import { RollingMoney } from './Rolling'
 import { Txt } from './Txt'
 
-const FREQ = { weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly', yearly: 'Yearly' }
 
 export function Commitments({ b }: { b: Bootstrap }) {
   const { c, tint } = useTheme()
@@ -52,7 +52,7 @@ export function Commitments({ b }: { b: Bootstrap }) {
                   {mark ? <Mark kind="spec" spec={mark} size={32} /> : <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={32} />}
                   <View style={{ flex: 1 }}>
                     <Txt variant="row" numberOfLines={1}>{x.r.label}</Txt>
-                    <Txt variant="foot" tone="label2" num>{FREQ[x.r.freq]}{x.r.freq !== 'monthly' ? `, ${formatCents(x.r.amount)}` : ''}</Txt>
+                    <Txt variant="foot" tone="label2" num>{FREQ_LABEL[x.r.freq]}{x.r.freq !== 'monthly' ? `, ${formatCents(x.r.amount)}` : ''}</Txt>
                   </View>
                   <Money cents={x.monthly} variant="callout" />
                 </View>

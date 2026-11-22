@@ -14,7 +14,7 @@ import { CheckDraw } from '@/components/CheckDraw'
 import { Chip } from '@/components/Chip'
 import { DateStrip } from '@/components/DateStrip'
 import { Icon } from '@/components/Icon'
-import { Keypad } from '@/components/Keypad'
+import { Keypad, typeOver } from '@/components/Keypad'
 import { Receipt } from '@/components/Receipt'
 import { EmptyMark, SplitGroup } from '@/components/SplitGroup'
 import { Mark } from '@/components/Mark'
@@ -32,7 +32,7 @@ import { close, useBusy, useCloseHere, useLatest } from '@/lib/nav'
 import { useDraftOwner } from '@/lib/draftOwner'
 import { deleteTxns, quickFromEntry, repeatEntry } from '@/lib/actions'
 import { cachedTxn, invalidateAll, useTransactions } from '@/lib/data'
-import { blank, fromCents, fromTxn, press, toCents, toInputs, useDraft, type Draft } from '@/lib/draft'
+import { blank, fromCents, fromTxn, pressOver, toCents, toInputs, useDraft, type Draft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { markFresh, useQuickFloat } from '@/lib/motion'
 import { QUEUED, sendOrQueue } from '@/lib/outbox'
@@ -41,7 +41,7 @@ import { play } from '@/lib/sound'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
-import { balanceFirst, FREQ_LABEL } from '@/lib/txn'
+import { balanceFirst, FREQ_LABEL, putLine } from '@/lib/txn'
 import { forgetUnsaved, peekUnsaved, snap, useUnsaved } from '@/lib/unsaved'
 import { radius, space, useTheme } from '@/theme'
 
@@ -64,9 +64,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
   const [typing, setTyping] = useState(false)
   const [pad, setPad] = useState(!id)
   // The amount the keypad opened on is selected, like text: the first digit types over it instead of onto its end.
-  const [fresh, setFresh] = useState(false)
-  // A split's first line takes what the other lines leave of the total, until it's typed into itself.
-  const [autoFirst, setAutoFirst] = useState(true)
+  const [over, setOver] = useState(false)
   const [quick, setQuick] = useState<number | null>(fav ? Number(fav) : null) // the quick action filling the draft
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
@@ -132,9 +130,11 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     start({ ...blank(today), from_id: from && t.acct.has(Number(from)) ? Number(from) : null })
   }, [t.b, one.data]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const leaving = useRef(false) // saved, saving or deleted: closing loses nothing
+  const leaving = useRef(false) // saved, queued or deleted: closing loses nothing
+  const pending = useRef<Promise<boolean> | null>(null) // a save under way: closing offers the draft back if it fails
   const reopen = useLatest({ id, mode: dup ? 'duplicate' : undefined, fav, from })
-  useUnsaved(!embedded, owner, () => ({ leaving: leaving.current, loaded: loaded.current, seed: seededDraft.current, from: seededFrom.current, params: reopen.current }))
+  useUnsaved(!embedded, owner, () => ({ leaving: leaving.current, pending: pending.current, loaded: loaded.current, seed: seededDraft.current,
+    from: seededFrom.current, params: reopen.current }))
 
   // The form fills on its first frame from a copy already in a list, which can be old (a bulk recategorize changed
   // it since). When the fresh copy arrives and differs, and nothing has been typed yet, the form takes it: saving
@@ -188,27 +188,20 @@ export function Entry({ embedded }: { embedded?: boolean }) {
   }
   // Puts an amount into the total or a split line. While line 1 hasn't been typed into, it takes what's left.
   const put = (amount: string) => {
-    const first = d.split?.[0]?.key
-    if (!d.split || d.target === 'main') {
-      set({ amount, ...(d.split && autoFirst ? { split: balanceFirst(d.split, toCents(amount)) } : {}) })
-      return
-    }
-    if (d.target === first) setAutoFirst(false)
-    const lines = d.split.map((l) => (l.key === d.target ? { ...l, amount } : l))
-    set({ split: autoFirst && d.target !== first ? balanceFirst(lines, cents) : lines })
+    if (!d.split || d.target === 'main') set({ amount, ...(d.split ? { split: balanceFirst(d.split, toCents(amount)) } : {}) })
+    else set({ split: putLine(d.split, d.target, amount, cents) })
   }
   // A digit that can't go in (the amount is at its cap) shakes the figure instead of silently doing nothing.
   const onKey = (k: string) => {
     const line = d.target === 'main' ? null : d.split?.find((x) => x.key === d.target)
     const cur = line ? line.amount : d.amount
-    const base = fresh && /^\d+$/.test(k) ? '' : cur
-    const next = press(base, k)
-    setFresh(false)
-    if (next === base && base && k !== 'del') { refuse(); return }
+    const next = pressOver(cur, k, over)
+    if (over) setOver(false)
+    else if (next === cur && cur && k !== 'del') { refuse(); return }
     put(next)
   }
   const refuse = () => { shake(); play('error', 0.6); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
-  const onClear = () => { setFresh(false); put('') }
+  const onClear = () => { setOver(false); put('') }
 
   const splitSum = d.split?.reduce((n, l) => n + toCents(l.amount), 0) ?? 0
   const left = cents - splitSum
@@ -227,7 +220,8 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     setErrors(errs)
     if (errs.length) { if (!cents) shake(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}); return }
     setSaving(true)
-    leaving.current = true // swiped down while it saves: nothing is lost
+    let settle = (_saved: boolean) => {}
+    pending.current = new Promise<boolean>((r) => { settle = r })
     try {
       let saved: Txn[] = []
       if (editing) {
@@ -236,6 +230,8 @@ export function Entry({ embedded }: { embedded?: boolean }) {
       } else {
         const r = await sendOrQueue(lines, d.what || (cat?.name ?? 'Entry'))
         if (!r) {
+          leaving.current = true
+          settle(true) // queued: it'll be sent, nothing to offer back
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {})
           toast({ text: QUEUED })
           close()
@@ -243,6 +239,8 @@ export function Entry({ embedded }: { embedded?: boolean }) {
         }
         saved = r
       }
+      leaving.current = true
+      settle(true)
       // A failed upload is said in the last toast: one of its own was replaced by "Saved" before it could be read.
       const lost = d.photo && saved[0] ? await api.uploadReceipt(saved[0].id, d.photo).then(() => false, () => true) : false
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
@@ -256,11 +254,12 @@ export function Entry({ embedded }: { embedded?: boolean }) {
       toast(lost ? { text: `${editing ? 'Saved' : `Added ${formatCents(cents)}`}, but the receipt photo didn't upload. Try adding it again.`, tone: 'error' }
         : { text: editing ? 'Saved' : `Added ${formatCents(cents)}${cat && !d.split ? ` to ${cat.name}` : ''}` })
     } catch (e) {
-      leaving.current = false
+      settle(false) // closed meanwhile: the toast offers the draft back
       setErrors(e instanceof ApiError ? e.errors : ['Tally is unreachable. Check Tailscale and try again.'])
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
       play('error')
     } finally {
+      pending.current = null
       setSaving(false)
     }
   }
@@ -275,29 +274,31 @@ export function Entry({ embedded }: { embedded?: boolean }) {
   // It stays mounted (a layout animation here could be cut short and leave it stuck halfway off the screen).
   const reduce = useReducedMotion()
   const showPad = pad && !typing
+  const mainOver = typeOver(c, over && showPad && mainActive, display)
   const padT = useSharedValue(showPad ? 1 : 0)
   const [padH, setPadH] = useState(420)
   useEffect(() => {
     padT.set(reduce ? (showPad ? 1 : 0) : withSpring(showPad ? 1 : 0, { damping: 30, stiffness: 320, mass: 0.9 }))
   }, [showPad]) // eslint-disable-line react-hooks/exhaustive-deps
   const padStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - padT.get()) * (padH + 30) }] }))
+  // Read from the store, not this render: "Add a line" writes its line and opens the keypad on it in one go.
   const openPad = (target: string) => {
     if (!pad) Haptics.selectionAsync().catch(() => {})
-    setFresh(!!toCents((target === 'main' ? d.amount : d.split?.find((l) => l.key === target)?.amount) ?? ''))
+    const now = useDraft.getState().d
+    setOver(!!toCents((target === 'main' ? now.amount : now.split?.find((l) => l.key === target)?.amount) ?? ''))
     set({ target })
     setPad(true)
   }
   // Starting a split puts the keypad on line 2, which line 1 makes room for as it's typed.
   const splitNow = (on: boolean) => {
-    setAutoFirst(true)
-    setFresh(false)
+    setOver(false)
     setPad(on)
   }
   // Done after a split line's amount: a line with no category yet goes straight on to picking one.
   const closePad = () => {
     Haptics.selectionAsync().catch(() => {})
     setPad(false)
-    setFresh(false)
+    setOver(false)
     const line = d.split?.find((l) => l.key === d.target)
     if (line && !line.category_id && toCents(line.amount)) router.push({ pathname: '/pick', params: { kind: 'category', line: line.key } })
   }
@@ -305,8 +306,10 @@ export function Entry({ embedded }: { embedded?: boolean }) {
   // Kept from one render to the next (this screen renders on every key): a new one rebuilds the header's buttons, and a
   // tap in between was lost.
   const live = useLatest({ row: one.data, today: t.today })
-  // A template is one line: a split line, or an entry that already repeats, can't start one.
-  const canRepeat = !!one.data && !one.data.recurring_id && !one.data.split_group
+  // A template or a quick action is one line: a split line can't start one, nor can an entry that already repeats
+  // start a template. The same rule as the row menu.
+  const canQuick = !!one.data && !one.data.split_group
+  const canRepeat = canQuick && !one.data!.recurring_id
   const template = editing && one.data?.recurring_id ? t.b?.recurring.find((r) => r.id === one.data!.recurring_id) : undefined
   const header = useMemo(() => (
     <>
@@ -330,11 +333,12 @@ export function Entry({ embedded }: { embedded?: boolean }) {
                 const row = live.current.row
                 if (row) repeatEntry(row, live.current.today, row.what || t.catOf(row).name)
               }}>Repeat…</Stack.Toolbar.MenuAction>,
+            ] : []), ...(canQuick ? [
+              <Stack.Toolbar.MenuAction key="quick" icon="bolt" onPress={() => {
+                const row = live.current.row
+                if (row) quickFromEntry(row, row.what || t.catOf(row).name)
+              }}>Make quick action</Stack.Toolbar.MenuAction>,
             ] : [])]}
-            <Stack.Toolbar.MenuAction icon="bolt" onPress={() => {
-              const row = live.current.row
-              if (row) quickFromEntry(row, row.what || t.catOf(row).name)
-            }}>Make quick action</Stack.Toolbar.MenuAction>
             <Stack.Toolbar.MenuAction icon="trash" destructive onPress={() => {
               const row = live.current.row
               leaving.current = true
@@ -345,7 +349,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
         </Stack.Toolbar>
       )}
     </>
-  ), [embedded, editing, canRepeat]) // eslint-disable-line react-hooks/exhaustive-deps
+  ), [embedded, editing, canRepeat, canQuick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -378,10 +382,10 @@ export function Entry({ embedded }: { embedded?: boolean }) {
             </ScrollView>
           )}
 
-          <Tap feedback="opacity" onPress={() => openPad('main')} accessibilityLabel={`Amount ${display}`}
+          <Tap feedback="opacity" onPress={() => openPad('main')} accessibilityLabel={`Amount ${mainOver.label ?? display}`}
             style={{ alignItems: 'center', paddingVertical: space.s }}>
             <Animated.View style={[shakeStyle, { borderRadius: radius.input, borderCurve: 'continuous', paddingHorizontal: space.s,
-              backgroundColor: fresh && showPad && mainActive ? c.fill : 'transparent' }]}>
+              backgroundColor: mainOver.fill }]}>
               <RollingText text={display} style={{ fontSize: display.length > 11 ? 46 : display.length > 9 ? 52 : 60, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
             </Animated.View>
             {d.split && (
@@ -426,7 +430,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
             </Group>
           )}
 
-          {d.kind === 'Spending' && <SplitGroup canSplit={!editing} left={left} onAmount={openPad} onSplit={splitNow} />}
+          {d.kind === 'Spending' && <SplitGroup canSplit={!editing} left={left} over={over && showPad} onAmount={openPad} onSplit={splitNow} />}
 
           <Group>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>

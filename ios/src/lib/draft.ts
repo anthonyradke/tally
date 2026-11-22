@@ -5,7 +5,9 @@ import type { CatType, Txn, TxnInput } from './api'
 import { todayISO } from './dates'
 import { SHAPES } from './shapes'
 
-export interface Line { key: string; category_id: number | null; amount: string }
+/** `typed`: the amount was typed into this line itself. Line 1 takes what the others leave until then (`balanceFirst`);
+ *  it's part of the draft so a restored or handed-over draft remembers it. */
+export interface Line { key: string; category_id: number | null; amount: string; typed?: boolean }
 export type Target = 'main' | string // 'main' or a split line key
 
 export interface Draft {

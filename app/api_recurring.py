@@ -59,9 +59,27 @@ def _counted(con, f: dict) -> dict:
     return f
 
 
+def _anchor(b: dict, f: dict) -> int:
+    """The day a new template aims for. `anchor_day` lets one started on a short month's last day keep aiming for a
+    later day: an entry from Jan 31 repeats from Feb 28 and should come back to Mar 31, not stay on the 28th. It's
+    only taken when the next date is that day, or the last day of a month too short for it."""
+    nxt = date.fromisoformat(f["next_date"])
+    if b.get("anchor_day") in (None, ""):
+        return nxt.day
+    want = whole(b["anchor_day"], "Anchor day")
+    if not 1 <= want <= 31:
+        bad("The anchor day must be between 1 and 31.")
+    month_end = (nxt + timedelta(days=1)).day == 1
+    fits = want == nxt.day or (want > nxt.day and month_end)
+    return want if fits and f["freq"] in ("monthly", "yearly") else nxt.day
+
+
 @router.post("/recurring", status_code=201)
 async def create_recurring(request: Request, con: Con):
-    id = _upsert(con, "recurring", _counted(con, _fields(con, await body(request))), None)
+    b = await body(request)
+    f = _fields(con, b)
+    f["anchor_day"] = _anchor(b, f)
+    id = _upsert(con, "recurring", _counted(con, f), None)
     con.commit()
     return _get(con, "recurring", id)
 

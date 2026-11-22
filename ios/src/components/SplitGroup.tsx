@@ -8,20 +8,24 @@ import { formatCents } from '@/lib/money'
 import { useTally } from '@/lib/tally'
 import { radius, space, useTheme } from '@/theme'
 import { Mark } from './Mark'
+import { typeOver } from './Keypad'
 import { Group, Row } from './Row'
 import { Tap } from './Tap'
 import { Txt } from './Txt'
 
-/** `left`: cents of the total not in a line yet. `onAmount` opens the keypad on a line; `onSplit` runs once the split
- *  has started or stopped. */
-export function SplitGroup({ canSplit, left, onAmount, onSplit }: { canSplit: boolean; left: number; onAmount: (key: string) => void; onSplit: (on: boolean) => void }) {
+/** `left`: cents of the total not in a line yet. `over`: the keypad's line shows its amount as selected (the first
+ *  digit types over it). `onAmount` opens the keypad on a line, reading the draft from the store; `onSplit` runs once
+ *  the split has started or stopped. */
+export function SplitGroup({ canSplit, left, over, onAmount, onSplit }: {
+  canSplit: boolean; left: number; over: boolean; onAmount: (key: string) => void; onSplit: (on: boolean) => void
+}) {
   const { c, tint } = useTheme()
   const t = useTally()
   const { d, set } = useDraft()
-  // A new line opens the keypad on itself; Done then goes on to its category.
+  // A new line opens the keypad on itself, its prefilled amount selected; Done then goes on to its category.
   const addLine = () => {
     const key = Math.random().toString(36).slice(2, 7)
-    set({ split: [...d.split!, { key, category_id: null, amount: left > 0 ? fromCents(left) : '' }], target: key })
+    set({ split: [...d.split!, { key, category_id: null, amount: left > 0 ? fromCents(left) : '' }] })
     onAmount(key)
   }
   return (
@@ -38,14 +42,19 @@ export function SplitGroup({ canSplit, left, onAmount, onSplit }: { canSplit: bo
         const lc = l.category_id ? t.cat.get(l.category_id) : undefined
         const lv = lc ? categoryVisual(lc) : null
         const active = d.target === l.key
+        const figure = formatCents(toCents(l.amount))
+        // Selected (typing replaces it): the composer's light wash. Being typed into: solid.
+        const sel = typeOver(c, active && over, figure)
+        const solid = active && !sel.label
         return (
           <Row key={l.key} label={lc?.name ?? `Line ${i + 1}`}
             leading={lv ? <Mark kind="glyph" sf={lv.sf} md={lv.md} tint={tint(lv.tint)} size={30} /> : <EmptyMark />}
             onPress={() => router.push({ pathname: '/pick', params: { kind: 'category', line: l.key } })}
             trailing={
-              <Tap feedback="opacity" onPress={() => onAmount(l.key)} hitSlop={8} accessibilityLabel={`Amount for line ${i + 1}, ${formatCents(toCents(l.amount))}`}
-                style={{ minWidth: 88, height: 34, borderRadius: radius.pill, paddingHorizontal: space.m, alignItems: 'flex-end', justifyContent: 'center', backgroundColor: active ? c.ink : c.fill }}>
-                <Txt variant="callout" num tone={active ? 'onInk' : 'label'} style={{ fontWeight: '600' }}>{formatCents(toCents(l.amount))}</Txt>
+              <Tap feedback="opacity" onPress={() => onAmount(l.key)} hitSlop={8} accessibilityLabel={`Amount for line ${i + 1}, ${sel.label ?? figure}`}
+                style={{ minWidth: 88, height: 34, borderRadius: radius.pill, paddingHorizontal: space.m, alignItems: 'flex-end', justifyContent: 'center',
+                  backgroundColor: sel.label ? sel.fill : solid ? c.ink : c.fill }}>
+                <Txt variant="callout" num tone={solid ? 'onInk' : 'label'} style={{ fontWeight: '600' }}>{figure}</Txt>
               </Tap>
             } chevron={false} />
         )

@@ -24,6 +24,7 @@ import { useDraft } from '@/lib/draft'
 import { monthsNow } from '@/lib/months'
 import { SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
+import { parseTags } from '@/lib/txn'
 import { radius, space, useTheme } from '@/theme'
 
 const KIND_ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
@@ -214,7 +215,7 @@ export function Extras({ onSplit }: { onSplit: () => void }) {
         <Icon sf="number" md="tag" size={18} color={c.label2} />
         <Field value={tagText ?? d.tags.join(' ')} placeholder="Tags, separated by spaces" placeholderTextColor={c.label3}
           autoCapitalize="none" autoCorrect={false} onBlur={() => setTagText(null)}
-          onChangeText={(v) => { setTagText(v); set({ tags: v.split(/[\s,]+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean) }) }}
+          onChangeText={(v) => { setTagText(v); set({ tags: parseTags(v) }) }}
           style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
       </View>
       <Receipt />

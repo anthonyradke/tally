@@ -22,6 +22,7 @@ import { monthsNow } from '@/lib/months'
 import { fits, SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
+import { parseTags } from '@/lib/txn'
 import { space, useTheme } from '@/theme'
 
 const TYPE_ORDER: CatType[] = ['Spending', 'Money in', 'Transfer', 'Saving', 'Loan']
@@ -211,7 +212,7 @@ function BulkTag({ ids }: { ids: string }) {
   const closeHere = useCloseHere()
   const apply = () => busy(async () => {
     // Commas or spaces between tags, like the placeholder shows; a comma used to stay on the tag ("trip,").
-    const tags = tag.split(/[\s,]+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean)
+    const tags = parseTags(tag)
     if (!tags.length) return
     try {
       const r = await api.bulk({ ids: ids.split(',').map(Number), action: 'tag', tags })

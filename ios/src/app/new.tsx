@@ -13,7 +13,7 @@ import * as Haptics from 'expo-haptics'
 import { CheckDraw } from '@/components/CheckDraw'
 import { QuickChips, Review } from '@/components/ComposerReview'
 import { Accounts, Categories, DatePill, Dot, OpKey, What } from '@/components/ComposerSteps'
-import { Keypad } from '@/components/Keypad'
+import { Keypad, typeOver } from '@/components/Keypad'
 import { EASE } from '@/components/ease'
 import { Pages } from '@/components/Pages'
 import { Segmented } from '@/components/native/Segmented'
@@ -313,8 +313,8 @@ function Composer() {
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xs }}>
                   <DatePill />
                   {/* An amount already there when the page opens shows as selected: the first digit replaces it. */}
-                  <Animated.View style={[shakeStyle, { borderRadius: radius.input, borderCurve: 'continuous', paddingHorizontal: space.s, backgroundColor: over ? `${c.ink}2E` : 'transparent' }]}
-                    accessibilityLabel={over ? `${figure.text}, selected. Typing replaces it` : undefined}>
+                  <Animated.View style={[shakeStyle, { borderRadius: radius.input, borderCurve: 'continuous', paddingHorizontal: space.s, backgroundColor: typeOver(c, over, figure.text).fill }]}
+                    accessibilityLabel={typeOver(c, over, figure.text).label}>
                     <RollingText text={calc ? formatCents(total(calc, d.amount)) : figure.text}
                       style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: !d.amount && !calc ? c.label3 : !calc && figure.pos ? c.pos : c.label }} />
                   </Animated.View>
