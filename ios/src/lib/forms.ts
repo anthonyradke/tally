@@ -1,8 +1,8 @@
 // Starting values for the Settings editor (edit.tsx): each form's fields as the text inputs show them.
-import type { AdminAccount, AdminData, AdminRecurring, Favorite, Freq, Recurring } from './api'
+import type { AdminAccount, AdminData, AdminRecurring, CatType, Favorite, Freq, Kind, Recurring } from './api'
 import { fromCents } from './draft'
 import { parseDollars } from './money'
-import { fromISO, monthOf } from './dates'
+import { addDays, fromISO, lastOfMonth, monthOf } from './dates'
 
 export type Form = Record<string, string | number | boolean | null>
 
@@ -52,6 +52,23 @@ export function initial(kind: string, id: number | undefined, a: AdminData, toda
 /** A category's regular budget and its one-off for a month ("YYYY-MM-01"), in cents; null when not set. */
 export function budgetIn(a: AdminData, id: number, month: string): { regular: number | null; over: number | null } {
   return { regular: a.categories.find((x) => x.id === id)?.budget ?? null, over: a.budgets.find((r) => r.category_id === id && r.month === month)?.amount ?? null }
+}
+
+/** Which month a budget edit is for: every month, this one, or next. */
+export type BudgetMode = 'regular' | 'this' | 'next'
+
+/** This month and next as "YYYY-MM-01", the months a one-off budget can be set for. */
+export const budgetMonths = (today: string) => ({ this: monthOf(today), next: monthOf(addDays(lastOfMonth(today), 1)) })
+
+/** The mode a budget form is in: `thisMonth` (as `initial` opens it) or `nextMonth` (set by the editor's segment). */
+export const budgetMode = (f: Form): BudgetMode => (f.nextMonth ? 'next' : f.thisMonth ? 'this' : 'regular')
+
+/** A budget editor's field for a mode: the regular amount, or that month's one-off (empty when it has none, so the
+ *  regular amount shows as the placeholder). */
+export function budgetText(a: AdminData, id: number, mode: BudgetMode, today: string): string {
+  const { regular, over } = budgetIn(a, id, mode === 'regular' ? '' : budgetMonths(today)[mode])
+  const v = mode === 'regular' ? regular : over
+  return v != null ? dollarsText(v) : ''
 }
 
 /** Dollar fields keyed by account id (month-end balances and interest) as cents, leaving out empty ones. A field
@@ -127,11 +144,40 @@ export function movable(a: AdminData, id: number): { quick: Favorite[]; recurrin
   return { ...u, recurring: [...u.recurring, ...a.recurring.filter((r) => !r.active && uses(r, id))] }
 }
 
+/** The kinds of account that make sense on each side of an entry of a type. The server takes any account, so a
+ *  hidden card's quick actions could be moved onto a student loan or a Roth IRA with one wrong tap. */
+const SIDE_KINDS: Record<CatType, { from: Kind[]; to: Kind[] }> = {
+  'Spending': { from: ['cash', 'card'], to: [] },
+  'Money in': { from: [], to: ['cash', 'card'] },
+  'Transfer': { from: ['cash', 'card', 'investment'], to: ['cash', 'card', 'investment'] },
+  'Saving': { from: ['cash'], to: ['cash', 'investment'] },
+  'Loan': { from: ['cash'], to: ['loan'] },
+}
+
+type Item = Sides & { category_id: number }
+
 /** Accounts those users can move to: shown ones that none of them already has on its other side (From and To the
- *  same account is refused, which left a hide half done). */
-export function moveTargets(a: AdminData, id: number, u: { quick: Sides[]; recurring: Sides[] }): AdminAccount[] {
-  const other = new Set([...u.quick, ...u.recurring].map((x) => (x.from_account_id === id ? x.to_account_id : x.from_account_id)))
-  return a.accounts.filter((x) => x.active && x.id !== id && !other.has(x.id))
+ *  same account is refused, which left a hide half done), and that suit the side each one takes. Accounts of the
+ *  hidden one's kind come first and always suit (a card's bills move to another card). */
+export function moveTargets(a: AdminData, id: number, u: { quick: Item[]; recurring: Item[] }): AdminAccount[] {
+  const items = [...u.quick, ...u.recurring]
+  const other = new Set(items.map((x) => (x.from_account_id === id ? x.to_account_id : x.from_account_id)))
+  const kind = a.accounts.find((x) => x.id === id)?.kind
+  const suits = (k: Kind) => items.every((x) => {
+    const type = a.categories.find((c) => c.id === x.category_id)?.type
+    if (!type) return true // unknown here; the server still checks From/To
+    return (x.from_account_id !== id || SIDE_KINDS[type].from.includes(k)) && (x.to_account_id !== id || SIDE_KINDS[type].to.includes(k))
+  })
+  const list = a.accounts.filter((x) => x.active && x.id !== id && !other.has(x.id) && (x.kind === kind || suits(x.kind)))
+  return [...list.filter((x) => x.kind === kind), ...list.filter((x) => x.kind !== kind)]
+}
+
+/** The account to pick in place of a hidden one: the only shown account of its kind (among `among` when given), or
+ *  null when there is none or more than one to choose from. */
+export function standIn<T extends { id: number; kind: Kind; active: boolean | number }>(accounts: T[], id: number, among: T[] = accounts): T | null {
+  const kind = accounts.find((x) => x.id === id)?.kind
+  const same = among.filter((x) => x.active && x.id !== id && x.kind === kind)
+  return same.length === 1 ? same[0] : null
 }
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`

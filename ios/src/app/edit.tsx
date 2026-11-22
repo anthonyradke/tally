@@ -7,6 +7,7 @@ import { Keyboard, KeyboardAvoidingView, ScrollView, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { AccountForm } from '@/components/editor/AccountForm'
+import { BudgetForm } from '@/components/editor/BudgetForm'
 import { DoneBar, Field, Toggle } from '@/components/editor/Fields'
 import { Pickers } from '@/components/editor/Pickers'
 import { RecurringActions, RecurringForm } from '@/components/editor/RecurringForm'
@@ -21,8 +22,7 @@ import { categoryVisual, GLYPH_NAMES, GLYPHS } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
 import { close, useBusy, useCloseHere, useLatest } from '@/lib/nav'
 import { api, ApiError, type AdminData, type CatType, type Freq } from '@/lib/api'
-import { budgetAmount, changed, favoriteBody, initial, movable, movedText, pctStr, recurringBody, swapAccount, unmoveBody, usersText, type Form } from '@/lib/forms'
-import { monthOf } from '@/lib/dates'
+import { budgetAmount, budgetMode, budgetMonths, changed, favoriteBody, initial, movable, movedText, pctStr, recurringBody, swapAccount, unmoveBody, usersText, type Form } from '@/lib/forms'
 import { removeRecurring } from '@/lib/recurringActions'
 import { useTally } from '@/lib/tally'
 import { toast, type ToastMsg } from '@/lib/toast'
@@ -39,7 +39,8 @@ type Note = Omit<ToastMsg, 'id'>
 export default function Edit() {
   // prefill: starting fields for a new item, as JSON (a suggested recurring template from Settings → Recurring).
   // draft: fields typed before the editor was closed without saving, brought back by the toast's Restore.
-  const { kind, id, prefill, draft } = useLocalSearchParams<{ kind: string; id?: string; prefill?: string; draft?: string }>()
+  // note: a line to read before saving the prefill (a suggestion whose account has been hidden since).
+  const { kind, id, prefill, draft, note } = useLocalSearchParams<{ kind: string; id?: string; prefill?: string; draft?: string; note?: string }>()
   const { c } = useTheme()
   const admin = useAdmin()
   const t = useTally()
@@ -67,7 +68,7 @@ export default function Edit() {
   useOfferBack(() => {
     const { f: now, start: was } = latest.current
     if (leaving.current || !now || !was || !changed(was, now)) return null
-    return () => { router.push({ pathname: '/edit', params: { kind, ...(id ? { id } : {}), draft: JSON.stringify(now) } }) }
+    return () => { router.push({ pathname: '/edit', params: { kind, ...(id ? { id } : {}), ...(note ? { note } : {}), draft: JSON.stringify(now) } }) }
   })
 
   const save = () => once(saveNow)
@@ -99,7 +100,8 @@ export default function Edit() {
         case 'budget': {
           const amount = budgetAmount(String(f.amount ?? ''))
           if (amount === undefined) throw new ApiError(422, ['The budget must be a number.'])
-          return api.setBudget(n!, amount, f.thisMonth ? monthOf(t.b!.today) : undefined)
+          const mode = budgetMode(f)
+          return api.setBudget(n!, amount, mode === 'regular' ? undefined : budgetMonths(t.b!.today)[mode])
         }
       }
     })
@@ -173,10 +175,16 @@ export default function Edit() {
               {kind === 'account' && <AccountForm f={f} set={set} a={a} id={n} start={t.b?.start ?? t.today} />}
               {kind === 'category' && <CategoryForm f={f} set={set} />}
               {kind === 'quick' && <QuickForm f={f} set={set} a={a} />}
+              {!n && !!note && (
+                <View style={{ flexDirection: 'row', gap: space.m, alignItems: 'center', padding: space.l, borderRadius: radius.panel, borderCurve: 'continuous', backgroundColor: c.panel }}>
+                  <Icon sf="eye.slash" md="visibility_off" size={18} color={c.label2} />
+                  <Txt variant="callout" tone="label2" style={{ flex: 1 }}>{note}</Txt>
+                </View>
+              )}
               {kind === 'recurring' && <RecurringForm f={f} set={set} a={a} id={n} />}
               {kind === 'recurring' && !!n && <RecurringActions id={n} a={a} />}
               {kind === 'view' && <Group><Field label="Name" value={String(f.name ?? '')} onChange={(v) => set({ name: v })} /></Group>}
-              {kind === 'budget' && <BudgetForm f={f} set={set} a={a} id={n!} />}
+              {kind === 'budget' && <BudgetForm f={f} set={set} a={a} id={n!} today={t.b!.today} />}
               {id && kind !== 'budget' && (
                 <Group footer={kind === 'account' || kind === 'category' ? 'Deleting only works when nothing uses it. Otherwise hide it to keep its history.' : kind === 'recurring' ? 'Deleting removes its future entries; ones already posted stay.' : undefined}>
                   <Row label={`Delete ${editTitle.toLowerCase()}`} destructive sf="trash" md="delete" onPress={remove} />
@@ -279,19 +287,6 @@ function QuickForm({ f, set, a }: { f: Form; set: (p: Form) => void; a: AdminDat
       <Group footer="Leave the amount empty to type it each time.">
         <Pickers f={f} set={set} a={a} />
         <Field label="Amount" value={String(f.amount ?? '')} onChange={(v) => set({ amount: v })} money placeholder="Optional" />
-      </Group>
-    </>
-  )
-}
-
-function BudgetForm({ f, set, a, id }: { f: Form; set: (p: Form) => void; a: AdminData; id: number }) {
-  const x = a.categories.find((r) => r.id === id)
-  return (
-    <>
-      <Txt variant="title2" style={{ paddingHorizontal: space.xs }}>{x?.name}</Txt>
-      <Group footer={f.thisMonth ? 'Only this month uses this amount; other months keep the regular budget.' : 'Every month uses this amount unless you set a one-off for a month.'}>
-        <Field label="Per month" value={String(f.amount ?? '')} onChange={(v) => set({ amount: v })} money placeholder="None" />
-        <Toggle label="Just this month" value={!!f.thisMonth} onChange={(v) => set({ thisMonth: v })} />
       </Group>
     </>
   )

@@ -37,7 +37,9 @@ export interface Backups { latest: { name: string; size: number; at: string } | 
 export interface Health { version: string; database: 'ok' | 'damaged'; backups: Backups; offsite: { last_success: string | null; result: string | null } | null }
 /** An entry in Recently deleted (kept 30 days); `deleted_at` is UTC; `batch` is shared by the rows one delete removed
  *  (null for older ones). */
-export type DeletedTxn = Txn & { deleted_at: string; batch?: number | null }
+/** `skipped_from`: the recurring template's label when this was a scheduled date taken out before its day, which
+ *  the template now skips (putting it back posts it again). */
+export type DeletedTxn = Txn & { deleted_at: string; batch?: number | null; skipped_from?: string | null }
 export interface Skip { recurring_id: number; date: string }
 /** A bank statement line: `amount` in cents, signed as the bank's file had it. */
 export interface StatementLine { line: number; date: string; what: string; amount: number }

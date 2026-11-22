@@ -195,6 +195,16 @@ function widgetNames(today: string): Record<string, [string, string?]> {
 }
 const ORDER = ['networth', 'review', 'stats', 'quick', 'budgets', 'spending', 'ef', 'forecast', 'upcoming', 'recent', 'roth', 'chart']
 
+/** With Next 30 days and Coming up both on, Home shows them as one Coming up section where the first of the two sits
+ *  (index.tsx); listed as two cards, nothing here said so. */
+function aheadNote(id: string, order: string[], hidden: Set<string>, names: Record<string, [string, string?]>): string | undefined {
+  const pair = ['forecast', 'upcoming']
+  if (!pair.includes(id) || pair.some((x) => hidden.has(x))) return names[id]?.[1]
+  const first = order.find((x) => pair.includes(x))
+  const other = names[pair.find((x) => x !== id)!][0]
+  return id === first ? `With ${other} on, the two show here as one Coming up section` : `Shows in one section with ${other}, where that one sits`
+}
+
 function HomeLayout({ a, reorder }: { a: AdminData; reorder: boolean }) {
   const { today } = useTally()
   const names = widgetNames(today)
@@ -215,7 +225,7 @@ function HomeLayout({ a, reorder }: { a: AdminData; reorder: boolean }) {
     <DragGroup items={order} keyOf={(id) => id} handles={reorder} onReorder={(next) => save(next, hidden)}
       footer="Press and hold a card to move it. Switch one off to hide it from Home."
       render={(id, handle) => (
-        <Row label={names[id][0]} sub={names[id][1]} chevron={false}
+        <Row label={names[id][0]} sub={aheadNote(id, order, hidden, names)} chevron={false}
           trailing={handle ?? <Switch value={!hidden.has(id)} onValueChange={(on) => { const h = new Set(hidden); if (on) h.delete(id); else h.add(id); save(order, h) }} />} />
       )} />
   )
