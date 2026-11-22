@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { blank, useDraft } from '@/lib/draft'
-import { keeper } from '@/lib/draftOwner'
+import { keeper, renew } from '@/lib/draftOwner'
 
 const reset = (what: string, owner: string, date = '2026-11-22', more = {}) => useDraft.getState().reset({ ...blank(date), what, ...more }, owner)
 
@@ -49,4 +49,54 @@ test('draft owner: in one screen, only the part that had the draft last takes it
     assert.equal(useDraft.getState().d.what, 'Catch-up line')
   }
   stops.forEach((s) => s())
+})
+
+test('draft owner: a screen that never had the draft never takes it', () => {
+  const k = keeper('bystander', 'route-e')
+  const stop = k.watch()
+  reset('Editor line', 'entry3')
+  k.focus()
+  assert.equal(useDraft.getState().owner, 'entry3')
+  assert.equal(useDraft.getState().d.what, 'Editor line')
+  stop()
+})
+
+test('draft owner: renew after an await leaves a screen opened meanwhile its draft, and hands the new one back on return', () => {
+  const under = keeper('catchup2', 'route-f')
+  const stop = under.watch()
+  reset('Amazon', 'catchup2', '2026-11-20', { amount: '42.99' })
+  renew({ ...blank('2026-11-20'), what: 'Next line' }, 'catchup2') // still its own: straight into the store
+  assert.equal(useDraft.getState().d.what, 'Next line')
+  reset('Amazon', 'catchup2', '2026-11-20', { amount: '42.99' })
+  // "N added" opens the editor while the Add is still saving.
+  const over = keeper('entry4', 'route-g')
+  const stopOver = over.watch()
+  reset('Costco', 'entry4', '2026-11-19', { id: 7 })
+  renew({ ...blank('2026-11-20'), date: '2026-11-20' }, 'catchup2') // the Add lands
+  assert.equal(useDraft.getState().owner, 'entry4')
+  assert.equal(useDraft.getState().d.what, 'Costco')
+  stopOver()
+  under.focus()
+  assert.equal(useDraft.getState().owner, 'catchup2')
+  assert.equal(useDraft.getState().d.what, '') // the next line, not the entry just added
+  assert.equal(useDraft.getState().d.date, '2026-11-20')
+  stop()
+})
+
+test('draft owner: an unmounted keeper stops following the store, and a remount claims the screen', () => {
+  const old = keeper('composer-old', 'route-h')
+  const stopOld = old.watch()
+  reset('Old composer', 'composer-old')
+  stopOld() // remounted by key: the old one's cleanup runs first
+  renew({ ...blank('2026-11-22'), what: 'Too late' }, 'composer-old') // its await ends after it's gone: nothing kept
+  const fresh = keeper('composer-new', 'route-h')
+  const stopNew = fresh.watch()
+  reset('New composer', 'composer-new')
+  reset('Opened row', 'entry5')
+  old.focus()
+  assert.equal(useDraft.getState().owner, 'entry5') // the old one has no claim left
+  fresh.focus()
+  assert.equal(useDraft.getState().owner, 'composer-new')
+  assert.equal(useDraft.getState().d.what, 'New composer')
+  stopNew()
 })

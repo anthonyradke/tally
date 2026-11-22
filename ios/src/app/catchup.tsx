@@ -18,7 +18,7 @@ import { balanceAfter, catchable, duplicateOf, exactPlace, flip, hintFor, lastSh
 import { refreshCatchUp, useBankMatch, useCatchUpSession, useKeyboardBar } from '@/lib/catchupHooks'
 import { offerCatchUp } from '@/lib/caughtUp'
 import { useTransactions } from '@/lib/data'
-import { useDraftOwner } from '@/lib/draftOwner'
+import { renew, useDraftOwner } from '@/lib/draftOwner'
 import { blank, fromCents, fromTxn, toCents, toInputs, useDraft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { markFresh } from '@/lib/motion'
@@ -220,7 +220,7 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
       setDone(true) // the button draws its check, then the next entry slides in
       await new Promise((r) => setTimeout(r, 420))
       setDone(false)
-      reset({ ...blank(d.date), date: d.date })
+      renew({ ...blank(d.date), date: d.date }, owner) // an editor opened meanwhile keeps its draft
       clearLine()
       go('what', 1)
     } catch (e) {
@@ -245,7 +245,7 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
       setLast(null)
       refreshCatchUp()
       clearLine()
-      reset({ ...fromTxn(cur, t.catOf(cur).type), id: undefined })
+      renew({ ...fromTxn(cur, t.catOf(cur).type), id: undefined }, owner)
       go('amount', -1)
     } catch (e) {
       setLast({ ...shown!, error: e instanceof ApiError ? e.errors.join(' ') : "Couldn't undo: Tally is unreachable." })
