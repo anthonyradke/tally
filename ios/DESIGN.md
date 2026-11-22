@@ -27,9 +27,14 @@ Changes to anything below get written here first.
 - **A new entry is a few questions, one at a time.** Amount and type, what it was, category, the accounts the type
   uses, then a review with the date and Add. Tapping an answer moves on; Back and Next are always there, and dots at
   the top show where you are. Picking a past entry under "What was it?" or a quick action chip fills in what it
-  knows, and Next skips those steps. The date is the past week as a row of days (entries often get caught up at the
-  end of the week) plus the calendar, and "Add another" in the toast starts the next entry on the same day. A new
-  entry starts empty (no guessed category or account); tapping a quick action again takes it back out. Splitting
+  knows, including the category and accounts it answers. Next goes one page on, or to the review once nothing after
+  it is left to answer; a page opened from the review says Done, and Done or Back goes back there. An amount already
+  there shows as selected and the first digit replaces it. − on the empty keypad marks a refund, shown as a green
+  +amount with "Refund" under it; the figure is signed as Activity signs the row. A day other than today shows as a
+  pill above the figure. The date is the past week as a row of days (entries often get caught up at the end of the
+  week) plus the calendar, and "Add another" in the toast starts the next entry on the same day; tapping the toast's
+  message opens the entry just added. A new entry starts empty (no guessed category or account); tapping a quick
+  action again takes it back out, keeping the type and any amount you typed. Splitting
   hands the draft to the full form. The steps move like pages in a stack: the next one slides in from the right over
   the last, Back slides it away again, each question sits at the top of its page, and the header stays "New entry".
   The dots stretch and fill as you go, Back grows in beside Next, and the full form for a split slides in as one
