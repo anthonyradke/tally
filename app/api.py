@@ -46,11 +46,13 @@ def _by_id(con, table: str) -> dict[int, dict]:
 
 
 def _tags(con) -> list[dict]:
-    """Every tag in use with how many entries carry it, most used first, for the app to suggest."""
-    counts: dict[str, int] = {}
-    for r in con.execute("SELECT tags FROM transactions WHERE tags IS NOT NULL AND tags != ''"):
-        for tg in set(r["tags"].split()):
-            counts[tg] = counts.get(tg, 0) + 1
+    """Every tag in use with how many entries carry it, most used first, for the app to suggest. A split purchase is
+    one entry, however many lines it has."""
+    seen: dict[str, set] = {}
+    for r in con.execute("SELECT id, split_group, tags FROM transactions WHERE tags IS NOT NULL AND tags != ''"):
+        for tg in r["tags"].split():
+            seen.setdefault(tg, set()).add(r["split_group"] or r["id"])
+    counts = {k: len(v) for k, v in seen.items()}
     return [{"tag": k, "count": n} for k, n in sorted(counts.items(), key=lambda x: (-x[1], x[0]))]
 
 
