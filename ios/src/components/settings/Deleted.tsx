@@ -1,6 +1,6 @@
 // Settings → Recently deleted: entries deleted in the last 30 days (the server keeps them), each with Put back, for
-// when the Undo toast had gone or the app was closed. Rows removed together (a bulk delete, a split) share one
-// moment and can go back all at once.
+// when the Undo toast had gone or the app was closed. Rows removed together (a bulk delete, a split) are grouped
+// (lib/deleted.ts) and can go back all at once.
 import { View } from 'react-native'
 import { useQuery } from '@tanstack/react-query'
 import { Group, Row } from '@/components/Row'
@@ -10,6 +10,7 @@ import { Txt } from '@/components/Txt'
 import { openEntry } from '@/lib/actions'
 import { write } from '@/lib/admin'
 import { api, type DeletedTxn, type Txn } from '@/lib/api'
+import { asEntry, byDelete } from '@/lib/deleted'
 import { dayLabel, toISO } from '@/lib/dates'
 import { formatCents } from '@/lib/money'
 import { markFresh } from '@/lib/motion'
@@ -18,17 +19,6 @@ import { play } from '@/lib/sound'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { space } from '@/theme'
-
-/** Deleted rows grouped by the moment they went, newest first (the list already comes newest first). */
-function byDelete(rows: DeletedTxn[]): DeletedTxn[][] {
-  const out: DeletedTxn[][] = []
-  for (const r of rows) {
-    const last = out[out.length - 1]
-    if (last && last[0].deleted_at === r.deleted_at) last.push(r)
-    else out.push([r])
-  }
-  return out
-}
 
 export function Deleted() {
   const t = useTally()
@@ -46,7 +36,7 @@ export function Deleted() {
   const name = (x: Txn) => x.what || t.catOf(x).name
   const where = (x: Txn) => [x.from_id, x.to_id].filter((v): v is number => v != null).map((id) => t.acct.get(id)?.name ?? '').filter(Boolean).join(' → ')
   const putBack = (rows: DeletedTxn[]) => busy(async () => {
-    const entries = rows.map(({ deleted_at: _gone, ...entry }) => entry)
+    const entries = rows.map(asEntry)
     if (!(await write(() => api.restore(entries)))) return
     play('undo')
     markFresh(entries.map((x) => x.id)) // they unfold back into their lists

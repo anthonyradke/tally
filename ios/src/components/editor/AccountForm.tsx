@@ -12,7 +12,7 @@ import { accountLogo, LOGO_IDS, LOGOS } from '@/icons/banks'
 import { GLYPH_NAMES, GLYPHS, KIND_SYMBOL } from '@/icons/categories'
 import type { AdminData, Kind } from '@/lib/api'
 import { fromISO } from '@/lib/dates'
-import { accountUsers, usersText, type Form } from '@/lib/forms'
+import { movable, moveTargets, usersText, type Form } from '@/lib/forms'
 import { radius, space, TINTS, useTheme, type Tint } from '@/theme'
 import { Choice, Field, Toggle } from './Fields'
 
@@ -31,9 +31,9 @@ function balanceNote(kind: Kind, start: string): string {
 export function AccountForm({ f, set, a, id, start }: { f: Form; set: (p: Form) => void; a: AdminData; id?: number; start: string }) {
   const kind = f.kind as Kind
   const orig = a.accounts.find((x) => x.id === id)
-  const users = id ? accountUsers(a, id) : { quick: [], recurring: [] }
+  const users = id ? movable(a, id) : { quick: [], recurring: [] }
   const hiding = !!orig?.active && !f.active && !!usersText(users)
-  const others = a.accounts.filter((x) => x.active && x.id !== id).map((x) => ({ value: x.id as number | null, label: x.name }))
+  const others = id ? moveTargets(a, id, users).map((x) => ({ value: x.id as number | null, label: x.name })) : []
   return (
     <>
       <View style={{ alignItems: 'center' }}><AccountMark a={look(f)} size={72} /></View>

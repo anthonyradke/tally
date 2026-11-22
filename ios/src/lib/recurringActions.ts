@@ -16,17 +16,20 @@ export function skipLabel(r: AdminRecurring, today: string): string {
   return l === 'Today' || l === 'Tomorrow' ? `Skip ${l.toLowerCase()}'s` : `Skip ${l}`
 }
 
-/** Pause a running template (its entries ahead come out) or resume a paused one (missed dates are skipped). */
+/** Pause a running template (its entries ahead come out) or resume a paused one (missed dates are skipped). Undo
+ *  starts from the template as the change left it, and keeps its schedule (`move: false`): built from `r`, it sent
+ *  the date from before the pause, which read as a move and dropped the bills already scheduled. */
 export async function togglePause(r: AdminRecurring, today: string): Promise<boolean> {
-  const set = (active: boolean) => api.saveRecurring({ ...recurringBody(r), active }, r.id)
+  const set = (x: AdminRecurring, active: boolean) => api.saveRecurring({ ...recurringBody(x), active }, r.id)
   const pausing = !!r.active
   let after: AdminRecurring | undefined
-  const ok = await write(async () => { after = await set(!pausing) })
-  if (!ok) return false
+  const ok = await write(async () => { after = await set(r, !pausing) })
+  if (!ok || !after) return false
+  const now = after
   play('toggle')
   toast({
-    text: pausing ? `Paused ${r.label}` : `${r.label} resumes ${after ? nextDue(after.next_date, today) : ''}`.trim(),
-    action: { label: 'Undo', run: async () => { await write(() => set(pausing)) } },
+    text: pausing ? `Paused ${r.label}` : `${r.label} resumes ${nextDue(now.next_due ?? now.next_date, today)}`,
+    action: { label: 'Undo', run: async () => { await write(() => set(now, pausing)) } },
   })
   return true
 }
@@ -37,7 +40,8 @@ export async function skipNext(r: AdminRecurring, today: string): Promise<boolea
   const ok = await write(async () => { out = await api.skipRecurring(r.id) })
   if (!ok || !out) return false
   const { date, rows } = out
-  toast({ text: `Skipping ${r.label} ${nextDue(date, today).replace(/^next /, 'on ')}`, action: { label: 'Undo', run: async () => {
+  // `date` is the date its row was posted for; a row moved by hand is on its own day.
+  toast({ text: `Skipping ${r.label} ${nextDue(rows[0]?.date ?? date, today).replace(/^next /, 'on ')}`, action: { label: 'Undo', run: async () => {
     await write(() => (rows.length ? api.restore(rows) : api.unskipRecurring(r.id, date)))
   } } })
   return true

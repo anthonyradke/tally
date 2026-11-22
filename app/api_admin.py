@@ -120,15 +120,16 @@ def _reorder(con, table: str, ids: list[int]):
 @router.get("/admin")
 def admin(con: Con):
     """Everything Settings needs, including inactive accounts/categories. Each recurring template carries `next_due`,
-    the next date that will happen (its first row still ahead); its own `next_date` is the one after those."""
-    from .api_recurring import _next_due  # it imports this module
+    the next date that will happen (its first row still ahead), and `next_slot`, the date that row was posted for (they
+    differ when it was moved by hand); its own `next_date` is the one after those."""
+    from .api_recurring import _out  # it imports this module
     rows = lambda sql: [dict(r) for r in con.execute(sql)]
     today = date.today().isoformat()
     return {"accounts": rows("SELECT * FROM accounts ORDER BY sort, id"),
             "categories": rows("SELECT * FROM categories ORDER BY sort, id"),
             "favorites": rows("SELECT * FROM favorites ORDER BY sort, id"),
-            "recurring": [{**r, "next_due": _next_due(con, r, today)}
-                          for r in rows("SELECT * FROM recurring ORDER BY active DESC, next_date")],
+            "recurring": [_out(con, r["id"], today)
+                          for r in rows("SELECT id FROM recurring ORDER BY active DESC, next_date")],
             "saved_views": rows("SELECT * FROM saved_views ORDER BY sort, id"),
             "budgets": rows("SELECT * FROM budgets ORDER BY month"),
             "skips": [dict(r) for r in con.execute("SELECT * FROM recurring_skips WHERE date > ? ORDER BY date",

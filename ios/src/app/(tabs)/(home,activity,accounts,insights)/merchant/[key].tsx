@@ -4,6 +4,7 @@ import { useMemo, useRef } from 'react'
 import { ScrollView, TextInput, View } from 'react-native'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { useSharedValue } from 'react-native-reanimated'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '@/components/Icon'
 import { closeSwipes } from '@/components/SwipeRow'
 import { MarkPicker } from '@/components/MarkPicker'
@@ -36,8 +37,12 @@ export default function Merchant() {
   const scroll = useRef<ScrollView>(null)
   const search = useRef<TextInput>(null)
   const logoY = useRef(0)
+  // On iOS the content runs under the header (automatic insets) and scrollTo sets the raw offset, so the header's
+  // height (status bar and a 44 pt bar: this screen has no large title) comes off, or the picker's title sat under it.
+  const insets = useSafeAreaInsets()
+  const under = process.env.EXPO_OS === 'ios' ? insets.top + 44 : 0
   const toLogo = () => {
-    scroll.current?.scrollTo({ y: Math.max(0, logoY.current - space.l), animated: true })
+    scroll.current?.scrollTo({ y: Math.max(0, logoY.current - under - space.l), animated: true })
     setTimeout(() => search.current?.focus(), 350)
   }
   const b = t.b
@@ -55,7 +60,7 @@ export default function Merchant() {
   return (
     <>
       <Stack.Screen options={{ title: p.name, headerLargeTitle: false }} />
-      <ScrollView ref={scroll} onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
+      <ScrollView ref={scroll} onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
         <View style={{ gap: space.m, marginBottom: space.section - 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.xs }}>
             <Tap feedback="scale" onPress={toLogo} accessibilityLabel="Change logo" hitSlop={6}>

@@ -1,6 +1,7 @@
-// Closing the entry editor with changes unsaved (the X, or a swipe down) never asks first. A toast says
-// "Changes not saved", and its Restore opens the editor again with the draft as it was left.
-import { useEffect, useRef } from 'react'
+// Closing an editor with changes unsaved (the X, or a swipe down) never asks first. A toast says "Changes not saved",
+// and its Restore opens the editor again with the draft as it was left. One toast for every editor: the entry editor
+// (useUnsaved) and the Settings editors (useOfferBack).
+import { useEffect, useRef, type RefObject } from 'react'
 import { router } from 'expo-router'
 import { toCents, useDraft, type Draft } from './draft'
 import { toast } from './toast'
@@ -49,7 +50,7 @@ export function useUnsaved(on: boolean, owner: string, read: () => Closing) {
       const p = Object.fromEntries(Object.entries({ ...now.params, restore: '1' }).filter(([, v]) => v)) as Record<string, string>
       const offer = () => {
         kept = stash
-        toast({ text: 'Changes not saved', action: { label: 'Restore', run: () => { router.push({ pathname: '/entry', params: p }) } } })
+        offerBack(() => { router.push({ pathname: '/entry', params: p }) })
       }
       // Swiped down while it saves: nothing to say unless the save then fails, which the closed screen can't show.
       setTimeout(() => {
@@ -57,6 +58,34 @@ export function useUnsaved(on: boolean, owner: string, read: () => Closing) {
         if (now.pending) now.pending.then((saved) => { if (!saved) offer() })
         else offer()
       }, 0)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/** The one "Changes not saved" toast: Restore opens the editor again as it was left. */
+export function offerBack(reopen: () => void) {
+  toast({ text: 'Changes not saved', action: { label: 'Restore', run: reopen } })
+}
+
+/** Offers the draft back a tick after the screen unmounted, unless it came back meanwhile (a dev-mode double effect
+ *  only remounts it). */
+function later(alive: RefObject<boolean>, reopen: () => void) {
+  setTimeout(() => {
+    if (alive.current) return
+    offerBack(reopen)
+  }, 0)
+}
+
+/** For an editor whose fields live in the screen (the Settings editors). `closing` runs as it unmounts and returns
+ *  how to reopen it with the draft, or null when there's nothing to offer (unchanged, saved, saving or deleted). */
+export function useOfferBack(closing: () => (() => void) | null) {
+  const alive = useRef(false)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+      const reopen = closing()
+      if (reopen) later(alive, reopen)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 }

@@ -10,7 +10,7 @@ from .api import Con
 from .api_admin import _get, _opt_int, _upsert
 from .engine import Txn, validate
 from .inputs import bad, body, day, far, flag, money, text, whole
-from .recurring import first_on_or_after, step
+from .recurring import _clamp, first_on_or_after, step
 
 router = APIRouter(prefix="/api")
 FREQS = ("weekly", "biweekly", "monthly", "yearly")
@@ -59,7 +59,7 @@ def _counted(con, f: dict) -> dict:
     return f
 
 
-def _anchor(b: dict, f: dict) -> int:
+def _start_anchor(b: dict, f: dict) -> int:
     """The day a new template aims for. `anchor_day` lets one started on a short month's last day keep aiming for a
     later day: an entry from Jan 31 repeats from Feb 28 and should come back to Mar 31, not stay on the 28th. It's
     only taken when the next date is that day, or the last day of a month too short for it."""
@@ -78,7 +78,7 @@ def _anchor(b: dict, f: dict) -> int:
 async def create_recurring(request: Request, con: Con):
     b = await body(request)
     f = _fields(con, b)
-    f["anchor_day"] = _anchor(b, f)
+    f["anchor_day"] = _start_anchor(b, f)
     id = _upsert(con, "recurring", _counted(con, f), None)
     con.commit()
     return _get(con, "recurring", id)
@@ -86,17 +86,26 @@ async def create_recurring(request: Request, con: Con):
 
 @router.put("/recurring/{id}")  # rows already posted for today and before stay as they are
 async def update_recurring(id: int, request: Request, con: Con):
-    """`next_date` is the next date the app shows (`next_due` in /admin) or the template's own next date (which older
-    versions of the app showed): either leaves the schedule as it is. Another date, or `"move": true`, moves it, and
-    its rows still ahead are posted again from that date. The template's own date is past the rows already posted,
-    so editing it to move rent from the 1st to the 3rd used to wipe December's and January's."""
+    """`"move": true` moves the schedule to `next_date`: its rows still ahead are posted again from that date, aiming
+    for `anchor_day` when one that fits the date is sent (Undo of a move sends the old one back, so the 31st stays the
+    31st). `"move": false` keeps the schedule whatever `next_date` says, so a list action built from data a moment
+    old can't move it. Without the flag (older app versions) a date other than the template's own or its next one is
+    a move, unless it is today or earlier: that is a date read before midnight, not a choice. The template's own date
+    is past the rows already posted, so editing it to move rent from the 1st to the 3rd used to wipe December's and
+    January's."""
     old = _get(con, "recurring", id)
     b = await body(request)
     f = _fields(con, b)
     today = date.today().isoformat()
-    moved = flag(b.get("move", False), "move") or f["next_date"] not in (old["next_date"], _next_due(con, old, today))
+    if b.get("move") is not None:
+        moved = flag(b["move"], "move")
+    else:
+        moved = f["next_date"] > today and f["next_date"] not in (old["next_date"], _next_due(con, old, today),
+                                                                  _next_slot(con, old, today))
     same_cadence = f["freq"] == old["freq"]
-    if not moved:
+    if moved:
+        f["anchor_day"] = _sent_anchor(b.get("anchor_day"), date.fromisoformat(f["next_date"])) or f["anchor_day"]
+    else:
         f["next_date"] = old["next_date"]
         if old["anchor_day"] and same_cadence:
             f["anchor_day"] = old["anchor_day"]  # unchanged date: keep aiming for the 31st even if next is Feb 28
@@ -119,31 +128,65 @@ async def update_recurring(id: int, request: Request, con: Con):
                 f["anchor_day"] = date.fromisoformat(f["next_date"]).day
     if moved:
         _reslot(con, id, f, today)
+        if f["next_date"] < today:  # an Undo sent after midnight: carry on along the schedule, never post a backlog
+            f["next_date"] = first_on_or_after(date.fromisoformat(f["next_date"]), f["freq"], f["anchor_day"],
+                                               date.today()).isoformat()
     if f["active"] and not old["active"]:
         f["next_date"] = first_on_or_after(date.fromisoformat(f["next_date"]), f["freq"], f["anchor_day"],
                                            date.today()).isoformat()
     _upsert(con, "recurring", _counted(con, f), id)
     con.commit()
-    return _get(con, "recurring", id)
+    return _out(con, id, today)
 
 
-HALF = {"weekly": 3, "biweekly": 7, "monthly": 15, "yearly": 182}  # days: half of each cadence's step
+def _sent_anchor(v, nxt: date) -> int | None:
+    """A sent anchor day, when it fits the date: the 31st fits Sep 30 (the month is shorter), the 3rd doesn't."""
+    if isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 31 and _clamp(nxt.year, nxt.month, v) == nxt:
+        return v
+    return None
+
+
+HALF = {"weekly": 3, "biweekly": 7}  # days: half of each short cadence's step
+
+
+def _matcher(f: dict):
+    """Maps a date the old schedule posted for to the new schedule's date for the same period: the same month
+    (monthly) or year (yearly), the nearest date within half a step for the weekly ones. None when the new schedule has
+    no date for that period (it starts after it). Nearest within half a step for monthly paired a hand-edited Nov 1
+    with Oct 20 after a move to the 20th, so October went without rent and November had two."""
+    start, freq, anchor = date.fromisoformat(f["next_date"]), f["freq"], f["anchor_day"]
+
+    def match(s: date) -> date | None:
+        d = start
+        if freq in HALF:
+            while d < s - timedelta(days=HALF[freq]):
+                d = step(d, freq, anchor)
+            return d if abs((d - s).days) <= HALF[freq] else None
+        period = (lambda x: (x.year, x.month)) if freq == "monthly" else (lambda x: (x.year, 0))
+        while period(d) < period(s):
+            d = step(d, freq, anchor)
+        return d if period(d) == period(s) else None
+    return match
 
 
 def _reslot(con, id: int, f: dict, today: str) -> None:
-    """After a move, a row still ahead that was changed by hand stands for the new date nearest it (within half a
-    step), so generate() doesn't post that date as well: moving rent from the 1st to the 3rd would otherwise keep the
-    December rent you'd edited and post a second one on Dec 3."""
-    taken: set[str] = set()
-    kept = con.execute("SELECT id, COALESCE(slot, date) AS s FROM transactions WHERE recurring_id=? AND date > ? "
-                       "ORDER BY s", (id, today)).fetchall()
+    """After a move, a row changed by hand (still ahead, or paid early for a date still ahead) stands for the new date
+    in its period, so generate() doesn't post that date as well: moving rent from the 1st to the 3rd would otherwise
+    keep the December rent you'd edited and post a second one on Dec 3. A skipped date moves with its period the same
+    way, so a skipped November stays skipped. Moving back undoes both exactly."""
+    match, taken = _matcher(f), set()
+    kept = con.execute("SELECT id, COALESCE(slot, date) AS s FROM transactions WHERE recurring_id=? "
+                       "AND (date > ? OR slot > ?) ORDER BY s", (id, today, today)).fetchall()
     for r in kept:
-        s, d = date.fromisoformat(r["s"]), date.fromisoformat(f["next_date"])
-        while d < s - timedelta(days=HALF[f["freq"]]):
-            d = step(d, f["freq"], f["anchor_day"])
-        if abs((d - s).days) <= HALF[f["freq"]] and d.isoformat() not in taken:
+        d = match(date.fromisoformat(r["s"]))
+        if d and d.isoformat() not in taken:
             taken.add(d.isoformat())
             con.execute("UPDATE transactions SET slot=? WHERE id=?", (d.isoformat(), r["id"]))
+    skips = [x[0] for x in con.execute("SELECT date FROM recurring_skips WHERE recurring_id=? AND date > ?", (id, today))]
+    moves = {s: d.isoformat() for s in skips if (d := match(date.fromisoformat(s)))}
+    con.executemany("DELETE FROM recurring_skips WHERE recurring_id=? AND date=?", [(id, s) for s in moves])
+    con.executemany("INSERT OR IGNORE INTO recurring_skips(recurring_id, date) VALUES(?,?)",
+                    [(id, d) for d in moves.values()])
 
 
 @router.delete("/recurring/{id}")
@@ -165,25 +208,46 @@ def delete_recurring(id: int, con: Con):
     return {"template": template, "rows": rows}
 
 
-def _next_due(con, r, today: str) -> str:
-    """The template's next date that will happen: its earliest row still ahead, else the next date it will post
-    (past any already skipped)."""
-    posted = con.execute("SELECT MIN(COALESCE(slot, date)) FROM transactions WHERE recurring_id=? AND date > ?",
-                         (r["id"], today)).fetchone()[0]
-    if posted:
-        return posted
-    skipped = {x[0] for x in con.execute("SELECT date FROM recurring_skips WHERE recurring_id=?", (r["id"],))}
+def _ahead(con, r, today: str) -> str:
+    """The first date the template itself will still post: from its own date, past today, skipped dates and dates
+    that already have their row."""
+    have = {x[0] for x in con.execute("SELECT date FROM recurring_skips WHERE recurring_id=? UNION "
+                                      "SELECT COALESCE(slot, date) FROM transactions WHERE recurring_id=?",
+                                      (r["id"], r["id"]))}
     d = date.fromisoformat(r["next_date"])
-    while d.isoformat() in skipped or d.isoformat() <= today:
+    while d.isoformat() in have or d.isoformat() <= today:
         d = step(d, r["freq"], r["anchor_day"])
     return d.isoformat()
 
 
+def _next_due(con, r, today: str) -> str:
+    """The date the next one happens: its earliest row still ahead, by the row's own date (October's rent moved by
+    hand from the 1st to the 8th is next on the 8th; its slot said Oct 1, a past date Skip refused), or the next date
+    the template will post."""
+    row = con.execute("SELECT MIN(date) FROM transactions WHERE recurring_id=? AND date > ?", (r["id"], today)).fetchone()[0]
+    return min(row, _ahead(con, r, today)) if row else _ahead(con, r, today)
+
+
+def _next_slot(con, r, today: str) -> str:
+    """Where the schedule stands: the date its next row was posted for (a row moved by hand or paid early keeps it),
+    else the next date it will post. Undo of a move sends it back with the old anchor day."""
+    row = con.execute("SELECT MIN(COALESCE(slot, date)) FROM transactions WHERE recurring_id=? AND (date > ? OR slot > ?)",
+                      (r["id"], today, today)).fetchone()[0]
+    return min(row, _ahead(con, r, today)) if row else _ahead(con, r, today)
+
+
+def _out(con, id: int, today: str) -> dict:
+    """A template as /admin lists it."""
+    r = _get(con, "recurring", id)
+    return {**r, "next_due": _next_due(con, r, today), "next_slot": _next_slot(con, r, today)}
+
+
 @router.post("/recurring/{id}/skip")
 async def skip_once(id: int, request: Request, con: Con):
-    """Body: {"date"?: "YYYY-MM-DD"}, the next one when left out. Skips one date without touching the template: its
-    row goes (to Recently deleted), and it isn't posted again. Returns the date and the rows removed, for Undo:
-    /transactions/restore with the rows, or DELETE /recurring/{id}/skip/{date} when nothing had posted yet."""
+    """Body: {"date"?: "YYYY-MM-DD"}, the next one when left out: a row's own date or the date it was posted for.
+    Skips one date without touching the template: its row goes (to Recently deleted), and it isn't posted again.
+    Returns the date skipped (the one the row was posted for) and the rows removed, for Undo: /transactions/restore
+    with the rows, or DELETE /recurring/{id}/skip/{date} when nothing had posted yet."""
     from .entries import _remove
     b = await body(request)
     r = _get(con, "recurring", id)
@@ -191,10 +255,14 @@ async def skip_once(id: int, request: Request, con: Con):
     d = day(b["date"], "Date").isoformat() if b.get("date") else _next_due(con, r, today)
     if d <= today:
         bad("Only a date still ahead can be skipped.")
-    con.execute("INSERT OR IGNORE INTO recurring_skips(recurring_id, date) VALUES(?,?)", (id, d))
-    ids = [x[0] for x in con.execute("SELECT id FROM transactions WHERE recurring_id=? AND COALESCE(slot, date)=? "
-                                     "AND date > ?", (id, d, today))]
-    rows = _remove(con, ids) if ids else []
+    row = con.execute("SELECT id, COALESCE(slot, date) FROM transactions WHERE recurring_id=? AND date > ? "
+                      "AND (date=? OR COALESCE(slot, date)=?) ORDER BY COALESCE(slot, date)=? DESC, id LIMIT 1",
+                      (id, today, d, d, d)).fetchone()
+    rows = []
+    if row:  # _remove records the skip, for the date the row was posted for
+        d, rows = row[1], _remove(con, [row[0]])
+    else:
+        con.execute("INSERT OR IGNORE INTO recurring_skips(recurring_id, date) VALUES(?,?)", (id, d))
     con.commit()
     return {"date": d, "rows": rows}
 
