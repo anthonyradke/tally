@@ -1,5 +1,7 @@
-import type { Bootstrap, Category, MonthRow } from '@/lib/api'
-import { fromISO, monthOf } from './dates'
+import type { Bootstrap, Category, MonthRow, Txn } from '@/lib/api'
+import { merchantKey } from '@/icons/merchants'
+import { fromISO, lastOfMonth, monthOf } from './dates'
+import { formatCents } from './money'
 
 /** A category's budget for a month: that month's override, else its default. */
 export const budgetFor = (b: Bootstrap, c: Category, month: string): number | null =>
@@ -27,6 +29,57 @@ export function paceOver(spent: number, budget: number, month: string, today: st
 /** A category's entry in a `Typical`, as `paceOver` takes it. */
 export const usualFor = (t: { by: Map<number, number>; full: Map<number, number> } | null, id: number) =>
   t && t.full.has(id) ? { by: t.by.get(id) ?? 0, full: t.full.get(id)! } : null
+
+/** Every budgeted spending category in a month taken together: their budgets summed, and what those categories spent.
+ *  Null with no budgets set. Unbudgeted categories stay out, so "under budget" means what the budgets cover. */
+export function monthBudget(b: Bootstrap, m: MonthRow): { budget: number; spent: number; ids: number[] } | null {
+  let budget = 0, spent = 0
+  const ids: number[] = []
+  for (const x of b.categories) {
+    if (x.type !== 'Spending' || !x.active) continue
+    const cap = budgetFor(b, x, m.month)
+    if (!cap) continue
+    budget += cap
+    spent += m.by_category[String(x.id)] ?? 0
+    ids.push(x.id)
+  }
+  return budget > 0 ? { budget, spent, ids } : null
+}
+
+/** One sentence on how a month stands against its total budget, with the same pace rule as a category's bar. A month
+ *  still going says what's left and for how long, or how far over it's headed; a finished month only speaks up when it
+ *  went over (the under-budget badge covers the rest). Null with no budgets, or for a month not started. */
+export function budgetLine(b: Bootstrap, m: MonthRow, typical: { by: Map<number, number>; full: Map<number, number> } | null):
+  { text: string; tone: 'neg' | 'warn' | 'label2' } | null {
+  const t = monthBudget(b, m)
+  const now = monthOf(b.today)
+  if (!t || now < m.month) return null
+  const cap = formatCents(t.budget, { cents: false })
+  const over = formatCents(t.spent - t.budget, { cents: false })
+  if (now > m.month) return t.spent > t.budget ? { text: `Finished ${over} over its ${cap} budget`, tone: 'neg' } : null
+  const left = Number(lastOfMonth(m.month).slice(8)) - Number(b.today.slice(8))
+  const days = left === 0 ? 'today' : left === 1 ? 'for 1 more day' : `for ${left} more days`
+  if (t.spent > t.budget) return { text: `${over} over your ${cap} budget`, tone: 'neg' }
+  // The month's usual is every budgeted category's usual added up.
+  const parts = t.ids.map((id) => usualFor(typical, id)).filter((u) => u != null)
+  const usual = parts.length ? { by: parts.reduce((n, u) => n + u.by, 0), full: parts.reduce((n, u) => n + u.full, 0) } : null
+  const warn = paceOver(t.spent, t.budget, m.month, b.today, usual)
+  if (warn != null) return { text: `On pace to go ${formatCents(warn, { cents: false })} over your ${cap} budget`, tone: 'warn' }
+  return { text: `${formatCents(t.budget - t.spent, { cents: false })} of your ${cap} budget left ${days}`, tone: 'label2' }
+}
+
+/** A budgeted category that's a fixed bill (it has a recurring template) and has taken its whole budget, give or take
+ *  a dollar: rent reads "Paid", not "$0 left" over a full bar. */
+export function paidBill(b: Bootstrap, id: number, spent: number, budget: number): boolean {
+  return spent > 0 && Math.abs(budget - spent) <= 100 && b.recurring.some((r) => r.category_id === id && !!r.active)
+}
+
+/** Whether a row is a bill: posted by a recurring template, or the same place and category as one (rent typed in by
+ *  hand before its template existed). Story highlights and the day-by-day shading leave bills out. */
+export function billTest(b: Bootstrap): (t: Pick<Txn, 'recurring_id' | 'category_id' | 'what'>) => boolean {
+  const known = new Set(b.recurring.filter((r) => r.active).map((r) => `${r.category_id}|${merchantKey(r.what || r.label)}`))
+  return (t) => !!t.recurring_id || known.has(`${t.category_id}|${merchantKey(t.what)}`)
+}
 
 export interface Suggestion { c: Category; average: number; suggested: number; months: number }
 

@@ -83,7 +83,7 @@ export function storyPages(s: Story, opts: { markFor: (what: string) => MarkSpec
         <Rise><Kicker>{up ? 'You kept' : 'You went over by'}</Kicker></Rise>
         <Rise at={150}><Big cents={Math.abs(m.left_over)} /></Rise>
         <Rise at={400}><Line strong>{up && s.kept != null ? `${pct(s.kept)} of everything that came in.` : 'More went out than came in.'}</Line></Rise>
-        <Rise at={600}><Line>{up ? 'That is after spending, loan payments and saving.' : `Loan payments and saving count here too. ${going ? 'There is still time.' : 'A fresh month is a clean slate.'}`}</Line></Rise>
+        <Rise at={600}><Line>{up ? `That is after spending${m.saving + m.loan > 0 ? `, before ${formatCents(m.saving + m.loan, { cents: false })} of saving and loan payments` : ''}.` : going ? 'There is still time.' : 'A fresh month is a clean slate.'}</Line></Rise>
       </View>
     ) })
   }
@@ -98,7 +98,7 @@ export function storyPages(s: Story, opts: { markFor: (what: string) => MarkSpec
     const d = s.biggestDay
     pages.push({ key: 'day', colors: ['#5B0F3A', '#E0457B'], node: (
       <View style={{ gap: space.l }}>
-        <Rise><Kicker>Your biggest day</Kicker></Rise>
+        <Rise><Kicker>{d.billsAside ? 'Your biggest day, bills aside' : 'Your biggest day'}</Kicker></Rise>
         <Rise at={150}><Line strong>{dayName(d.date)}</Line></Rise>
         <Rise at={300}><Big cents={d.cents} /></Rise>
         <View style={{ gap: space.s }}>
@@ -168,6 +168,18 @@ export function storyPages(s: Story, opts: { markFor: (what: string) => MarkSpec
         <Rise at={150}><Txt style={{ fontSize: 64, fontWeight: '800', letterSpacing: -2, color: WHITE }}>{bu.kept} of {bu.of}</Txt></Rise>
         <Rise at={300}><Line strong>{bu.kept === bu.of ? 'Every budget kept.' : `kept${going ? ' so far' : ''}.`}</Line></Rise>
         <Rise at={450}><Grow k={bu.kept / bu.of} at={600} /></Rise>
+        {bu.missed.length > 0 && (
+          <View style={{ gap: space.s, marginTop: space.s }}>
+            {bu.missed.slice(0, 3).map((x, i) => (
+              <Rise key={x.c.id} at={750 + i * 120}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.m }}>
+                  <Txt variant="headline" numberOfLines={1} style={{ color: WHITE, flexShrink: 1 }}>{x.c.name}</Txt>
+                  <Txt variant="headline" num style={{ color: SOFT }}>{formatCents(x.over, { cents: false })} over</Txt>
+                </View>
+              </Rise>
+            ))}
+          </View>
+        )}
       </View>
     ) })
   }
@@ -187,7 +199,7 @@ function Top({ s }: { s: Story }) {
   const v = categoryVisual(lead.c)
   return (
     <View style={{ gap: space.l }}>
-      <Rise><Kicker>Most of it went to</Kicker></Rise>
+      <Rise><Kicker>{s.besidesBills ? 'Besides your bills, most went to' : 'Most of it went to'}</Kicker></Rise>
       <Rise at={150}><Mark kind="glyph" sf={v.sf} md={v.md} tint="rgba(255,255,255,0.22)" size={88} /></Rise>
       <Rise at={300}><Txt style={{ fontSize: 48, fontWeight: '800', letterSpacing: -1.5, color: WHITE }} numberOfLines={2}>{lead.c.name}</Txt></Rise>
       <Rise at={450}><Line strong>{formatCents(lead.cents, { cents: false })}, {pct(lead.share)} of your spending.</Line></Rise>

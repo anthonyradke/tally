@@ -20,3 +20,17 @@ export function efPace(b: Bootstrap): Pace | null {
   const d = fromISO(monthOf(b.today))
   return { perMonth, months, eta: toISO(new Date(d.getFullYear(), d.getMonth() + months, 1)) }
 }
+
+/** How many months of spending the emergency fund covers now, against the goal's months (`ef_months`, 6 by default):
+ *  the goal is that many months of spending, so one month is goal / months. Null without a goal. */
+export function efCover(b: Bootstrap): { months: number; goal: number } | null {
+  const goal = Number(b.settings.ef_months ?? 6) || 6
+  if (!b.ef.goal) return null
+  return { months: Math.floor((b.ef.progress / (b.ef.goal / goal)) * 10) / 10, goal }
+}
+
+/** The account a tap on the emergency fund opens: the one marked as it, or null when there are several (or none). */
+export function efAccount(b: Bootstrap): number | null {
+  const ef = b.accounts.filter((a) => a.ef)
+  return ef.length === 1 ? ef[0].id : null
+}

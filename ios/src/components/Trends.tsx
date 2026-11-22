@@ -1,5 +1,6 @@
 // Insights' trends: each spending category as a small card, its line over the months up to the one picked, and how
-// that month compares with the average of the ones before it. Tapping a card opens the category.
+// that month compares with the average of the ones before it, always as a percentage. Tapping a card opens the
+// category on that month.
 import { View } from 'react-native'
 import Svg, { Circle, Path } from 'react-native-svg'
 import { categoryVisual } from '@/icons/categories'
@@ -47,7 +48,7 @@ export function Trends({ b, months, at }: { b: Bootstrap; months: MonthRow[]; at
           const max = Math.max(...values, 1)
           const pts = values.map((val, i) => [4 + (i / (values.length - 1)) * (W - 8), 4 + (1 - val / max) * (H - 8)] as const)
           return (
-            <Tap key={x.id} href={{ pathname: '/category/[id]', params: { id: String(x.id) } }}
+            <Tap key={x.id} href={{ pathname: '/category/[id]', params: { id: String(x.id), month: upTo.at(-1)!.month.slice(0, 7) } }}
               style={{ width: '47.5%', flexGrow: 1, padding: space.m, gap: space.s, borderRadius: radius.panel, borderCurve: 'continuous', backgroundColor: c.panel }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
                 <Mark kind="glyph" sf={v.sf} md={v.md} tint={color} size={24} />
@@ -61,7 +62,7 @@ export function Trends({ b, months, at }: { b: Bootstrap; months: MonthRow[]; at
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <Txt variant="headline" num>{formatCents(now, { cents: false })}</Txt>
                 {change != null && Math.abs(change) >= 0.05 && (
-                  <Txt variant="foot" num tone={change > 0 ? 'neg' : 'pos'} style={{ fontWeight: '600' }}>{change >= 1 ? `${(now / avg!).toFixed(1)}×` : `${change > 0 ? '+' : '−'}${Math.round(Math.abs(change) * 100)}%`}</Txt>
+                  <Txt variant="foot" num tone={change > 0 ? 'neg' : 'pos'} style={{ fontWeight: '600' }}>{change > 0 ? '+' : '−'}{Math.round(Math.abs(change) * 100).toLocaleString('en-US')}%</Txt>
                 )}
               </View>
             </Tap>

@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
-import { Stack } from 'expo-router'
+import { router, Stack } from 'expo-router'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import Animated, { Easing, LinearTransition, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming, ZoomIn } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics'
 import { Bar } from '@/components/Bar'
 import { Commitments } from '@/components/Commitments'
 import { Confetti } from '@/components/Confetti'
+import { Delta } from '@/components/Delta'
 import { Donut } from '@/components/Donut'
 import { EASE } from '@/components/ease'
 import { Glow } from '@/components/Glow'
@@ -29,14 +30,15 @@ import { Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import { api, type Bootstrap, type MonthRow } from '@/lib/api'
-import { budgetFor, elapsed } from '@/lib/budgets'
+import { budgetFor, budgetLine, elapsed, monthBudget, paidBill } from '@/lib/budgets'
 import { fromISO, monthLabel, monthOf } from '@/lib/dates'
-import { compactCents, formatCents, pct } from '@/lib/money'
+import { formatCents, pct } from '@/lib/money'
 import { usePace } from '@/lib/pace'
 import { usePullRefresh } from '@/lib/refresh'
 import { play } from '@/lib/sound'
 import { shareCsv } from '@/lib/exportCsv'
 import { useTally } from '@/lib/tally'
+import { useTypical } from '@/lib/typical'
 import { font as ramp, radius, space, useTheme } from '@/theme'
 
 const name = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'long' })
@@ -49,6 +51,7 @@ const HEADER = (
       <Stack.Toolbar.MenuAction icon="list.bullet.rectangle" onPress={() => shareCsv('/export/log.csv', 'tally-entries.csv')}>Export every entry (CSV)</Stack.Toolbar.MenuAction>
       <Stack.Toolbar.MenuAction icon="calendar" onPress={() => shareCsv('/export/months.csv', 'tally-months.csv')}>Export months (CSV)</Stack.Toolbar.MenuAction>
     </Stack.Toolbar.Menu>
+    <Stack.Toolbar.Button icon="gearshape" accessibilityLabel="Settings" onPress={() => router.push('/settings')} />
   </Stack.Toolbar>
 )
 
@@ -57,13 +60,14 @@ export default function Insights() {
   const pull = usePullRefresh(q.refetch)
   const { c } = useTheme()
   const [waited] = useState(!b) // the skeleton showed first
+  const scroller = useRef<ScrollView>(null)
   return (
     <>
       {HEADER}
-      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
+      <ScrollView ref={scroller} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
         refreshControl={<RefreshControl {...pull} />}>
         <Glow />
-        {b ? <Arrive on={waited}><Body b={b} /></Arrive> : <StateView q={q} />}
+        {b ? <Arrive on={waited}><Body b={b} scroller={scroller} /></Arrive> : <StateView q={q} />}
       </ScrollView>
     </>
   )
@@ -71,15 +75,8 @@ export default function Insights() {
 
 /** How far under its total budget a month's budgeted spending finished, or null (no budgets, or over). */
 function underBy(b: Bootstrap, m: MonthRow): number | null {
-  let budget = 0, spent = 0
-  for (const x of b.categories) {
-    if (x.type !== 'Spending') continue
-    const cap = budgetFor(b, x, m.month)
-    if (!cap) continue
-    budget += cap
-    spent += m.by_category[String(x.id)] ?? 0
-  }
-  return budget > 0 && spent <= budget ? budget - spent : null
+  const t = monthBudget(b, m)
+  return t && t.spent <= t.budget ? t.budget - t.spent : null
 }
 
 const CELEBRATED = 'tally.celebrated'
@@ -112,7 +109,7 @@ function UnderBudget({ month, by }: { month: string; by: number }) {
   )
 }
 
-function Body({ b }: { b: Bootstrap }) {
+function Body({ b, scroller }: { b: Bootstrap; scroller: RefObject<ScrollView | null> }) {
   const { c, tint } = useTheme()
   const months = b.months.filter((m) => m.month <= monthOf(b.today))
   // The latest month until you pick one: data from the phone's cache can be a month behind on the first frame, and
@@ -126,6 +123,7 @@ function Body({ b }: { b: Bootstrap }) {
   const [settle, title, leave] = useMonthShift(m?.month)
   const target = useRef<number | null>(null) // the month being switched to while the current one fades out
   const pace = usePace(b)
+  const typical = useTypical(b, 3)
   const cats = !m ? [] : b.categories.filter((x) => x.type === 'Spending')
     .map((x) => ({ x, spent: m.by_category[String(x.id)] ?? 0, budget: budgetFor(b, x, m.month) }))
     .filter((r) => r.spent > 0 || (r.budget ?? 0) > 0).sort((a, z) => z.spent - a.spent)
@@ -140,6 +138,8 @@ function Body({ b }: { b: Bootstrap }) {
     leave(next > from ? 1 : -1, () => { if (target.current != null) setI(target.current); target.current = null })
   }
   const go = (d: number) => show((target.current ?? i) + d)
+  // A month picked further down (the Every month table) scrolls back up to it.
+  const pickUp = (k: number) => { scroller.current?.scrollTo({ y: 0, animated: true }); show(k) }
   // This month is still going: compare it with last month up to the same day, not with all of last month.
   const sameDay = isNow && pace && pace.cur.length ? pace.cur.at(-1)! - pace.prev[pace.cur.length - 1] : null
   const delta = !prev ? null : isNow ? sameDay : m.spent - prev.spent
@@ -147,6 +147,8 @@ function Body({ b }: { b: Bootstrap }) {
   const under = isNow ? null : underBy(b, m)
   // Early in a month, point back at last month if it came in under budget.
   const last = isNow && prev && Number(b.today.slice(8)) <= 10 ? underBy(b, prev) : null
+  const line = budgetLine(b, m, isNow ? typical : null)
+  const after = m.left_over - m.saving - m.loan // left over is money in less spending; this is after saving and loans too
 
   return (
     <>
@@ -187,11 +189,16 @@ function Body({ b }: { b: Bootstrap }) {
             {selected && <Txt variant="foot" tone="label2" num>{Math.round(pct(selected.spent, m.spent) * 100)}% of spending</Txt>}
           </View>
         </View>
+        {line && <Txt variant="callout" tone={line.tone} num style={{ textAlign: 'center', marginTop: -space.s }}>{line.text}</Txt>}
+        {/* Left over is money in less spending, so it sits next to money in; saving and loans come out of it after. */}
         <View style={{ flexDirection: 'row', alignSelf: 'stretch' }}>
           <Stat label="Money in" cents={m.money_in} tone="pos" />
-          <Stat label={m.loan ? 'Saved + loans' : 'Saved'} cents={m.saving + m.loan} />
           <Stat label="Left over" cents={m.left_over} tone={m.left_over < 0 ? 'neg' : undefined} />
+          <Stat label={m.loan ? 'Saved + loans' : 'Saved'} cents={m.saving + m.loan} />
         </View>
+        {m.saving + m.loan > 0 && (
+          <Txt variant="foot" tone="label2" num style={{ marginTop: -space.s, textAlign: 'center' }}>Left over is money in less spending. {formatCents(after, { cents: false })} after {m.loan ? 'saving and loans' : 'saving'}.</Txt>
+        )}
         <StoryButton month={m.month} label={isNow ? `Watch ${name(m.month)} so far` : `Watch ${name(m.month)}'s story`} />
       </Panel>
 
@@ -202,12 +209,13 @@ function Body({ b }: { b: Bootstrap }) {
           {cats.map((r, k) => {
             const v = categoryVisual(r.x)
             const on = sel === String(r.x.id)
-            const over = r.budget != null && r.spent > r.budget
+            const paid = r.budget != null && paidBill(b, r.x.id, r.spent, r.budget)
+            const over = r.budget != null && r.spent > r.budget && !paid
             return (
               <View key={r.x.id}>
                 {k > 0 && <Hairline inset={space.l + 40 + space.m} />}
                 {/* Pressing a row lights its slice in the donut, then opens the category. */}
-                <Tap feedback="highlight" href={{ pathname: '/category/[id]', params: { id: String(r.x.id) } }}
+                <Tap feedback="highlight" href={{ pathname: '/category/[id]', params: { id: String(r.x.id), month: m.month.slice(0, 7) } }}
                   onPressIn={() => setSel(String(r.x.id))} onPressOut={() => setSel(null)}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, backgroundColor: on ? c.fill : undefined,
                     paddingTop: space.m + (k === 0 ? space.xs : 0), paddingBottom: space.m + (k === cats.length - 1 ? space.xs : 0) }}>
@@ -220,7 +228,7 @@ function Body({ b }: { b: Bootstrap }) {
                     {r.budget != null ? (
                       <>
                         <Bar value={pct(r.spent, r.budget)} color={over ? c.neg : tint(v.tint)} notch={isNow ? elapsed(m.month, b.today) : undefined} height={6} />
-                        <Txt variant="foot" tone={over ? 'neg' : 'label2'} num>{over ? `${formatCents(r.spent - r.budget, { cents: false })} over` : `${formatCents(r.budget - r.spent, { cents: false })} left`} of {formatCents(r.budget, { cents: false })}</Txt>
+                        <Txt variant="foot" tone={over ? 'neg' : 'label2'} num>{paid ? 'Paid' : `${over ? `${formatCents(r.spent - r.budget, { cents: false })} over` : `${formatCents(r.budget - r.spent, { cents: false })} left`} of ${formatCents(r.budget, { cents: false })}`}</Txt>
                       </>
                     ) : (
                       <Txt variant="foot" tone="label2" num>{Math.round(pct(r.spent, m.spent) * 100)}% of spending</Txt>
@@ -248,24 +256,7 @@ function Body({ b }: { b: Bootstrap }) {
         <MonthEndRow month={m.month} />
       </Section>
 
-      <Section title="Every month">
-        <Panel pad={false}>
-          <View style={{ flexDirection: 'row', paddingHorizontal: space.l, paddingVertical: space.s }}>
-            {['Month', 'In', 'Spent', 'Left'].map((h, k) => <Txt key={h} variant="foot" tone="label2" style={{ flex: k === 0 ? 1.1 : 1, textAlign: k === 0 ? 'left' : 'right' }}>{h}</Txt>)}
-          </View>
-          {[...months].reverse().map((r) => (
-            <View key={r.month}>
-              <Hairline inset={space.l} />
-              <View style={{ flexDirection: 'row', paddingHorizontal: space.l, paddingVertical: space.m }}>
-                <Txt variant="callout" style={{ flex: 1.1 }}>{monthLabel(r.month)}</Txt>
-                <Txt variant="callout" num tone="pos" style={{ flex: 1, textAlign: 'right' }}>{compactCents(r.money_in)}</Txt>
-                <Txt variant="callout" num style={{ flex: 1, textAlign: 'right' }}>{compactCents(r.spent)}</Txt>
-                <Txt variant="callout" num tone={r.left_over < 0 ? 'neg' : 'label'} style={{ flex: 1, textAlign: 'right' }}>{compactCents(r.left_over)}</Txt>
-              </View>
-            </View>
-          ))}
-        </Panel>
-      </Section>
+      <EveryMonth b={b} months={months} at={i} onPick={pickUp} />
       </Animated.View>
     </>
   )
@@ -307,6 +298,38 @@ function Stat({ label, cents, tone }: { label: string; cents: number; tone?: 'po
       <Txt variant="sub" tone="label2">{label}</Txt>
       <RollingMoney cents={cents} whole style={{ ...ramp.headline, color: tone ? c[tone] : c.label }} />
     </View>
+  )
+}
+
+/** Every month as a table in whole dollars, newest first. Tapping a row picks that month at the top of the screen,
+ *  like the Cash flow bars. */
+function EveryMonth({ b, months, at, onPick }: { b: Bootstrap; months: MonthRow[]; at: number; onPick: (i: number) => void }) {
+  const { c } = useTheme()
+  const whole = (cents: number) => formatCents(cents, { cents: false })
+  return (
+    <Section title="Every month">
+      <Panel pad={false}>
+        <View style={{ flexDirection: 'row', paddingHorizontal: space.l, paddingVertical: space.s }}>
+          {['Month', 'In', 'Spent', 'Left'].map((h, k) => <Txt key={h} variant="foot" tone="label2" style={{ flex: k === 0 ? 1.1 : 1, textAlign: k === 0 ? 'left' : 'right' }}>{h}</Txt>)}
+        </View>
+        {months.map((r, k) => ({ r, k })).reverse().map(({ r, k }, n, all) => {
+          const on = k === at
+          return (
+            <View key={r.month}>
+              <Hairline inset={space.l} />
+              <Tap feedback="highlight" onPress={() => onPick(k)} accessibilityState={{ selected: on }}
+                style={{ flexDirection: 'row', paddingHorizontal: space.l, paddingTop: space.m, paddingBottom: space.m + (n === all.length - 1 ? space.xs : 0),
+                  backgroundColor: on ? c.fill : undefined }}>
+                <Txt variant="callout" style={{ flex: 1.1, fontWeight: on ? '600' : undefined }}>{r.month === monthOf(b.today) ? `${shortName(r.month)} so far` : monthLabel(r.month)}</Txt>
+                <Txt variant="callout" num tone="pos" style={{ flex: 1, textAlign: 'right' }}>{whole(r.money_in)}</Txt>
+                <Txt variant="callout" num style={{ flex: 1, textAlign: 'right' }}>{whole(r.spent)}</Txt>
+                <Txt variant="callout" num tone={r.left_over < 0 ? 'neg' : 'label'} style={{ flex: 1, textAlign: 'right' }}>{whole(r.left_over)}</Txt>
+              </Tap>
+            </View>
+          )
+        })}
+      </Panel>
+    </Section>
   )
 }
 
@@ -368,7 +391,7 @@ function NetWorth({ b }: { b: Bootstrap }) {
     <Section title="Net worth">
       <Panel style={{ gap: space.m }}>
         <ScrubFigure cents={values.at(-1)!} values={values} labels={months.map((m) => (m.month === monthOf(b.today) ? `${name(m.month)} so far` : `End of ${monthLabel(m.month, 'long')}`))} scrub={scrub}
-          style={{ ...ramp.title, color: c.label }} caption={<Txt variant="callout" tone="label2">Month-end, {months.length} months</Txt>} />
+          style={{ ...ramp.title, color: c.label }} caption={<Delta cents={values.at(-1)! - values.at(-2)!} suffix={`since ${name(months.at(-2)!.month)}`} />} />
         <ScrubChart scrub={scrub} slots={values.length} series={[{ values, color: c.ink }]} height={110} />
       </Panel>
     </Section>

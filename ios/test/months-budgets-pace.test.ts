@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { budgetFor, elapsed, paceOver, suggestBudgets } from '@/lib/budgets'
+import { billTest, budgetFor, budgetLine, elapsed, monthBudget, paceOver, paidBill, suggestBudgets } from '@/lib/budgets'
 import { monthsBefore, typicalFrom } from '@/lib/typical'
 import { monthsNow } from '@/lib/months'
 import { paceFrom, paceWindow } from '@/lib/pace'
@@ -107,4 +107,44 @@ test('typicalFrom: spending by this day of the month in the months before', () =
   assert.equal(t.full.get(1), 140000)
   assert.equal(t.by.get(2), 2500)
   assert.equal(t.full.get(2), 20000)
+})
+
+test('monthBudget and budgetLine: the month against all its budgets at once', () => {
+  const cats = [cat(2, 'Spending', { budget: 40000 }), cat(3, 'Spending', { budget: 10000 }), cat(4, 'Spending'), cat(5, 'Spending', { budget: 9000, active: false })]
+  const m = month('2026-09-01', { by_category: { 2: 30000, 3: 4000, 4: 99999, 5: 1 } })
+  const b = boot({ today: '2026-09-22', categories: cats })
+  assert.deepEqual(monthBudget(b, m), { budget: 50000, spent: 34000, ids: [2, 3] }) // unbudgeted and hidden stay out
+  assert.deepEqual(budgetLine(b, m, null), { text: '$160 of your $500 budget left for 8 more days', tone: 'label2' })
+  assert.equal(budgetLine(boot({ today: '2026-09-30', categories: cats }), m, null)?.text, '$160 of your $500 budget left today')
+  // Usually another $250 comes after the 22nd: 340 + 250 is $90 over.
+  const typical = { by: new Map([[2, 10000], [3, 0]]), full: new Map([[2, 35000], [3, 0]]) }
+  assert.deepEqual(budgetLine(b, m, typical), { text: 'On pace to go $90 over your $500 budget', tone: 'warn' })
+  const over = month('2026-09-01', { by_category: { 2: 52000 } })
+  assert.deepEqual(budgetLine(b, over, typical), { text: '$20 over your $500 budget', tone: 'neg' })
+  // A finished month only speaks up when it went over; a month not started says nothing.
+  const later = boot({ today: '2026-10-05', categories: cats })
+  assert.equal(budgetLine(later, m, null), null)
+  assert.deepEqual(budgetLine(later, over, null), { text: 'Finished $20 over its $500 budget', tone: 'neg' })
+  assert.equal(budgetLine(boot({ today: '2026-08-20', categories: cats }), m, null), null)
+  assert.equal(budgetLine(boot({ categories: [cat(2, 'Spending')] }), m, null), null)
+})
+
+test('paidBill: a recurring category that took its whole budget', () => {
+  const r = { id: 1, label: 'Rent', category_id: 2, from_account_id: 1, to_account_id: null, amount: 140000, what: 'Rent', freq: 'monthly' as const,
+    next_date: '2026-10-01', horizon_days: 45, active: 1, anchor_day: 1, created_at: '' }
+  const b = boot({ recurring: [r] })
+  assert.equal(paidBill(b, 2, 140000, 140000), true)
+  assert.equal(paidBill(b, 2, 70000, 140000), false)
+  assert.equal(paidBill(b, 3, 140000, 140000), false)
+  assert.equal(paidBill(boot({ recurring: [{ ...r, active: 0 }] }), 2, 140000, 140000), false)
+})
+
+test('billTest: posted by a template, or the same place and category as one', () => {
+  const r = { id: 1, label: 'Rent', category_id: 2, from_account_id: 1, to_account_id: null, amount: 140000, what: 'Rent', freq: 'monthly' as const,
+    next_date: '2026-10-01', horizon_days: 45, active: 1, anchor_day: 1, created_at: '' }
+  const bill = billTest(boot({ recurring: [r] }))
+  assert.equal(bill(row('2026-09-01', 140000, { what: 'RENT', category_id: 2 })), true) // typed by hand
+  assert.equal(bill(row('2026-09-01', 140000, { what: 'Rent', category_id: 3 })), false)
+  assert.equal(bill(row('2026-09-01', 999, { what: 'Gym', category_id: 3, recurring_id: 4 })), true)
+  assert.equal(bill(row('2026-09-01', 999, { what: 'Market', category_id: 2 })), false)
 })

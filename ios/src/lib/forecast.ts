@@ -2,8 +2,9 @@
 // templates post their rows ~45 days ahead, and anything else dated in the future counts too. No guessing at
 // everyday spending, so the lows here are the floor of what's planned, not a prediction.
 import type { Account, Bootstrap, Txn } from './api'
-import { addDays } from './dates'
+import { addDays, fromISO } from './dates'
 import { dailyBalances } from './balances'
+import { formatCents } from './money'
 
 export const AHEAD = 30
 
@@ -50,4 +51,21 @@ export function outlooks(b: Bootstrap, rows: Txn[], ahead = AHEAD): Outlook[] {
     .map((a) => outlook(a, rows, b.start, b.today, ahead))
     .filter((o) => o.count > 0)
     .sort((x, y) => (x.a.kind === y.a.kind ? 0 : x.a.kind === 'cash' ? -1 : 1))
+}
+
+/** One scale for every small line in Next 30 days: the biggest swing among them. Each line scaled to itself drew a
+ *  card's $12 charge as tall a step as rent out of checking. */
+export function sharedSpan(list: Pick<Outlook, 'days'>[]): number {
+  return Math.max(1, ...list.map((o) => Math.max(...o.days) - Math.min(...o.days)))
+}
+
+/** The line under an account in Next 30 days. A card says what it means for what's owed, since "+$12" read like money
+ *  coming in. */
+export function aheadLine(o: Pick<Outlook, 'a' | 'inflow' | 'outflow' | 'count' | 'belowZero'>): string {
+  if (o.belowZero) return `Below zero on ${fromISO(o.belowZero).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+  if (o.a.kind === 'card') {
+    const more = o.outflow - o.inflow
+    return `${o.count} scheduled, ${formatCents(more, { cents: false, sign: 'always' })} owed`
+  }
+  return `${o.count} scheduled, ${formatCents(o.inflow - o.outflow, { cents: false, sign: 'always' })}`
 }

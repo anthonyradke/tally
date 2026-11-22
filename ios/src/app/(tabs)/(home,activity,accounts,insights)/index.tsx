@@ -8,7 +8,9 @@ import { closeSwipes } from '@/components/SwipeRow'
 import { Bar } from '@/components/Bar'
 import { Chip } from '@/components/Chip'
 import { EASE } from '@/components/ease'
-import { Forecast } from '@/components/Forecast'
+import { Delta } from '@/components/Delta'
+import { FootLink } from '@/components/FootLink'
+import { ComingUp, Forecast } from '@/components/Forecast'
 import { Glow } from '@/components/Glow'
 import { Moments } from '@/components/Moments'
 import { CatchUpNudge } from '@/components/CatchUpNudge'
@@ -28,10 +30,10 @@ import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import type { Bootstrap, MonthRow } from '@/lib/api'
-import { budgetFor, elapsed, paceOver, usualFor } from '@/lib/budgets'
-import { efPace } from '@/lib/goals'
+import { budgetFor, budgetLine, elapsed, monthBudget, paceOver, paidBill, usualFor } from '@/lib/budgets'
+import { efAccount, efCover, efPace } from '@/lib/goals'
 import { useTransactions } from '@/lib/data'
-import { addDays, fromISO, monthLabel } from '@/lib/dates'
+import { fromISO, monthLabel } from '@/lib/dates'
 import { compactCents, formatCents, pct } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
 import { useQuickFloat } from '@/lib/motion'
@@ -89,7 +91,7 @@ export default function Home() {
         contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
         refreshControl={<RefreshControl {...pull} />}>
         <Glow />
-        {b ? <Arrive on={waited}><Widgets b={b} /></Arrive> : <StateView q={q} />}
+        {b ? <Arrive on={waited}><Widgets b={b} /><FootLink label="Customize Home" href="/settings/home" /></Arrive> : <StateView q={q} />}
       </ScrollView>
     </>
   )
@@ -98,12 +100,20 @@ export default function Home() {
 function Widgets({ b }: { b: Bootstrap }) {
   const ids = layout(b)
   const out: ReactNode[] = [<Moments key="moments" b={b} />, <CatchUpNudge key="nudge" b={b} />]
+  const both = ids.includes('forecast') && ids.includes('upcoming')
+  let merged = false
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i]
     // Emergency fund and Roth are small; when they sit next to each other they share a row.
     if ((id === 'ef' && ids[i + 1] === 'roth') || (id === 'roth' && ids[i + 1] === 'ef')) {
       out.push(<View key="goals" style={{ flexDirection: 'row', gap: space.m, marginBottom: space.section - 4 }}><Goal b={b} kind={id} /><Goal b={b} kind={ids[i + 1] as 'ef' | 'roth'} /></View>)
       i++
+      continue
+    }
+    // Next 30 days and Coming up list the same bills: with both on, they're one section where the first one sits.
+    if (both && (id === 'forecast' || id === 'upcoming')) {
+      if (!merged) out.push(<View key="ahead"><ComingUp b={b} paths /></View>)
+      merged = true
       continue
     }
     const el = WIDGETS[id]?.(b)
@@ -122,22 +132,11 @@ const WIDGETS: Record<string, (b: Bootstrap) => ReactNode> = {
   ef: (b) => <Goal b={b} kind="ef" wide />,
   roth: (b) => <Goal b={b} kind="roth" wide />,
   forecast: (b) => <Forecast b={b} />,
-  upcoming: (b) => <Upcoming b={b} />,
+  upcoming: (b) => <ComingUp b={b} paths={false} />,
   recent: (b) => <Recent b={b} />,
   chart: (b) => <NetWorthChart b={b} />,
 }
 
-function Delta({ cents, suffix }: { cents: number; suffix: string }) {
-  const { c } = useTheme()
-  const up = cents >= 0
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <Icon sf={up ? 'arrow.up.right' : 'arrow.down.right'} md={up ? 'trending_up' : 'trending_down'} size={13} color={up ? c.pos : c.neg} weight="bold" />
-      <Txt variant="callout" tone={up ? 'pos' : 'neg'} num style={{ fontWeight: '600' }}>{formatCents(Math.abs(cents))}</Txt>
-      <Txt variant="callout" tone="label2">{suffix}</Txt>
-    </View>
-  )
-}
 
 const SEEN = 'tally.seen.networth'
 
@@ -190,12 +189,13 @@ function Hero({ b }: { b: Bootstrap }) {
 function ThisMonth({ b }: { b: Bootstrap }) {
   const { c } = useTheme()
   const pace = usePace(b)
+  const typical = useTypical(b, 3)
   const scrub = useSharedValue(-1)
   const { cur, prev } = monthsNow(b)
-  const budgets = b.categories.filter((x) => x.type === 'Spending' && x.active).map((x) => budgetFor(b, x, cur?.month ?? ''))
-    .filter((v): v is number => v != null)
-  const totalBudget = budgets.length ? budgets.reduce((a, v) => a + v, 0) : null
   if (!cur) return null
+  const totalBudget = monthBudget(b, cur)?.budget ?? null
+  const line = budgetLine(b, cur, typical) // "Am I on track?" in words, by the same pace rule as each budget bar
+  const due = pace?.scheduled ?? 0
   const spent = pace?.cur.at(-1) ?? cur.spent
   const prevAt = pace ? pace.prev[Math.max(0, (pace.cur.length || 1) - 1)] : null
   const diff = prevAt != null ? spent - prevAt : null
@@ -214,6 +214,7 @@ function ThisMonth({ b }: { b: Bootstrap }) {
               {` than ${monthName(prev.month)} at this point`}
             </Txt>
           ) : <Txt variant="callout" tone="label2">Spent so far</Txt>} />
+        {line && <Txt variant="callout" tone={line.tone} num style={{ marginTop: -space.s, fontWeight: line.tone === 'label2' ? undefined : '600' }}>{line.text}</Txt>}
         {pace ? (
           <ScrubChart scrub={scrub} slots={pace.days} zero height={140} guide={totalBudget} live
             series={[{ values: pace.cur, color: c.ink }, ...(prev ? [{ values: pace.prev, color: c.chartPrev, dashed: true }] : [])]} />
@@ -227,7 +228,8 @@ function ThisMonth({ b }: { b: Bootstrap }) {
         <View style={{ flexDirection: 'row' }}>
           <Stat label="Money in" cents={cur.money_in} tone="pos" />
           <Stat label="Left over" cents={cur.left_over} tone={cur.left_over < 0 ? 'neg' : undefined} />
-          <Stat label="Scheduled" cents={pace?.scheduled ?? 0} />
+          {/* Only what's still due this month; Coming up looks further ahead. */}
+          {due > 0 && <Stat label="Still due" cents={due} />}
         </View>
       </Panel>
     </Section>
@@ -253,12 +255,12 @@ function Stat({ label, cents, tone }: { label: string; cents: number; tone?: 'po
 }
 
 function QuickAdd({ b }: { b: Bootstrap }) {
-  const { tint } = useTheme()
+  const { c, tint } = useTheme()
   const cats = new Map(b.categories.map((x) => [x.id, x]))
   const float = useQuickFloat((s) => s.last)
   // The scroller clips its content, so it reaches up over the title with padding to give a floating amount room.
   return (
-    <Section title="Quick add">
+    <Section title="Quick add" href="/settings/quick" action="Edit">
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l, marginTop: -FLOAT }}
         contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l, paddingTop: FLOAT }}>
         {b.favorites.map((f) => {
@@ -273,6 +275,9 @@ function QuickAdd({ b }: { b: Bootstrap }) {
             </View>
           )
         })}
+        <Chip label="New" leading={<View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c.fill, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon sf="plus" md="add" size={14} color={c.label} weight="bold" /></View>}
+          onPress={() => router.push({ pathname: '/edit', params: { kind: 'quick' } })} />
       </ScrollView>
     </Section>
   )
@@ -306,8 +311,8 @@ function Budgets({ b }: { b: Bootstrap }) {
   const typical = useTypical(b, 3)
   if (!cur) return null
   const rows = b.categories.filter((x) => x.active && x.type === 'Spending')
-    .map((x) => ({ x, budget: budgetFor(b, x, cur.month), spent: cur.by_category[String(x.id)] ?? 0 }))
-    .filter((r) => r.budget != null && r.budget > 0) as { x: Bootstrap['categories'][number]; budget: number; spent: number }[]
+    .map((x) => ({ x, budget: budgetFor(b, x, cur.month) ?? 0, spent: cur.by_category[String(x.id)] ?? 0 }))
+    .filter((r) => r.budget > 0).map((r) => ({ ...r, paid: paidBill(b, r.x.id, r.spent, r.budget) }))
   const notch = elapsed(cur.month, b.today)
   if (!rows.length) {
     return (
@@ -327,13 +332,14 @@ function Budgets({ b }: { b: Bootstrap }) {
       </Section>
     )
   }
-  rows.sort((a, z) => z.spent / z.budget - a.spent / a.budget)
+  // Fullest first, but a bill that's simply been paid goes to the end: it isn't a warning.
+  rows.sort((a, z) => Number(a.paid) - Number(z.paid) || z.spent / z.budget - a.spent / a.budget)
   return (
     <Section title="Budgets" href="/settings/budgets" action="Edit">
       <Panel style={{ gap: space.l }}>
-        {rows.slice(0, 5).map(({ x, budget, spent }) => {
+        {rows.slice(0, 5).map(({ x, budget, spent, paid }) => {
           const v = categoryVisual(x)
-          const over = spent > budget
+          const over = spent > budget && !paid
           const warn = paceOver(spent, budget, cur.month, b.today, usualFor(typical, x.id))
           return (
             <Tap key={x.id} href={{ pathname: '/category/[id]', params: { id: String(x.id) } }} feedback="opacity" style={{ gap: space.s }}>
@@ -341,7 +347,7 @@ function Budgets({ b }: { b: Bootstrap }) {
                   <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={28} />
                   <Txt variant="row" style={{ flex: 1 }} numberOfLines={1}>{x.name}</Txt>
                   <Txt variant="sub" tone={over ? 'neg' : 'label2'} num>
-                    {over ? `${formatCents(spent - budget, { cents: false })} over` : `${formatCents(budget - spent, { cents: false })} left`}
+                    {paid ? 'Paid' : `${over ? `${formatCents(spent - budget, { cents: false })} over` : `${formatCents(budget - spent, { cents: false })} left`} of ${formatCents(budget, { cents: false })}`}
                   </Txt>
                 </View>
                 <Bar value={pct(spent, budget)} color={over ? c.neg : tint(v.tint)} notch={notch} />
@@ -398,8 +404,11 @@ function Goal({ b, kind, wide }: { b: Bootstrap; kind: 'ef' | 'roth'; wide?: boo
   if (!goal) return null
   const color = ef ? tint('teal') : tint('violet')
   const pace = ef ? efPace(b) : null // when the fund gets there at its recent pace
-  // The emergency fund opens Accounts; the Roth opens its contributions category.
-  const href = ef ? '/accounts' as const : b.roth.category_id ? { pathname: '/category/[id]' as const, params: { id: String(b.roth.category_id) } } : undefined
+  const cover = ef ? efCover(b) : null
+  // The emergency fund opens its account (Accounts when several make it up); the Roth opens its contributions category.
+  const efId = ef ? efAccount(b) : null
+  const href = ef ? (efId != null ? { pathname: '/account/[id]' as const, params: { id: String(efId) } } : '/accounts' as const)
+    : b.roth.category_id ? { pathname: '/category/[id]' as const, params: { id: String(b.roth.category_id) } } : undefined
   return (
     <Tap href={href} disabled={!href} style={{ flex: 1, marginBottom: wide ? space.section - 4 : 0 }}>
     <Panel style={{ flex: 1, flexDirection: wide ? 'row' : 'column', alignItems: wide ? 'center' : 'flex-start', gap: space.m }}>
@@ -407,7 +416,12 @@ function Goal({ b, kind, wide }: { b: Bootstrap; kind: 'ef' | 'roth'; wide?: boo
       <View style={{ gap: 2, flex: wide ? 1 : undefined }}>
         <Txt variant="sub" tone="label2">{ef ? 'Emergency fund' : `Roth IRA ${fromISO(b.today).getFullYear()}`}</Txt>
         <Money cents={have} whole variant="headline" />
-        <Txt variant="foot" tone="label2" num>of {formatCents(goal, { cents: false })}{ef ? `, ${b.settings.ef_months ?? 6} months of spending` : ' limit'}</Txt>
+        {cover ? (
+          <Txt variant="foot" tone="label2" num>
+            <Txt variant="foot" style={{ fontWeight: '600' }} num>{cover.months.toLocaleString('en-US')} {cover.months === 1 ? 'month' : 'months'} of spending.</Txt>
+            {` Goal ${cover.goal} (${formatCents(goal, { cents: false })})`}
+          </Txt>
+        ) : <Txt variant="foot" tone="label2" num>of {formatCents(goal, { cents: false })} limit</Txt>}
         {pace && (
           <Txt variant="foot" tone="pos" num style={{ fontWeight: '600' }}>
             {wide ? `At ${formatCents(pace.perMonth, { cents: false, sign: 'always' })} a month, there by ${monthLabel(pace.eta, 'long')}` : `There by ${monthLabel(pace.eta)}`}
@@ -420,26 +434,6 @@ function Goal({ b, kind, wide }: { b: Bootstrap; kind: 'ef' | 'roth'; wide?: boo
   )
 }
 
-function Upcoming({ b }: { b: Bootstrap }) {
-  const t = useTally()
-  // From tomorrow: starting today, a busy day's entries filled the six rows and hid what's coming.
-  const q = useTransactions({ start: addDays(b.today, 1), end: addDays(b.today, 30), sort: 'date', dir: 'asc', limit: 6 })
-  const rows = q.data?.items ?? []
-  if (!rows.length) return null
-  return (
-    <Section title="Coming up" href={{ pathname: '/activity', params: { when: 'upcoming' } }}>
-      <Panel pad={false}>
-        {rows.slice(0, 4).map((x, i, all) => (
-          <View key={x.id}>
-            {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-            <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={b.today} showDate={short(x.date)}
-              padTop={i === 0 ? space.xs : 0} padBottom={i === all.length - 1 ? space.xs : 0} />
-          </View>
-        ))}
-      </Panel>
-    </Section>
-  )
-}
 
 function Recent({ b }: { b: Bootstrap }) {
   const t = useTally()
@@ -487,14 +481,15 @@ function MonthReview({ b }: { b: Bootstrap }) {
 function NetWorthChart({ b }: { b: Bootstrap }) {
   const { c } = useTheme()
   const scrub = useSharedValue(-1)
-  const { upTo } = monthsNow(b)
+  const { upTo, prev } = monthsNow(b)
   if (upTo.length < 3) return null
   const values = upTo.map((m: MonthRow) => m.net_worth)
+  const since = prev ? <Delta cents={values.at(-1)! - prev.net_worth} suffix={`since ${monthName(prev.month)}`} /> : <Txt variant="callout" tone="label2">Month-end balances</Txt>
   return (
     <Section title="Net worth over time">
       <Panel style={{ gap: space.m }}>
         <ScrubFigure cents={values.at(-1)!} values={values} labels={upTo.map((m, i) => (i === upTo.length - 1 ? `${monthName(m.month)} so far` : `End of ${monthLabel(m.month, 'long')}`))} scrub={scrub}
-          style={{ ...ramp.title, color: c.label }} caption={<Txt variant="callout" tone="label2">Month-end balances</Txt>} />
+          style={{ ...ramp.title, color: c.label }} caption={since} />
         <ScrubChart scrub={scrub} slots={values.length} series={[{ values, color: c.ink }]} height={120} />
       </Panel>
     </Section>
