@@ -5,7 +5,7 @@ import { View } from 'react-native'
 import Svg, { Circle, Path } from 'react-native-svg'
 import { categoryVisual } from '@/icons/categories'
 import type { Bootstrap, MonthRow } from '@/lib/api'
-import { elapsed } from '@/lib/budgets'
+import { elapsed, USUAL_MONTHS, usualBefore, vsUsual } from '@/lib/budgets'
 import { useTypical } from '@/lib/typical'
 import { formatCents } from '@/lib/money'
 import { radius, space, useTheme } from '@/theme'
@@ -18,7 +18,7 @@ const W = 120, H = 34
 
 export function Trends({ b, months, at }: { b: Bootstrap; months: MonthRow[]; at: number }) {
   const { c, tint } = useTheme()
-  const upTo = months.slice(Math.max(0, at - 5), at + 1)
+  const upTo = months.slice(Math.max(0, at - USUAL_MONTHS), at + 1)
   // A month still going is compared with what the months before had spent by the same day, not with a share of
   // their whole: rent paid on the 1st read +650% on the 4th.
   const share = upTo.length ? elapsed(upTo.at(-1)!.month, b.today) : 1
@@ -27,8 +27,7 @@ export function Trends({ b, months, at }: { b: Bootstrap; months: MonthRow[]; at
   const cards = b.categories.filter((x) => x.type === 'Spending')
     .map((x) => {
       const values = upTo.map((m) => Math.max(0, m.by_category[String(x.id)] ?? 0))
-      const before = values.slice(0, -1)
-      const whole = before.reduce((n, v) => n + v, 0) / before.length
+      const whole = usualBefore(values, values.length - 1) ?? 0
       // Never against less than a pro-rata share of a usual month: a few days in, what's usual by then can be a few
       // dollars, and one grocery run read +1078%.
       const avg = share < 1 ? (typical ? Math.max(typical.by.get(x.id) ?? 0, whole * share) : null) : whole
@@ -44,7 +43,7 @@ export function Trends({ b, months, at }: { b: Bootstrap; months: MonthRow[]; at
         {cards.map(({ x, values, now, avg }) => {
           const v = categoryVisual(x)
           const color = tint(v.tint)
-          const change = avg != null && avg > 0 ? (now - avg) / avg : null
+          const change = vsUsual(now, avg)
           const max = Math.max(...values, 1)
           const pts = values.map((val, i) => [4 + (i / (values.length - 1)) * (W - 8), 4 + (1 - val / max) * (H - 8)] as const)
           return (
@@ -61,7 +60,7 @@ export function Trends({ b, months, at }: { b: Bootstrap; months: MonthRow[]; at
               </Svg>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <Txt variant="headline" num>{formatCents(now, { cents: false })}</Txt>
-                {change != null && Math.abs(change) >= 0.05 && (
+                {!!change && (
                   <Txt variant="foot" num tone={change > 0 ? 'neg' : 'pos'} style={{ fontWeight: '600' }}>{change > 0 ? '+' : '−'}{Math.round(Math.abs(change) * 100).toLocaleString('en-US')}%</Txt>
                 )}
               </View>

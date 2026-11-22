@@ -26,6 +26,24 @@ export function paceOver(spent: number, budget: number, month: string, today: st
   return projected > budget * 1.05 ? projected - budget : null
 }
 
+/** How many months before a month its usual averages over. Trends and the category page use the same ones, so a card
+ *  reading +40% doesn't open a page saying "18% higher". */
+export const USUAL_MONTHS = 5
+
+/** The average of the (up to `USUAL_MONTHS`) values before index `k`, or null with none before it. */
+export function usualBefore(values: number[], k: number): number | null {
+  const before = values.slice(Math.max(0, k - USUAL_MONTHS), k)
+  return before.length ? before.reduce((n, v) => n + v, 0) / before.length : null
+}
+
+/** A month against its usual as a share (0.4 = 40% higher), or null with nothing usual to go by. Within 5% either way
+ *  is "about the same": Trends shows no figure and the category page says so. */
+export function vsUsual(now: number, usual: number | null): number | null {
+  if (usual == null || usual <= 0) return null
+  const change = (now - usual) / usual
+  return Math.abs(change) < 0.05 ? 0 : change
+}
+
 /** A category's entry in a `Typical`, as `paceOver` takes it. */
 export const usualFor = (t: { by: Map<number, number>; full: Map<number, number> } | null, id: number) =>
   t && t.full.has(id) ? { by: t.by.get(id) ?? 0, full: t.full.get(id)! } : null
@@ -44,6 +62,18 @@ export function monthBudget(b: Bootstrap, m: MonthRow): { budget: number; spent:
     ids.push(x.id)
   }
   return budget > 0 ? { budget, spent, ids } : null
+}
+
+/** The month's total budget as a guide line on a chart of all its spending, or null when some of that spending is in
+ *  categories without a budget: the line would cross the guide while `budgetLine` (budgeted categories only) still
+ *  said there was money left. */
+export function budgetGuide(b: Bootstrap, m: MonthRow): number | null {
+  const t = monthBudget(b, m)
+  if (!t) return null
+  const covered = new Set(t.ids.map(String))
+  const types = new Map(b.categories.map((c) => [String(c.id), c.type]))
+  const outside = Object.entries(m.by_category).some(([id, v]) => v !== 0 && types.get(id) === 'Spending' && !covered.has(id))
+  return outside ? null : t.budget
 }
 
 /** One sentence on how a month stands against its total budget, with the same pace rule as a category's bar. A month

@@ -30,19 +30,20 @@ import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import type { Bootstrap, MonthRow } from '@/lib/api'
-import { budgetFor, budgetLine, elapsed, monthBudget, paceOver, paidBill, usualFor } from '@/lib/budgets'
+import { budgetFor, budgetGuide, budgetLine, elapsed, paceOver, paidBill, usualFor } from '@/lib/budgets'
 import { efAccount, efCover, efPace } from '@/lib/goals'
 import { useTransactions } from '@/lib/data'
-import { fromISO, monthLabel } from '@/lib/dates'
-import { compactCents, formatCents, pct } from '@/lib/money'
+import { fromISO, lastOfMonth, monthLabel } from '@/lib/dates'
+import { compactCents, formatCents, formatChange, pct } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
 import { useQuickFloat } from '@/lib/motion'
 import { usePace } from '@/lib/pace'
 import { usePrivacy } from '@/lib/privacy'
 import { play } from '@/lib/sound'
 import { usePullRefresh } from '@/lib/refresh'
+import { topSpending } from '@/lib/story'
 import { useTally } from '@/lib/tally'
-import { useTypical } from '@/lib/typical'
+import { monthsBefore, useTypical } from '@/lib/typical'
 import { radius, space, font as ramp, useTheme } from '@/theme'
 
 const DEFAULT_ORDER = ['networth', 'review', 'stats', 'quick', 'budgets', 'spending', 'ef', 'forecast', 'upcoming', 'recent', 'roth', 'chart']
@@ -193,8 +194,11 @@ function ThisMonth({ b }: { b: Bootstrap }) {
   const scrub = useSharedValue(-1)
   const { cur, prev } = monthsNow(b)
   if (!cur) return null
-  const totalBudget = monthBudget(b, cur)?.budget ?? null
-  const line = budgetLine(b, cur, typical) // "Am I on track?" in words, by the same pace rule as each budget bar
+  // The guide only shows when the chart's line (all spending) measures what the sentence does (budgeted spending).
+  const totalBudget = budgetGuide(b, cur)
+  // "Am I on track?" in words, by the same pace rule as each budget bar. It waits for the months before, or it read
+  // "$X left" and turned amber a moment later.
+  const line = typical || !monthsBefore(b.today, 3, b.start).length ? budgetLine(b, cur, typical) : null
   const due = pace?.scheduled ?? 0
   const spent = pace?.cur.at(-1) ?? cur.spent
   const prevAt = pace ? pace.prev[Math.max(0, (pace.cur.length || 1) - 1)] : null
@@ -209,10 +213,12 @@ function ThisMonth({ b }: { b: Bootstrap }) {
         <ScrubFigure cents={spent} values={pace?.cur ?? []} labels={labels} scrub={scrub}
           style={{ ...ramp.title, color: c.label }}
           caption={diff != null && prev ? (
-            <Txt variant="callout" tone="label2">
-              <Txt variant="callout" tone={diff > 0 ? 'neg' : 'pos'} num style={{ fontWeight: '600' }}>{formatCents(Math.abs(diff), { cents: false })} {diff > 0 ? 'more' : 'less'}</Txt>
-              {` than ${monthName(prev.month)} at this point`}
-            </Txt>
+            diff ? (
+              <Txt variant="callout" tone="label2">
+                <Txt variant="callout" tone={diff > 0 ? 'neg' : 'pos'} num style={{ fontWeight: '600' }}>{formatChange(Math.abs(diff))} {diff > 0 ? 'more' : 'less'}</Txt>
+                {` than ${monthName(prev.month)} at this point`}
+              </Txt>
+            ) : <Txt variant="callout" tone="label2">{`The same as ${monthName(prev.month)} at this point`}</Txt>
           ) : <Txt variant="callout" tone="label2">Spent so far</Txt>} />
         {line && <Txt variant="callout" tone={line.tone} num style={{ marginTop: -space.s, fontWeight: line.tone === 'label2' ? undefined : '600' }}>{line.text}</Txt>}
         {pace ? (
@@ -419,7 +425,7 @@ function Goal({ b, kind, wide }: { b: Bootstrap; kind: 'ef' | 'roth'; wide?: boo
         {cover ? (
           <Txt variant="foot" tone="label2" num>
             <Txt variant="foot" style={{ fontWeight: '600' }} num>{cover.months.toLocaleString('en-US')} {cover.months === 1 ? 'month' : 'months'} of spending.</Txt>
-            {` Goal ${cover.goal} (${formatCents(goal, { cents: false })})`}
+            {` Goal ${cover.goal} ${cover.goal === 1 ? 'month' : 'months'} (${formatCents(goal, { cents: false })})`}
           </Txt>
         ) : <Txt variant="foot" tone="label2" num>of {formatCents(goal, { cents: false })} limit</Txt>}
         {pace && (
@@ -460,9 +466,12 @@ function Recent({ b }: { b: Bootstrap }) {
 function MonthReview({ b }: { b: Bootstrap }) {
   const { c } = useTheme()
   const { prev } = monthsNow(b)
-  if (!prev || fromISO(b.today).getDate() > 7) return null
-  const top = Object.entries(prev.by_category).map(([id, v]) => ({ cat: b.categories.find((x) => String(x.id) === id), v }))
-    .filter((r) => r.cat?.type === 'Spending' && r.v > 0).sort((a, z) => z.v - a.v)[0]
+  const on = !!prev && fromISO(b.today).getDate() <= 7
+  // The month's rows tell bills from everyday spending, the same way its story does ("Besides your bills").
+  const q = useTransactions({ type: 'Spending', start: prev?.month, end: prev ? lastOfMonth(prev.month) : undefined, limit: 3000 }, on)
+  if (!prev || !on) return null
+  const lead = q.data ? topSpending(b, prev, q.data.items) : null
+  const top = lead?.top[0]
   return (
     <Section title={`${monthName(prev.month)} in review`}>
       <Panel style={{ gap: space.m }}>
@@ -471,7 +480,7 @@ function MonthReview({ b }: { b: Bootstrap }) {
           <Stat label="Spent" cents={prev.spent} />
           <Stat label="Left over" cents={prev.left_over} tone={prev.left_over < 0 ? 'neg' : undefined} />
         </View>
-        {top?.cat && <Txt variant="callout" tone="label2">Most went to <Txt variant="callout" style={{ color: c.label, fontWeight: '600' }}>{top.cat.name}</Txt>, {formatCents(top.v, { cents: false })}.</Txt>}
+        {top && <Txt variant="callout" tone="label2">{lead?.besidesBills ? 'Besides your bills, most went to ' : 'Most went to '}<Txt variant="callout" style={{ color: c.label, fontWeight: '600' }}>{top.c.name}</Txt>, {formatCents(top.cents, { cents: false })}.</Txt>}
         <StoryButton month={prev.month} label={`Watch ${monthName(prev.month)}'s story`} />
       </Panel>
     </Section>

@@ -40,7 +40,7 @@ export function SpendCalendar({ b, month }: { b: Bootstrap; month: string }) {
   const lead = (fromISO(month).getDay() + 6) % 7 // weeks start on Monday
   const past = days.filter((d) => d.date <= b.today)
   const quiet = past.filter((d) => d.cents <= 0).length
-  const big = hist.data ? bigWeekday(hist.data.items, until, b.start) : null
+  const big = hist.data ? bigWeekday(hist.data.items, until, b.start, 12, bill) : null
   const sel = days.find((d) => d.date === picked)
   const open = (date: string) => router.push({ pathname: '/activity', params: { day: date } })
   const tap = (date: string) => {

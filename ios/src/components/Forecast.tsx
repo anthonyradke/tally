@@ -24,9 +24,10 @@ import { Txt } from './Txt'
 
 const short = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-/** The accounts with something scheduled in the next 30 days, or null while the rows load. */
-export function useOutlooks(b: Bootstrap): Outlook[] | null {
-  const all = useAllTxns()
+/** The accounts with something scheduled in the next 30 days, or null while the rows load (or when not `enabled`:
+ *  it reads the whole ledger). */
+export function useOutlooks(b: Bootstrap, enabled = true): Outlook[] | null {
+  const all = useAllTxns(enabled)
   return all.data ? outlooks(b, all.data.items).slice(0, 4) : null
 }
 
@@ -35,8 +36,10 @@ export function useOutlooks(b: Bootstrap): Outlook[] | null {
  *  entries filled the rows and hid what's coming. */
 export function ComingUp({ b, paths }: { b: Bootstrap; paths: boolean }) {
   const t = useTally()
-  const list = useOutlooks(b)
+  const list = useOutlooks(b, paths)
   const q = useTransactions({ start: addDays(b.today, 1), end: addDays(b.today, AHEAD), sort: 'date', dir: 'asc', limit: 6 })
+  // With paths, nothing shows until they're known: 4 rows first dropped to 3 when the account lines came in.
+  if (paths && !list) return null
   const ahead = paths && list ? list : []
   const rows = (q.data?.items ?? []).slice(0, ahead.length ? 3 : 4)
   if (!rows.length && !ahead.length) return null

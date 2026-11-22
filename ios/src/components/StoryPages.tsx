@@ -8,7 +8,7 @@ import { router } from 'expo-router'
 import { categoryVisual } from '@/icons/categories'
 import type { MarkSpec } from '@/icons/merchants'
 import { addDays, fromISO, lastOfMonth } from '@/lib/dates'
-import { formatCents } from '@/lib/money'
+import { formatCents, formatChange } from '@/lib/money'
 import { dayName, type Story } from '@/lib/story'
 import { radius, space } from '@/theme'
 import { EASE } from './ease'
@@ -174,7 +174,7 @@ export function storyPages(s: Story, opts: { markFor: (what: string) => MarkSpec
               <Rise key={x.c.id} at={750 + i * 120}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.m }}>
                   <Txt variant="headline" numberOfLines={1} style={{ color: WHITE, flexShrink: 1 }}>{x.c.name}</Txt>
-                  <Txt variant="headline" num style={{ color: SOFT }}>{formatCents(x.over, { cents: false })} over</Txt>
+                  <Txt variant="headline" num style={{ color: SOFT }}>{formatChange(x.over)} over</Txt>
                 </View>
               </Rise>
             ))}
@@ -254,7 +254,7 @@ function Mover({ c, by }: { c: Story['top'][number]['c']; by: number }) {
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
       <Mark kind="glyph" sf={v.sf} md={v.md} tint="rgba(255,255,255,0.22)" size={40} />
       <Txt variant="headline" style={{ color: WHITE, flex: 1 }} numberOfLines={1}>{c.name}</Txt>
-      <Txt variant="headline" num style={{ color: WHITE }}>{by > 0 ? '+' : '−'}{formatCents(Math.abs(by), { cents: false })}</Txt>
+      <Txt variant="headline" num style={{ color: WHITE }}>{formatChange(by, 'always')}</Txt>
     </View>
   )
 }

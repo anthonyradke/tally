@@ -14,17 +14,20 @@ export function daysOf(month: string, rows: Pick<Txn, 'date' | 'amount'>[]): { d
 
 export const WEEKDAYS = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays']
 
+type Row = Pick<Txn, 'date' | 'amount'> & { recurring_id?: number | null }
+
 /** The weekday with the highest average spending over the `weeks` full weeks before `until` (today, or the day after
  *  the month being looked at), and how it compares with the average day. Each weekday's single costliest day is left
- *  out and so are recurring rows, so a rent day doesn't decide it. Null with under four weeks of history or no clear
- *  winner (under 1.3× the average day). */
-export function bigWeekday(rows: (Pick<Txn, 'date' | 'amount'> & { recurring_id?: number | null })[], until: string, start: string, weeks = 12) {
+ *  out and so are bills (`bill`: the calendar passes budgets' `billTest`, so rent typed by hand counts too; by default
+ *  rows a template posted), so a rent day doesn't decide it. Null with under four weeks of history or no clear winner
+ *  (under 1.3× the average day). */
+export function bigWeekday<T extends Row>(rows: T[], until: string, start: string, weeks = 12, bill: (t: T) => boolean = (t) => !!t.recurring_id) {
   const from = addDays(until, -7 * weeks)
   const first = from < start ? start : from
   const span = Math.round((fromISO(until).getTime() - fromISO(first).getTime()) / 864e5)
   if (span < 28) return null
   const byDay = new Map<string, number>()
-  for (const t of rows) if (t.date >= first && t.date < until && !t.recurring_id) byDay.set(t.date, (byDay.get(t.date) ?? 0) + t.amount)
+  for (const t of rows) if (t.date >= first && t.date < until && !bill(t)) byDay.set(t.date, (byDay.get(t.date) ?? 0) + t.amount)
   const days: number[][] = Array.from({ length: 7 }, () => [])
   for (let d = first; d < until; d = addDays(d, 1)) days[fromISO(d).getDay()].push(byDay.get(d) ?? 0)
   const trimmed = days.map((list) => (list.length > 1 ? [...list].sort((a, b) => a - b).slice(0, -1) : list))

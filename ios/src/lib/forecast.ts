@@ -4,7 +4,7 @@
 import type { Account, Bootstrap, Txn } from './api'
 import { addDays, fromISO } from './dates'
 import { dailyBalances } from './balances'
-import { formatCents } from './money'
+import { formatChange } from './money'
 
 export const AHEAD = 30
 
@@ -63,9 +63,8 @@ export function sharedSpan(list: Pick<Outlook, 'days'>[]): number {
  *  coming in. */
 export function aheadLine(o: Pick<Outlook, 'a' | 'inflow' | 'outflow' | 'count' | 'belowZero'>): string {
   if (o.belowZero) return `Below zero on ${fromISO(o.belowZero).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-  if (o.a.kind === 'card') {
-    const more = o.outflow - o.inflow
-    return `${o.count} scheduled, ${formatCents(more, { cents: false, sign: 'always' })} owed`
-  }
-  return `${o.count} scheduled, ${formatCents(o.inflow - o.outflow, { cents: false, sign: 'always' })}`
+  // What's owed goes up with a card's charges; a cash account's balance with what comes in.
+  const net = o.a.kind === 'card' ? o.outflow - o.inflow : o.inflow - o.outflow
+  if (!net) return `${o.count} scheduled, no change`
+  return `${o.count} scheduled, ${formatChange(net, 'always')}${o.a.kind === 'card' ? ' owed' : ''}`
 }

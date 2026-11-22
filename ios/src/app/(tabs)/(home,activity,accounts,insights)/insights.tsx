@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
 import { router, Stack } from 'expo-router'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
@@ -32,13 +32,13 @@ import { categoryVisual } from '@/icons/categories'
 import { api, type Bootstrap, type MonthRow } from '@/lib/api'
 import { budgetFor, budgetLine, elapsed, monthBudget, paidBill } from '@/lib/budgets'
 import { fromISO, monthLabel, monthOf } from '@/lib/dates'
-import { formatCents, pct } from '@/lib/money'
+import { formatCents, formatChange, pct } from '@/lib/money'
 import { usePace } from '@/lib/pace'
 import { usePullRefresh } from '@/lib/refresh'
 import { play } from '@/lib/sound'
 import { shareCsv } from '@/lib/exportCsv'
 import { useTally } from '@/lib/tally'
-import { useTypical } from '@/lib/typical'
+import { monthsBefore, useTypical } from '@/lib/typical'
 import { font as ramp, radius, space, useTheme } from '@/theme'
 
 const name = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'long' })
@@ -61,13 +61,18 @@ export default function Insights() {
   const { c } = useTheme()
   const [waited] = useState(!b) // the skeleton showed first
   const scroller = useRef<ScrollView>(null)
+  // The resting top, where the first drag started: iOS insets the page under the large title, so it's negative there
+  // and y: 0 left the month switcher under the header (as Activity does).
+  const topY = useRef<number | null>(null)
+  const toTop = () => { if (topY.current != null) scroller.current?.scrollTo({ y: topY.current, animated: true }) }
   return (
     <>
       {HEADER}
       <ScrollView ref={scroller} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}
+        onScrollBeginDrag={(e) => { topY.current = Math.min(topY.current ?? Infinity, e.nativeEvent.contentOffset.y) }}
         refreshControl={<RefreshControl {...pull} />}>
         <Glow />
-        {b ? <Arrive on={waited}><Body b={b} scroller={scroller} /></Arrive> : <StateView q={q} />}
+        {b ? <Arrive on={waited}><Body b={b} toTop={toTop} /></Arrive> : <StateView q={q} />}
       </ScrollView>
     </>
   )
@@ -109,7 +114,7 @@ function UnderBudget({ month, by }: { month: string; by: number }) {
   )
 }
 
-function Body({ b, scroller }: { b: Bootstrap; scroller: RefObject<ScrollView | null> }) {
+function Body({ b, toTop }: { b: Bootstrap; toTop: () => void }) {
   const { c, tint } = useTheme()
   const months = b.months.filter((m) => m.month <= monthOf(b.today))
   // The latest month until you pick one: data from the phone's cache can be a month behind on the first frame, and
@@ -139,7 +144,7 @@ function Body({ b, scroller }: { b: Bootstrap; scroller: RefObject<ScrollView | 
   }
   const go = (d: number) => show((target.current ?? i) + d)
   // A month picked further down (the Every month table) scrolls back up to it.
-  const pickUp = (k: number) => { scroller.current?.scrollTo({ y: 0, animated: true }); show(k) }
+  const pickUp = (k: number) => { toTop(); show(k) }
   // This month is still going: compare it with last month up to the same day, not with all of last month.
   const sameDay = isNow && pace && pace.cur.length ? pace.cur.at(-1)! - pace.prev[pace.cur.length - 1] : null
   const delta = !prev ? null : isNow ? sameDay : m.spent - prev.spent
@@ -147,7 +152,8 @@ function Body({ b, scroller }: { b: Bootstrap; scroller: RefObject<ScrollView | 
   const under = isNow ? null : underBy(b, m)
   // Early in a month, point back at last month if it came in under budget.
   const last = isNow && prev && Number(b.today.slice(8)) <= 10 ? underBy(b, prev) : null
-  const line = budgetLine(b, m, isNow ? typical : null)
+  // A month still going waits for the months before, or its line read "$X left" and turned amber a moment later.
+  const line = !isNow || typical || !monthsBefore(b.today, 3, b.start).length ? budgetLine(b, m, isNow ? typical : null) : null
   const after = m.left_over - m.saving - m.loan // left over is money in less spending; this is after saving and loans too
 
   return (
@@ -184,7 +190,7 @@ function Body({ b, scroller }: { b: Bootstrap; scroller: RefObject<ScrollView | 
             <Txt variant="sub" tone="label2">{selected ? selected.x.name : 'Spent'}</Txt>
             <RollingMoney cents={selected ? selected.spent : m.spent} whole style={{ ...ramp.title2, fontSize: 26, color: c.label }} />
             {!selected && delta != null && prev && (
-              <Txt variant="foot" tone={delta > 0 ? 'neg' : 'pos'} num>{delta > 0 ? '+' : '−'}{formatCents(Math.abs(delta), { cents: false })} vs {shortName(prev.month)}{isNow ? ` 1–${pace?.cur.length}` : ''}</Txt>
+              <Txt variant="foot" tone={delta > 0 ? 'neg' : delta < 0 ? 'pos' : 'label2'} num>{delta ? formatChange(delta, 'always') : 'Same as'} {delta ? 'vs ' : ''}{shortName(prev.month)}{isNow ? ` 1–${pace?.cur.length}` : ''}</Txt>
             )}
             {selected && <Txt variant="foot" tone="label2" num>{Math.round(pct(selected.spent, m.spent) * 100)}% of spending</Txt>}
           </View>
