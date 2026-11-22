@@ -1,7 +1,7 @@
 // The facts behind a month's story (app/story.tsx): what came in and went out, where it went, the biggest day, the
 // favorite place, how it compares with the month before. Pure, from the bootstrap months and that month's rows.
 import type { Bootstrap, Category, MonthRow, Txn } from './api'
-import { billTest, budgetFor } from './budgets'
+import { billTest, budgetFor, paidBill } from './budgets'
 import { addDays, fromISO, lastOfMonth } from './dates'
 import { merchantKey } from '@/icons/merchants'
 
@@ -45,27 +45,18 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
   const inMonth = rows.filter((t) => t.date >= month && t.date <= end && t.date <= b.today)
   const spendRow = isSpend(b)
   const spending = inMonth.filter(spendRow)
-  const cats = new Map(b.categories.map((c) => [c.id, c]))
-
-  // Bills: categories whose month is mostly recurring rows. "Most of it went to Rent, 60%" said nothing new.
-  const recurring = new Map<number, number>()
+  const { top, besidesBills } = topSpending(b, m, spending)
   const bill = billTest(b)
-  for (const t of spending) if (bill(t)) recurring.set(t.category_id, (recurring.get(t.category_id) ?? 0) + t.amount)
-  const byCat = Object.entries(m.by_category)
-    .map(([id, cents]) => ({ c: cats.get(Number(id))!, cents }))
-    .filter((x) => x.c?.type === 'Spending' && x.cents > 0).sort((a, z) => z.cents - a.cents)
-  const everyday = byCat.filter((x) => (recurring.get(x.c.id) ?? 0) * 2 < x.cents)
-  const besidesBills = everyday.length > 0 && everyday.length < byCat.length && everyday[0] !== byCat[0]
-  const top = (besidesBills ? everyday : byCat).slice(0, 3).map((x) => ({ ...x, share: m.spent > 0 ? x.cents / m.spent : 0 }))
 
   const days = new Map<string, Txn[]>()
   for (const t of spending) days.set(t.date, [...(days.get(t.date) ?? []), t])
   const daily = new Map<string, Txn[]>()
   for (const t of spending) if (!bill(t)) daily.set(t.date, [...(daily.get(t.date) ?? []), t])
+  const billsAside = spending.some(bill)
   let biggestDay: Story['biggestDay'] = null
   for (const [date, list] of daily) {
     const cents = list.reduce((n, t) => n + t.amount, 0)
-    if (!biggestDay || cents > biggestDay.cents) biggestDay = { date, cents, rows: [...list].sort((a, z) => z.amount - a.amount).slice(0, 3), billsAside: recurring.size > 0 }
+    if (!biggestDay || cents > biggestDay.cents) biggestDay = { date, cents, rows: [...list].sort((a, z) => z.amount - a.amount).slice(0, 3), billsAside }
   }
   const biggest = spending.reduce<Txn | null>((x, t) => (!x || t.amount > x.amount ? t : x), null)
 
@@ -125,7 +116,7 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
     if (!cap) continue
     of2++
     const spent = m.by_category[String(c.id)] ?? 0
-    if (spent <= cap) kept++
+    if (spent <= cap || paidBill(b, c.id, spent, cap)) kept++ // a bill a dollar over its budget reads "Paid" elsewhere
     else missed.push({ c, over: spent - cap })
   }
   missed.sort((a, z) => z.over - a.over)
@@ -136,6 +127,24 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
     top, besidesBills, biggestDay, biggest, quiet: { days: quietDays, of, streak }, spentDays, favorite, movers, worth,
     budgets: of2 ? { kept, of: of2, missed } : null, vs,
   }
+}
+
+/** A month's top three spending categories. Bills (categories whose month is mostly recurring rows) step aside when
+ *  they'd lead, so it says "besides your bills": "Most of it went to Rent, 60%" said nothing new. `spending`: the
+ *  month's spending rows so far. The story and Home's month in review both use it. */
+export function topSpending(b: Bootstrap, m: MonthRow, spending: Pick<Txn, 'recurring_id' | 'category_id' | 'what' | 'amount'>[]):
+  { top: Story['top']; besidesBills: boolean } {
+  const cats = new Map(b.categories.map((c) => [c.id, c]))
+  const recurring = new Map<number, number>()
+  const bill = billTest(b)
+  for (const t of spending) if (bill(t)) recurring.set(t.category_id, (recurring.get(t.category_id) ?? 0) + t.amount)
+  const byCat = Object.entries(m.by_category)
+    .map(([id, cents]) => ({ c: cats.get(Number(id))!, cents }))
+    .filter((x) => x.c?.type === 'Spending' && x.cents > 0).sort((a, z) => z.cents - a.cents)
+  const everyday = byCat.filter((x) => (recurring.get(x.c.id) ?? 0) * 2 < x.cents)
+  const besidesBills = everyday.length > 0 && everyday.length < byCat.length && everyday[0] !== byCat[0]
+  const top = (besidesBills ? everyday : byCat).slice(0, 3).map((x) => ({ ...x, share: m.spent > 0 ? x.cents / m.spent : 0 }))
+  return { top, besidesBills }
 }
 
 /** "Saturday the 26th" */

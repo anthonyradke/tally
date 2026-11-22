@@ -64,6 +64,18 @@ export function monthBudget(b: Bootstrap, m: MonthRow): { budget: number; spent:
   return budget > 0 ? { budget, spent, ids } : null
 }
 
+/** The month's total budget as a guide line on a chart of all its spending, or null when some of that spending is in
+ *  categories without a budget: the line would cross the guide while `budgetLine` (budgeted categories only) still
+ *  said there was money left. */
+export function budgetGuide(b: Bootstrap, m: MonthRow): number | null {
+  const t = monthBudget(b, m)
+  if (!t) return null
+  const covered = new Set(t.ids.map(String))
+  const types = new Map(b.categories.map((c) => [String(c.id), c.type]))
+  const outside = Object.entries(m.by_category).some(([id, v]) => v !== 0 && types.get(id) === 'Spending' && !covered.has(id))
+  return outside ? null : t.budget
+}
+
 /** One sentence on how a month stands against its total budget, with the same pace rule as a category's bar. A month
  *  still going says what's left and for how long, or how far over it's headed; a finished month only speaks up when it
  *  went over (the under-budget badge covers the rest). Null with no budgets, or for a month not started. */

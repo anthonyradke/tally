@@ -15,7 +15,7 @@ import { KIND_LABEL } from '@/icons/categories'
 import type { Account, Bootstrap, Kind } from '@/lib/api'
 import { groupTotal, split, useBalancesToday } from '@/lib/balances'
 import { fromISO, lastOfMonth } from '@/lib/dates'
-import { formatCents } from '@/lib/money'
+import { formatChange } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
 import { usePullRefresh } from '@/lib/refresh'
 import { useTally } from '@/lib/tally'
@@ -134,7 +134,7 @@ function AccountRow({ a, bal, prev, padTop, padBottom }: { a: Account; bal: numb
       <View style={{ alignItems: 'flex-end', gap: 2 }}>
         <Money cents={bal} />
         {delta != null && delta !== 0 && (
-          <Txt variant="sub" num tone={good ? 'pos' : 'neg'}>{delta > 0 ? '+' : '−'}{formatCents(Math.abs(delta), { cents: false })}</Txt>
+          <Txt variant="sub" num tone={good ? 'pos' : 'neg'}>{formatChange(delta, 'always')}</Txt>
         )}
       </View>
     </Tap>

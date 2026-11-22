@@ -12,6 +12,12 @@ export function formatCents(c: number, { cents = true, sign = 'auto' }: { cents?
   return `${s}$${body}`
 }
 
+/** A change in whole dollars, or with cents when whole dollars would round it to $0: a 40¢ change read "$0" beside an
+ *  arrow, and −40¢ read "−$0". */
+export function formatChange(c: number, sign: Sign = 'auto'): string {
+  return formatCents(c, { cents: Math.round(Math.abs(c) / 100) === 0, sign })
+}
+
 /** "12.5" → 1250, "$1,234.56" → 123456, "" → null. Half-up on the third decimal. */
 export function parseDollars(s: string): number | null {
   const clean = s.replace(/[$,\s]/g, '').replace('−', '-')
