@@ -12,6 +12,7 @@ import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import * as Haptics from 'expo-haptics'
 import { useToast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
+import { Icon } from './Icon'
 import { Txt } from './Txt'
 
 const glass = isLiquidGlassAvailable()
@@ -51,9 +52,17 @@ export function Toaster() {
       else y.set(withSpring(0, { damping: 20, stiffness: 300 }))
     })
   if (!t) return null
+  const text = <Txt variant="callout" tone={t.tone === 'error' ? 'neg' : 'label'} numberOfLines={2} style={{ flex: 1, fontWeight: '500' }}>{t.text}</Txt>
   const body = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingLeft: space.xl, paddingRight: t.action ? space.s : space.xl, paddingVertical: space.s, minHeight: 48 }}>
-      <Txt variant="callout" tone={t.tone === 'error' ? 'neg' : 'label'} numberOfLines={2} style={{ flex: 1, fontWeight: '500' }}>{t.text}</Txt>
+      {t.onPress ? (
+        // The message opens what it's about (the entry just added); the button keeps its own job.
+        <Pressable onPress={() => { hide(); Haptics.selectionAsync().catch(() => {}); t.onPress!() }} hitSlop={{ top: 8, bottom: 8, left: 12 }}
+          accessibilityRole="button" accessibilityHint="Opens it" style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: pressed ? 0.6 : 1 })}>
+          {text}
+          <Icon sf="chevron.right" md="chevron_right" size={12} color={c.label3} weight="semibold" />
+        </Pressable>
+      ) : text}
       {t.action && (
         <Pressable
           onPress={async () => { hide(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); await t.action!.run() }}
