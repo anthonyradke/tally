@@ -253,6 +253,9 @@ async def restore(request: Request, con: Con):
             rid = None
         kept = con.execute("SELECT json_extract(row, '$.slot') FROM deleted WHERE txn_id=?", (t.id,)).fetchone()
         slot = kept[0] if kept and rid else None  # the date its template posted it for, kept server-side
+        if rid and con.execute("SELECT 1 FROM transactions WHERE recurring_id=? AND COALESCE(slot, date)=?",
+                               (rid, slot or t.date.isoformat())).fetchone():
+            raise HTTPException(409, {"errors": [f"{t.what or 'That entry'} is already in for that date."]})
         con.execute(
             "INSERT INTO transactions(id,date,what,category_id,from_account_id,to_account_id,amount,note,tags,"
             "split_group,receipt,recurring_id,slot) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",

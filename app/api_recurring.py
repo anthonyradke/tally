@@ -269,10 +269,13 @@ async def skip_once(id: int, request: Request, con: Con):
 
 @router.delete("/recurring/{id}/skip/{ymd}")
 def unskip(id: int, ymd: str, con: Con):
-    """Takes a skip back. If the template has already moved past that date, its row is posted now."""
+    """Takes a skip back. If the template has already moved past that date, its row is posted now. The row the skip
+    took out leaves Recently deleted: the template posts that date again, and putting it back too made two."""
     r = _get(con, "recurring", id)
     d = day(ymd, "Date").isoformat()
     con.execute("DELETE FROM recurring_skips WHERE recurring_id=? AND date=?", (id, d))
+    con.execute("DELETE FROM deleted WHERE json_extract(row, '$.recurring_id')=? "
+                "AND COALESCE(json_extract(row, '$.slot'), json_extract(row, '$.date'))=?", (id, d))
     posted = con.execute("SELECT 1 FROM transactions WHERE recurring_id=? AND COALESCE(slot, date)=?", (id, d)).fetchone()
     if r["active"] and not posted and date.today().isoformat() < d < r["next_date"]:
         con.execute("INSERT INTO transactions(date,what,category_id,from_account_id,to_account_id,amount,recurring_id,"
