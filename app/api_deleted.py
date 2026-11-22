@@ -26,16 +26,23 @@ def purge(con, days: int = KEEP_DAYS) -> int:
 def recently_deleted(con: Con):
     """Newest first: each entry as it was, with `deleted_at` (UTC) and `batch`, shared by the rows one delete removed
     (a bulk delete, a split; null for rows deleted before it was kept), which come next to each other. Rows whose id
-    is in use again (put back by an Undo that didn't reach this list, say) are left out."""
+    is in use again (put back by an Undo that didn't reach this list, say) are left out.
+    `skipped_from` is the template's label for a scheduled row taken out before its day (Skip, or a delete of one),
+    whose date the template now skips: putting it back posts it again. Null for every other row, including the rows
+    a template's delete took with it (their skips went with the template)."""
     live = {r[0] for r in con.execute("SELECT id FROM transactions")}
+    skips = {(r[0], r[1]): r[2] for r in con.execute(
+        "SELECT s.recurring_id, s.date, r.label FROM recurring_skips s JOIN recurring r ON r.id = s.recurring_id")}
     rows = con.execute("SELECT * FROM deleted ORDER BY deleted_at DESC, json_extract(row, '$.batch') DESC, "
                        "txn_id DESC").fetchall()
     out = []
     for r in rows:
         if r["txn_id"] not in live:
             row = json.loads(r["row"])
-            row.pop("slot", None)  # server-side only: restore reads it from here
-            out.append({**row, "batch": row.get("batch"), "deleted_at": r["deleted_at"]})
+            slot = row.pop("slot", None)  # server-side only: restore reads it from here
+            rid = row.get("recurring_id")
+            skipped = skips.get((rid, slot or row.get("date"))) if rid else None
+            out.append({**row, "batch": row.get("batch"), "deleted_at": r["deleted_at"], "skipped_from": skipped})
     return out
 
 

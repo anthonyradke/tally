@@ -15,4 +15,8 @@ export function byDelete(rows: DeletedTxn[]): DeletedTxn[][] {
 }
 
 /** A listed row as /transactions/restore takes it back. */
-export const asEntry = ({ deleted_at: _gone, batch: _batch, ...entry }: DeletedTxn) => entry
+export const asEntry = ({ deleted_at: _gone, batch: _batch, skipped_from: _skip, ...entry }: DeletedTxn) => entry
+
+/** A group of one skipped date stands apart from the deletions: labelled with its template and put back with
+ *  Unskip, so a cleanup doesn't bring back a bill skipped on purpose thinking it was a mistake. */
+export const skippedFrom = (g: DeletedTxn[]): string | null => (g.length === 1 && g[0].skipped_from) || null
