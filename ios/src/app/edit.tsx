@@ -1,30 +1,31 @@
 // The editor modal for Settings items: account, category, quick action, recurring template, saved view, budget.
 // Its own Cancel/Save; destructive actions sit at the bottom and act at once (the server refuses deletes that would
-// orphan entries, and says to hide the item instead).
-import { useMemo, useState, type ReactNode } from 'react'
-import { Keyboard, KeyboardAvoidingView, ScrollView, Switch, TextInput, View } from 'react-native'
-import { Stack, useLocalSearchParams } from 'expo-router'
+// orphan entries, and says to hide the item instead). Closing with unsaved changes says so, with the draft one tap
+// away (no confirm dialogs).
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Keyboard, KeyboardAvoidingView, ScrollView, View } from 'react-native'
+import { router, Stack, useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
-import { AccountMark, LogoMark } from '@/components/AccountMark'
-import { Chip } from '@/components/Chip'
+import { AccountForm } from '@/components/editor/AccountForm'
+import { DoneBar, Field, Toggle } from '@/components/editor/Fields'
+import { Pickers } from '@/components/editor/Pickers'
+import { RecurringActions, RecurringForm } from '@/components/editor/RecurringForm'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
-import { DatePick } from '@/components/native/DatePick'
 import { Segmented } from '@/components/native/Segmented'
 import { Group, Row } from '@/components/Row'
 import { StateView } from '@/components/StateView'
 import { Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
-import { LOGO_IDS, LOGOS } from '@/icons/banks'
-import { categoryVisual, GLYPH_NAMES, GLYPHS, KIND_SYMBOL } from '@/icons/categories'
+import { categoryVisual, GLYPH_NAMES, GLYPHS } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
 import { close, useBusy, useCloseHere, useLatest } from '@/lib/nav'
-import { api, ApiError, type AdminData, type CatType, type Freq, type Kind, type Txn } from '@/lib/api'
-import { budgetAmount, initial, pctStr, type Form } from '@/lib/forms'
-import { dayLabel, monthOf } from '@/lib/dates'
-import { SHAPES } from '@/lib/shapes'
+import { api, ApiError, type AdminData, type CatType, type Freq } from '@/lib/api'
+import { accountUsers, budgetAmount, changed, favoriteBody, initial, movedText, pctStr, recurringBody, swapAccount, usersText, type Form } from '@/lib/forms'
+import { monthOf } from '@/lib/dates'
+import { dueOf, removeRecurring } from '@/lib/recurringActions'
 import { useTally } from '@/lib/tally'
-import { toast } from '@/lib/toast'
+import { toast, type ToastMsg } from '@/lib/toast'
 import { radius, space, TINTS, useTheme, type Tint } from '@/theme'
 
 const TITLE: Record<string, [string, string]> = {
@@ -32,83 +33,105 @@ const TITLE: Record<string, [string, string]> = {
   recurring: ['New recurring', 'Recurring'], view: ['Saved view', 'Saved view'], budget: ['Budget', 'Budget'],
 }
 
+type Note = Omit<ToastMsg, 'id'>
+
 export default function Edit() {
   // prefill: starting fields for a new item, as JSON (a suggested recurring template from Settings → Recurring).
-  const { kind, id, prefill } = useLocalSearchParams<{ kind: string; id?: string; prefill?: string }>()
+  // draft: fields typed before the editor was closed without saving, brought back by the toast's Keep editing.
+  const { kind, id, prefill, draft } = useLocalSearchParams<{ kind: string; id?: string; prefill?: string; draft?: string }>()
   const { c } = useTheme()
   const admin = useAdmin()
   const t = useTally()
   const [f, setF] = useState<Form | null>(null)
+  const [start, setStart] = useState<Form | null>(null)
   const [busy, setBusy] = useState(false)
   const once = useBusy() // a ref, not the state above: two quick taps both saw busy as false
   const closeHere = useCloseHere()
+  const finished = useRef(false) // saved or deleted: closing has nothing to warn about
   const set = (p: Form) => setF((s) => ({ ...s!, ...p }))
   const a = admin.data
+  const n = id ? Number(id) : undefined
 
   // The form starts once Settings data is in (set while rendering, so it's filled on the frame the data lands).
   if (a && t.b && !f) {
-    let extra: Form = {}
-    try { extra = !id && prefill ? JSON.parse(prefill) : {} } catch { /* ignore a bad prefill */ }
-    setF({ ...initial(kind, id ? Number(id) : undefined, a, t.b.today), ...extra })
+    const parse = (s?: string): Form => { try { return s ? JSON.parse(s) : {} } catch { return {} } } // a bad one is ignored
+    const s = { ...initial(kind, n, a, t.b.today), ...(n ? {} : parse(prefill)) }
+    setStart(s)
+    setF({ ...s, ...parse(draft) })
   }
+
+  // ✕ and a swipe down both unmount the screen; changes that weren't saved come back with Keep editing.
+  const latest = useLatest({ f, start })
+  useEffect(() => () => {
+    const { f: now, start: was } = latest.current
+    if (finished.current || !now || !was || !changed(was, now)) return
+    toast({ text: 'Changes not saved', action: { label: 'Keep editing', run: () => { router.push({ pathname: '/edit', params: { kind, ...(id ? { id } : {}), draft: JSON.stringify(now) } }) } } })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = () => once(saveNow)
   async function saveNow() {
-    if (!f) return
+    if (!f || !a) return
     setBusy(true)
-    const n = id ? Number(id) : undefined
-    const ok = await write(() => {
+    let note: Note = { text: 'Saved' }
+    const ok = await write(async () => {
       switch (kind) {
-        case 'account': {
-          const orig = a!.accounts.find((x) => x.id === n)
-          const body: Form = { ...f }
-          // Rates are left out unless changed, so a rate imported at full precision isn't rounded by a re-save.
-          if (orig && f.apy === pctStr(orig.apy)) delete body.apy
-          if (orig && f.loan_rate === pctStr(orig.loan_rate)) delete body.loan_rate
-          if (f.kind !== 'loan' && f.kind !== 'investment') body.opened = ''
-          return api.saveAccount(body, n)
-        }
+        case 'account': note = await saveAccount(f, a, n, t.today) ?? note; return
         case 'category': return api.saveCategory(f, n)
         case 'quick': return api.saveFavorite(f, n)
-        case 'recurring': return api.saveRecurring(f, n)
+        case 'recurring': {
+          const r = a.recurring.find((x) => x.id === n)
+          if (!r || f.next_date === dueOf(r)) return api.saveRecurring(f, n)
+          // A new date: its entries ahead are posted again from it. Undo puts the old schedule back.
+          await api.saveRecurring({ ...f, move: true }, n)
+          note = { text: movedText(String(f.label), f.freq as Freq, String(f.next_date), t.today), action: { label: 'Undo', run: async () => {
+            await write(() => api.saveRecurring({ ...recurringBody(r), next_date: dueOf(r), move: true }, n))
+          } } }
+          return
+        }
         case 'view': return api.saveView(f, n)
         case 'budget': {
           const amount = budgetAmount(String(f.amount ?? ''))
-          if (amount === undefined) return Promise.reject(new ApiError(422, ['The budget must be a number.']))
+          if (amount === undefined) throw new ApiError(422, ['The budget must be a number.'])
           return api.setBudget(n!, amount, f.thisMonth ? monthOf(t.b!.today) : undefined)
         }
-        default: return Promise.resolve()
       }
-    }, 'Saved')
+    })
     setBusy(false)
-    if (ok) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); closeHere() }
+    if (!ok) return
+    finished.current = true
+    toast(note)
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+    closeHere()
   }
   // Once: a second tap on a recurring delete got a 204, whose toast (no Undo) replaced the first one's Undo, and its
   // close() popped Settings too.
   const remove = () => once(removeNow)
   async function removeNow() {
-    const n = Number(id)
+    if (!a || !n) return
     // Quick actions, views and recurring templates come back with Undo (no confirm dialogs anywhere). Accounts and
     // categories can only be deleted when nothing uses them, so there's nothing to lose.
+    const r = a.recurring.find((x) => x.id === n)
+    if (kind === 'recurring') {
+      if (r && await removeRecurring(r)) { finished.current = true; closeHere() }
+      return
+    }
     let back: (() => Promise<unknown>) | undefined
     const ok = await write(async () => {
-      if (kind === 'recurring') {
-        const gone = await api.deleteRecurring(n) // nothing comes back when it was already gone
-        if (gone) back = async () => { await api.restoreRecurring(gone.template); if (gone.rows.length) await api.restore(gone.rows) }
-      } else if (kind === 'quick') {
-        const x = a!.favorites.find((r) => r.id === n)
+      if (kind === 'quick') {
+        const x = a.favorites.find((q) => q.id === n)
         await api.deleteFavorite(n)
         // Back in its old place: it comes back with a new id, which sorted it last.
-        const ids = a!.favorites.map((r) => r.id)
-        if (x) back = async () => { const made = await api.saveFavorite({ ...x, amount: x.amount == null ? null : x.amount / 100 }); await api.orderFavorites(ids.map((i) => (i === n ? made.id : i))) }
+        const ids = a.favorites.map((q) => q.id)
+        if (x) back = async () => { const made = await api.saveFavorite(favoriteBody(x)); await api.orderFavorites(ids.map((i) => (i === n ? made.id : i))) }
       } else if (kind === 'view') {
-        const x = a!.saved_views.find((r) => r.id === n)
+        const x = a.saved_views.find((v) => v.id === n)
         await api.deleteView(n)
-        const ids = a!.saved_views.map((r) => r.id)
+        const ids = a.saved_views.map((v) => v.id)
         if (x) back = async () => { const made = await api.saveView(x); await api.orderViews(ids.map((i) => (i === n ? made.id : i))) }
       } else await (kind === 'account' ? api.deleteAccount : api.deleteCategory)(n)
     })
     if (!ok) return
+    finished.current = true
     toast({ text: 'Deleted', action: back ? { label: 'Undo', run: async () => { await write(back!) } } : undefined })
     closeHere()
   }
@@ -134,20 +157,21 @@ export default function Edit() {
   return (
     <>
       {header}
+      <DoneBar />
       <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
           contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 80 }}>
           {!f || !a ? <StateView q={admin} shape="list" /> : (
             <>
-              {kind === 'account' && <AccountForm f={f} set={set} />}
+              {kind === 'account' && <AccountForm f={f} set={set} a={a} id={n} start={t.b?.start ?? t.today} />}
               {kind === 'category' && <CategoryForm f={f} set={set} />}
               {kind === 'quick' && <QuickForm f={f} set={set} a={a} />}
-              {kind === 'recurring' && <RecurringForm f={f} set={set} a={a} />}
-              {kind === 'recurring' && id && <Skips id={Number(id)} a={a} />}
+              {kind === 'recurring' && <RecurringForm f={f} set={set} a={a} id={n} />}
+              {kind === 'recurring' && !!n && <RecurringActions id={n} a={a} onActive={(on) => { set({ active: on }); setStart((s) => s && { ...s, active: on }) }} />}
               {kind === 'view' && <Group><Field label="Name" value={String(f.name ?? '')} onChange={(v) => set({ name: v })} /></Group>}
-              {kind === 'budget' && <BudgetForm f={f} set={set} a={a} id={Number(id)} />}
+              {kind === 'budget' && <BudgetForm f={f} set={set} a={a} id={n!} />}
               {id && kind !== 'budget' && (
-                <Group footer={kind === 'account' || kind === 'category' ? 'Deleting only works when nothing uses it. Otherwise switch off Active to hide it and keep its history.' : kind === 'recurring' ? 'Deleting removes its future entries; ones already posted stay.' : undefined}>
+                <Group footer={kind === 'account' || kind === 'category' ? 'Deleting only works when nothing uses it. Otherwise hide it to keep its history.' : kind === 'recurring' ? 'Deleting removes its future entries; ones already posted stay.' : undefined}>
                   <Row label={`Delete ${editTitle.toLowerCase()}`} destructive sf="trash" md="delete" onPress={remove} />
                 </Group>
               )}
@@ -159,143 +183,32 @@ export default function Edit() {
   )
 }
 
-/** Skip one date of a template (a bill paid another way this month) without changing it, and take a skip back. */
-function Skips({ id, a }: { id: number; a: AdminData }) {
-  const t = useTally()
-  const once = useBusy()
-  const r = a.recurring.find((x) => x.id === id)
-  if (!r || !r.active) return null
-  const skipped = a.skips.filter((x) => x.recurring_id === id)
-  const skip = () => once(async () => {
-    let out: { date: string; rows: Txn[] } | undefined
-    const ok = await write(async () => { out = await api.skipRecurring(id) })
-    if (!ok || !out) return
-    const { date, rows } = out
-    Haptics.selectionAsync().catch(() => {})
-    toast({ text: `Skipping ${dayLabel(date, t.today)}`, action: { label: 'Undo', run: async () => {
-      await write(() => (rows.length ? api.restore(rows) : api.unskipRecurring(id, date)))
-    } } })
-  })
-  return (
-    <Group header="Skip one date" footer="Skips the next date only, say a bill paid another way this time. The template stays as it is.">
-      <Row label="Skip the next one" sf="forward.end" md="skip_next" chevron={false} onPress={skip} />
-      {skipped.map((x) => (
-        <Row key={x.date} label={`Skipping ${dayLabel(x.date, t.today)}`} chevron={false}
-          trailing={<Tap feedback="opacity" hitSlop={8} onPress={() => once(() => write(() => api.unskipRecurring(id, x.date), 'It will post again'))}>
-            <Txt variant="callout" style={{ fontWeight: '600' }}>Undo</Txt></Tap>} />
-      ))}
-    </Group>
-  )
-}
-
-function Field({ label, value, onChange, money, pct, placeholder, auto }: { label: string; value: string; onChange: (v: string) => void; money?: boolean; pct?: boolean; placeholder?: string; auto?: boolean }) {
-  const { c } = useTheme()
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
-      <Txt variant="body" style={{ width: 118 }}>{label}</Txt>
-      {money && <Txt variant="body" tone="label2">$</Txt>}
-      <TextInput value={value} onChangeText={(v) => onChange(money || pct ? v.replace(/[^0-9.\-]/g, '') : v)} placeholder={placeholder ?? (money ? '0.00' : '')}
-        placeholderTextColor={c.label3} keyboardType={money || pct ? 'decimal-pad' : 'default'} autoCapitalize={auto ? 'words' : 'sentences'} accessibilityLabel={label}
-        style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m, fontVariant: money || pct ? ['tabular-nums'] : undefined }} />
-      {pct && <Txt variant="body" tone="label2">%</Txt>}
-    </View>
-  )
-}
-
-function Toggle({ label, sub, value, onChange }: { label: string; sub?: string; value: boolean; onChange: (v: boolean) => void }) {
-  return <Row label={label} sub={sub} chevron={false} trailing={<Switch value={value} onValueChange={onChange} />} />
-}
-
-/** A row that opens an inline list of options under it. */
-function Choice<T extends string | number | null>({ label, value, options, onChange, leading }: {
-  label: string; value: T; options: { value: T; label: string; leading?: ReactNode }[]; onChange: (v: T) => void; leading?: ReactNode
-}) {
-  const { c } = useTheme()
-  const [open, setOpen] = useState(false)
-  const cur = options.find((o) => o.value === value)
-  return (
-    <>
-      <Row label={label} value={cur?.label ?? 'Choose'} leading={leading} onPress={() => setOpen((v) => !v)} />
-      {open && options.map((o) => (
-        <Row key={String(o.value)} label={o.label} leading={o.leading ?? <View style={{ width: 18 }} />} chevron={false}
-          trailing={o.value === value ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : undefined}
-          onPress={() => { Haptics.selectionAsync().catch(() => {}); onChange(o.value); setOpen(false) }} />
-      ))}
-    </>
-  )
-}
-
-function AccountForm({ f, set }: { f: Form; set: (p: Form) => void }) {
-  const kind = f.kind as Kind
-  const { c, tint } = useTheme()
-  const look = { kind, bank: f.bank as string | null, icon: f.icon as string | null, color: f.color as string | null, apy: Number(f.apy) || null }
-  return (
-    <>
-      <View style={{ alignItems: 'center' }}><AccountMark a={look} size={72} /></View>
-      <Group><Field label="Name" value={String(f.name)} onChange={(v) => set({ name: v })} auto /></Group>
-      <Segmented options={[['cash', 'Cash'], ['card', 'Card'], ['investment', 'Invest'], ['loan', 'Loan']]} value={kind} onChange={(v) => set({ kind: v })} />
-      <View style={{ gap: space.s }}>
-        <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Logo</Txt>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.m, paddingHorizontal: space.xs }}>
-          {LOGO_IDS.map((id) => {
-            const on = f.icon === `logo:${id}`
-            return (
-              <Tap key={id} feedback="scale" onPress={() => set({ icon: on ? null : `logo:${id}`, color: null })} accessibilityLabel={LOGOS[id].title} accessibilityState={{ selected: on }}
-                style={{ borderRadius: 22, borderWidth: 2, borderColor: on ? c.ink : 'transparent', padding: 2 }}>
-                <LogoMark logo={LOGOS[id]} size={36} />
-              </Tap>
-            )
-          })}
-        </View>
-      </View>
-      <View style={{ gap: space.s }}>
-        <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Bank color</Txt>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-          {[[null, 'None'], ['chase', 'Chase'], ['amex', 'Amex'], ['sofi', 'SoFi'], ['wells', 'Wells Fargo'], ['hsa', 'Grey'], ['roth', 'Violet']].map(([v, l]) => (
-            <Chip key={String(v)} label={l!} selected={f.bank === v} onPress={() => set({ bank: v, color: null })} />
-          ))}
-        </View>
-      </View>
-      <View style={{ gap: space.s }}>
-        <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Or a color of its own</Txt>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.m, paddingHorizontal: space.xs }}>
-          {TINTS.map((k) => (
-            <Tap key={k} feedback="scale" onPress={() => set({ color: f.color === k ? null : k, icon: String(f.icon ?? '').startsWith('logo:') ? null : f.icon })} accessibilityLabel={k} accessibilityState={{ selected: f.color === k }}
-              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: tint(k as Tint), borderWidth: f.color === k ? 3 : 0, borderColor: c.panel, boxShadow: f.color === k ? `0 0 0 2px ${c.ink}` : undefined }}>
-              <View />
-            </Tap>
-          ))}
-        </View>
-      </View>
-      <View style={{ gap: space.s }}>
-        <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Symbol</Txt>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s, backgroundColor: c.panel, borderRadius: radius.panel, padding: space.m }}>
-          {[null, ...GLYPH_NAMES].map((g) => {
-            const on = (f.icon ?? null) === g
-            const [sf, md] = g ? GLYPHS[g] : KIND_SYMBOL[kind]
-            return (
-              <Tap key={g ?? 'kind'} feedback="scale" onPress={() => set({ icon: g })} accessibilityLabel={g ?? 'The usual symbol'} accessibilityState={{ selected: on }}
-                style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.ink : c.fill }}>
-                <Icon sf={sf} md={md} size={19} color={on ? c.onInk : c.label} />
-              </Tap>
-            )
-          })}
-        </View>
-      </View>
-      <Group footer={kind === 'investment' ? 'Investments are updated at month end with their typed balance. For one opened since Tally started counting, Opened is its first month, like 2026-10.'
-        : kind === 'loan' ? 'Loans grow by rate / 12 each month and shrink with each payment. For one taken out since Tally started counting, Opened is its first month, like 2026-10, and Starting owed is what was owed at the start of it.'
-        : 'The balance on the day Tally starts counting.'}>
-        <Field label={kind === 'card' || kind === 'loan' ? 'Starting owed' : 'Starting balance'} value={String(f.start_balance ?? '')} onChange={(v) => set({ start_balance: v })} money />
-        {kind === 'cash' && <Field label="APY" value={String(f.apy ?? '')} onChange={(v) => set({ apy: v })} pct placeholder="None" />}
-        {kind === 'loan' && <Field label="Interest rate" value={String(f.loan_rate ?? '')} onChange={(v) => set({ loan_rate: v })} pct placeholder="0" />}
-        {(kind === 'loan' || kind === 'investment') && <Field label="Opened" value={String(f.opened ?? '')} onChange={(v) => set({ opened: v })} placeholder="From the start" />}
-      </Group>
-      <Group>
-        {kind === 'cash' && <Toggle label="Emergency fund" sub="Counts toward the emergency fund goal" value={!!f.ef} onChange={(v) => set({ ef: v })} />}
-        <Toggle label="Active" sub="Hidden accounts keep their history but leave the pickers" value={!!f.active} onChange={(v) => set({ active: v })} />
-      </Group>
-    </>
-  )
+/** Saves an account; hiding one with "Move them to" picked also moves its quick actions and recurring bills there,
+ *  and the toast says so with Undo. */
+async function saveAccount(f: Form, a: AdminData, n: number | undefined, today: string): Promise<Note | undefined> {
+  const orig = a.accounts.find((x) => x.id === n)
+  const { move_to: to, ...body } = f
+  // Rates are left out unless changed, so a rate imported at full precision isn't rounded by a re-save.
+  if (orig && f.apy === pctStr(orig.apy)) delete body.apy
+  if (orig && f.loan_rate === pctStr(orig.loan_rate)) delete body.loan_rate
+  if (f.kind !== 'loan' && f.kind !== 'investment') body.opened = ''
+  await api.saveAccount(body, n)
+  if (!orig || !n || to == null || !orig.active || f.active) return undefined
+  const u = accountUsers(a, n)
+  const dest = Number(to)
+  for (const q of u.quick) await api.saveFavorite(favoriteBody(swapAccount(q, n, dest)), q.id)
+  for (const r of u.recurring) await api.saveRecurring(recurringBody(swapAccount(r, n, dest)), r.id)
+  const was = initial('account', n, a, today)
+  delete was.apy
+  delete was.loan_rate
+  return {
+    text: `Hidden ${orig.name}. Moved ${usersText(u)} to ${a.accounts.find((x) => x.id === dest)?.name ?? 'the other account'}.`,
+    action: { label: 'Undo', run: async () => { await write(async () => {
+      for (const q of u.quick) await api.saveFavorite(favoriteBody(q), q.id)
+      for (const r of u.recurring) await api.saveRecurring(recurringBody(r), r.id)
+      await api.saveAccount(was, n)
+    }) } },
+  }
 }
 
 function CategoryForm({ f, set }: { f: Form; set: (p: Form) => void }) {
@@ -308,6 +221,10 @@ function CategoryForm({ f, set }: { f: Form; set: (p: Form) => void }) {
       </View>
       <Group><Field label="Name" value={String(f.name)} onChange={(x) => set({ name: x })} auto /></Group>
       <Segmented options={[['Spending', 'Spent'], ['Money in', 'Income'], ['Transfer', 'Transfer'], ['Saving', 'Saving'], ['Loan', 'Loan']]} value={f.type as CatType} onChange={(x) => set({ type: x })} />
+      <Group>
+        {f.type === 'Spending' && <Field label="Budget" value={String(f.budget ?? '')} onChange={(x) => set({ budget: x })} money placeholder="None" />}
+        <Toggle label="Hide" sub="Leaves the pickers. Its history stays, and still counts in totals." value={!f.active} onChange={(x) => set({ active: !x })} />
+      </Group>
       <View style={{ gap: space.s }}>
         <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Color</Txt>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.m, paddingHorizontal: space.xs }}>
@@ -330,76 +247,19 @@ function CategoryForm({ f, set }: { f: Form; set: (p: Form) => void }) {
           ))}
         </View>
       </View>
-      <Group>
-        {f.type === 'Spending' && <Field label="Budget" value={String(f.budget ?? '')} onChange={(x) => set({ budget: x })} money placeholder="None" />}
-        <Toggle label="Active" sub="Hidden categories keep their history but leave the pickers" value={!!f.active} onChange={(x) => set({ active: x })} />
-      </Group>
     </>
   )
-}
-
-function AcctChoices({ f, set, a, type }: { f: Form; set: (p: Form) => void; a: AdminData; type: CatType }) {
-  const s = SHAPES[type]
-  const opts = a.accounts.filter((x) => x.active).map((x) => ({ value: x.id as number | null, label: x.name }))
-  return (
-    <>
-      {s.from !== 'blank' && <Choice label="From" value={(f.from_account_id as number | null) ?? null} options={s.from === 'optional' ? [{ value: null, label: 'None' }, ...opts] : opts} onChange={(v) => set({ from_account_id: v })} />}
-      {s.to !== 'blank' && <Choice label={s.to === 'optional' ? 'To (optional)' : 'To'} value={(f.to_account_id as number | null) ?? null} options={s.to === 'optional' ? [{ value: null, label: 'None' }, ...opts] : opts} onChange={(v) => set({ to_account_id: v })} />}
-    </>
-  )
-}
-
-/** Picking a category also clears a From/To its type doesn't use: the row is hidden then, so a leftover account
- *  made Save fail with a message the screen gave no way to act on. */
-function pickCategory(a: AdminData, v: number | null): Form {
-  const type = a.categories.find((x) => x.id === v)?.type ?? 'Spending'
-  const s = SHAPES[type]
-  return { category_id: v, ...(s.from === 'blank' ? { from_account_id: null } : {}), ...(s.to === 'blank' ? { to_account_id: null } : {}) }
-}
-
-function catOptions(a: AdminData, tint: (t: Tint) => string) {
-  return a.categories.filter((x) => x.active).map((x) => {
-    const v = categoryVisual(x)
-    return { value: x.id as number | null, label: x.name, leading: <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={26} /> }
-  })
 }
 
 function QuickForm({ f, set, a }: { f: Form; set: (p: Form) => void; a: AdminData }) {
-  const { tint } = useTheme()
-  const type = a.categories.find((x) => x.id === f.category_id)?.type ?? 'Spending'
   return (
     <>
-      <Group><Field label="Label" value={String(f.label)} onChange={(v) => set({ label: v })} auto placeholder="Gas" /></Group>
+      <Group footer="The chip's name on Home, and what its entries are called.">
+        <Field label="Name" value={String(f.label)} onChange={(v) => set({ label: v })} auto placeholder="Gas" />
+      </Group>
       <Group footer="Leave the amount empty to type it each time.">
-        <Choice label="Category" value={(f.category_id as number | null) ?? null} options={catOptions(a, tint)} onChange={(v) => set(pickCategory(a, v))} />
-        <AcctChoices f={f} set={set} a={a} type={type} />
+        <Pickers f={f} set={set} a={a} />
         <Field label="Amount" value={String(f.amount ?? '')} onChange={(v) => set({ amount: v })} money placeholder="Optional" />
-      </Group>
-    </>
-  )
-}
-
-function RecurringForm({ f, set, a }: { f: Form; set: (p: Form) => void; a: AdminData }) {
-  const { tint } = useTheme()
-  const type = a.categories.find((x) => x.id === f.category_id)?.type ?? 'Spending'
-  return (
-    <>
-      <Group>
-        <Field label="Label" value={String(f.label)} onChange={(v) => set({ label: v, what: !f.what || f.what === f.label ? v : f.what })} auto placeholder="Rent" />
-        <Field label="Shows as" value={String(f.what ?? '')} onChange={(v) => set({ what: v })} auto placeholder="What entries are called" />
-        <Field label="Amount" value={String(f.amount ?? '')} onChange={(v) => set({ amount: v })} money />
-      </Group>
-      <Group>
-        <Choice label="Category" value={(f.category_id as number | null) ?? null} options={catOptions(a, tint)} onChange={(v) => set(pickCategory(a, v))} />
-        <AcctChoices f={f} set={set} a={a} type={type} />
-      </Group>
-      <Segmented options={[['weekly', 'Weekly'], ['biweekly', 'Every 2 wk'], ['monthly', 'Monthly'], ['yearly', 'Yearly']]} value={f.freq as Freq} onChange={(v) => set({ freq: v })} />
-      <View style={{ gap: space.s }}>
-        <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>Next date</Txt>
-        <DatePick value={String(f.next_date)} onChange={(v) => set({ next_date: v })} />
-      </View>
-      <Group footer="Saving updates its entries still ahead (ones dated today or earlier, or changed by hand, stay as they are). Pausing takes them out; resuming skips the dates you missed.">
-        <Toggle label="Active" value={!!f.active} onChange={(v) => set({ active: v })} />
       </Group>
     </>
   )

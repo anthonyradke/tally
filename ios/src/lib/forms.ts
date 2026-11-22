@@ -1,8 +1,8 @@
 // Starting values for the Settings editor (edit.tsx): each form's fields as the text inputs show them.
-import type { AdminData } from './api'
+import type { AdminData, Favorite, Freq, Recurring } from './api'
 import { fromCents } from './draft'
 import { parseDollars } from './money'
-import { monthOf } from './dates'
+import { fromISO, monthOf } from './dates'
 
 export type Form = Record<string, string | number | boolean | null>
 
@@ -32,7 +32,7 @@ export function initial(kind: string, id: number | undefined, a: AdminData, toda
     }
     case 'recurring': {
       const x = a.recurring.find((r) => r.id === id)
-      return x ? { label: x.label, what: x.what, category_id: x.category_id, from_account_id: x.from_account_id, to_account_id: x.to_account_id, amount: dollarsText(x.amount), freq: x.freq, next_date: x.next_date, horizon_days: x.horizon_days, active: !!x.active }
+      return x ? { label: x.label, what: x.what, category_id: x.category_id, from_account_id: x.from_account_id, to_account_id: x.to_account_id, amount: dollarsText(x.amount), freq: x.freq, next_date: x.next_due ?? x.next_date, horizon_days: x.horizon_days, active: !!x.active }
         : { label: '', what: '', category_id: a.categories.find((r) => r.type === 'Spending' && r.active)?.id ?? null, from_account_id: null, to_account_id: null, amount: '', freq: 'monthly', next_date: today, horizon_days: 45, active: true }
     }
     case 'view': {
@@ -40,13 +40,16 @@ export function initial(kind: string, id: number | undefined, a: AdminData, toda
       return { name: x?.name ?? '', query: x?.query ?? '', icon: x?.icon ?? null, sort: x?.sort ?? 0 }
     }
     case 'budget': {
-      const x = a.categories.find((r) => r.id === id)
-      const month = monthOf(today)
-      const over = a.budgets.find((r) => r.category_id === id && r.month === month)
-      return { amount: over ? dollarsText(over.amount) : x?.budget ? dollarsText(x.budget) : '', thisMonth: !!over }
+      const { regular, over } = budgetIn(a, id ?? 0, monthOf(today))
+      return { amount: over != null ? dollarsText(over) : regular ? dollarsText(regular) : '', thisMonth: over != null }
     }
   }
   return {}
+}
+
+/** A category's regular budget and its one-off for a month ("YYYY-MM-01"), in cents; null when not set. */
+export function budgetIn(a: AdminData, id: number, month: string): { regular: number | null; over: number | null } {
+  return { regular: a.categories.find((x) => x.id === id)?.budget ?? null, over: a.budgets.find((r) => r.category_id === id && r.month === month)?.amount ?? null }
 }
 
 /** Dollar fields keyed by account id (month-end balances and interest) as cents, leaving out empty ones. A field
@@ -65,3 +68,57 @@ export function amountsById(fields: Record<string, string>, positiveOnly = false
 /** The budget editor's amount in cents: null clears the budget, undefined means it isn't a number (a typo used to
  *  clear the budget). */
 export const budgetAmount = (text: string): number | null | undefined => (text.trim() === '' ? null : parseDollars(text) ?? undefined)
+
+/** A saved template as the body `saveRecurring` takes (dollars), for an action that changes one thing about it from a
+ *  list (pause, another account) without the editor. */
+export const recurringBody = (r: Recurring): Form => ({
+  label: r.label, what: r.what, category_id: r.category_id, from_account_id: r.from_account_id, to_account_id: r.to_account_id,
+  amount: r.amount / 100, freq: r.freq, next_date: r.next_date, horizon_days: r.horizon_days, active: !!r.active,
+})
+
+/** A quick action as the body `saveFavorite` takes. */
+export const favoriteBody = (x: Favorite): Form => ({ ...x, amount: x.amount == null ? null : x.amount / 100 })
+
+const ordinal = (n: number) => {
+  const end = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
+  return `${n}${end}`
+}
+
+/** "Dec 3", with the year when it isn't this year. */
+export function shortDay(iso: string, today: string): string {
+  const d = fromISO(iso)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(d.getFullYear() === fromISO(today).getFullYear() ? {} : { year: 'numeric' }) })
+}
+
+/** What a template does after its date moved, for the toast: "Rent now posts on the 3rd, starting Dec 3". */
+export function movedText(label: string, freq: Freq, next: string, today: string): string {
+  const d = fromISO(next)
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'long' })
+  const when = freq === 'monthly' ? `on the ${ordinal(d.getDate())}`
+    : freq === 'weekly' ? `on ${weekday}s`
+    : freq === 'biweekly' ? `every other ${weekday}`
+    : `each year on ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+  return `${label || 'It'} now posts ${when}, starting ${shortDay(next, today)}`
+}
+
+/** Quick actions and running recurring templates that post to an account, for when it's hidden. */
+export function accountUsers(a: AdminData, id: number): { quick: Favorite[]; recurring: Recurring[] } {
+  const on = (x: { from_account_id: number | null; to_account_id: number | null }) => x.from_account_id === id || x.to_account_id === id
+  return { quick: a.favorites.filter(on), recurring: a.recurring.filter((r) => r.active && on(r)) }
+}
+
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+
+/** "3 quick actions and 1 recurring bill", or "" when nothing uses it. */
+export function usersText(u: { quick: unknown[]; recurring: unknown[] }): string {
+  return [u.quick.length ? count(u.quick.length, 'quick action', 'quick actions') : '',
+    u.recurring.length ? count(u.recurring.length, 'recurring bill', 'recurring bills') : ''].filter(Boolean).join(' and ')
+}
+
+/** The same item with one account swapped for another, on whichever side it was. */
+export function swapAccount<T extends { from_account_id: number | null; to_account_id: number | null }>(x: T, from: number, to: number): T {
+  return { ...x, from_account_id: x.from_account_id === from ? to : x.from_account_id, to_account_id: x.to_account_id === from ? to : x.to_account_id }
+}
+
+/** Whether the editor's fields differ from what it opened with (closing it then offers them back). */
+export const changed = (start: Form, now: Form) => Object.keys({ ...start, ...now }).some((k) => String(start[k] ?? '') !== String(now[k] ?? ''))

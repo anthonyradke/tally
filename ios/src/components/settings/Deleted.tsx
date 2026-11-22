@@ -1,0 +1,81 @@
+// Settings → Recently deleted: entries deleted in the last 30 days (the server keeps them), each with Put back, for
+// when the Undo toast had gone or the app was closed. Rows removed together (a bulk delete, a split) share one
+// moment and can go back all at once.
+import { View } from 'react-native'
+import { useQuery } from '@tanstack/react-query'
+import { Group, Row } from '@/components/Row'
+import { StateView } from '@/components/StateView'
+import { Tap } from '@/components/Tap'
+import { Txt } from '@/components/Txt'
+import { openEntry } from '@/lib/actions'
+import { write } from '@/lib/admin'
+import { api, type DeletedTxn, type Txn } from '@/lib/api'
+import { dayLabel, toISO } from '@/lib/dates'
+import { formatCents } from '@/lib/money'
+import { markFresh } from '@/lib/motion'
+import { useBusy } from '@/lib/nav'
+import { play } from '@/lib/sound'
+import { useTally } from '@/lib/tally'
+import { toast } from '@/lib/toast'
+import { space } from '@/theme'
+
+/** Deleted rows grouped by the moment they went, newest first (the list already comes newest first). */
+function byDelete(rows: DeletedTxn[]): DeletedTxn[][] {
+  const out: DeletedTxn[][] = []
+  for (const r of rows) {
+    const last = out[out.length - 1]
+    if (last && last[0].deleted_at === r.deleted_at) last.push(r)
+    else out.push([r])
+  }
+  return out
+}
+
+export function Deleted() {
+  const t = useTally()
+  const q = useQuery({ queryKey: ['deleted'], queryFn: api.deleted })
+  const busy = useBusy()
+  if (!q.data) return <StateView q={q} shape="list" />
+  if (!q.data.length) {
+    return (
+      <View style={{ gap: space.xs, paddingHorizontal: space.xs }}>
+        <Txt variant="headline">Nothing to put back</Txt>
+        <Txt variant="callout" tone="label2">Deleted entries wait here for 30 days.</Txt>
+      </View>
+    )
+  }
+  const name = (x: Txn) => x.what || t.catOf(x).name
+  const where = (x: Txn) => [x.from_id, x.to_id].filter((v): v is number => v != null).map((id) => t.acct.get(id)?.name ?? '').filter(Boolean).join(' → ')
+  const putBack = (rows: DeletedTxn[]) => busy(async () => {
+    const entries = rows.map(({ deleted_at: _gone, ...entry }) => entry)
+    if (!(await write(() => api.restore(entries)))) return
+    play('undo')
+    markFresh(entries.map((x) => x.id)) // they unfold back into their lists
+    const one = entries.length === 1 ? entries[0] : null
+    toast({
+      text: one ? `Put back ${name(one)} ${formatCents(one.amount)}` : `Put back ${entries.length} entries`,
+      action: one ? { label: 'Show', run: () => openEntry(one.id) } : undefined,
+    })
+    q.refetch()
+  })
+  const groups = byDelete(q.data)
+  return (
+    <>
+      {groups.map((g) => {
+        const when = dayLabel(toISO(new Date(g[0].deleted_at)), t.today).toLowerCase()
+        return (
+          <Group key={`${g[0].deleted_at}:${g[0].id}`} header={g.length > 1 ? `${g.length} deleted together ${when}` : undefined}>
+            {[
+              ...g.map((x) => (
+                <Row key={x.id} label={name(x)} chevron={false}
+                  sub={`${formatCents(x.amount)}, ${t.catOf(x).name}${where(x) ? ` on ${where(x)}` : ''}, ${dayLabel(x.date, t.today)}${g.length > 1 ? '' : `, deleted ${when}`}`}
+                  trailing={<Tap feedback="opacity" hitSlop={8} onPress={() => putBack([x])}><Txt variant="callout" style={{ fontWeight: '600' }}>Put back</Txt></Tap>} />
+              )),
+              ...(g.length > 1 ? [<Row key="all" label={`Put back all ${g.length}`} sf="arrow.uturn.backward" md="undo" chevron={false} onPress={() => putBack(g)} />] : []),
+            ]}
+          </Group>
+        )
+      })}
+      <Txt variant="foot" tone="label2" style={{ paddingHorizontal: space.l, lineHeight: 16 }}>{"Kept for 30 days after they're deleted, then gone for good. Putting one back keeps its receipt and its place."}</Txt>
+    </>
+  )
+}
