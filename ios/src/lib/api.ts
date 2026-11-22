@@ -43,7 +43,9 @@ export interface StatementMatch { account_id: number; first: string; last: strin
 /** Settings rows straight from the tables: `active` and `ef` are SQLite's 0/1 here. Saving one returns the same. */
 export type AdminAccount = Omit<Account, 'active' | 'ef'> & { sort: number; active: number; ef: number }
 export type AdminCategory = Omit<Category, 'active'> & { sort: number; active: number }
-export interface AdminData { accounts: AdminAccount[]; categories: AdminCategory[]; favorites: Favorite[]; recurring: Recurring[]; saved_views: SavedView[]; budgets: Budget[]; skips: Skip[]; settings: Record<string, string> }
+/** `next_due`: the next date that will happen (its first row still ahead); `next_date` is the one after those. */
+export type AdminRecurring = Recurring & { next_due?: string }
+export interface AdminData { accounts: AdminAccount[]; categories: AdminCategory[]; favorites: Favorite[]; recurring: AdminRecurring[]; saved_views: SavedView[]; budgets: Budget[]; skips: Skip[]; settings: Record<string, string> }
 
 export class ApiError extends Error {
   constructor(public status: number, public errors: string[]) { super(errors.join(' ')) }

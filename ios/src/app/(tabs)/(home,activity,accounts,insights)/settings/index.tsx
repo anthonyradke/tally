@@ -13,6 +13,7 @@ import { usePrivacy } from '@/lib/privacy'
 import { play, useSounds } from '@/lib/sound'
 import { setLockEnabled, useLock } from '@/lib/lock'
 import { toast } from '@/lib/toast'
+import { shareCsv } from '@/lib/exportCsv'
 import { useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
 import { space, themeById, useTheme } from '@/theme'
@@ -30,6 +31,16 @@ async function loadHealth(): Promise<Health> {
     if (!(e instanceof ApiError) || e.status !== 404) throw e
     return { version: '', database: 'ok', backups: await api.backups(), offsite: null }
   }
+}
+
+/** What the backups amount to, or, with no snapshot found, what to check: "0 nightly snapshots … your Mac copies
+ *  them to iCloud" under a red "None found" read as if all was well. */
+function backupNote(h: Health | undefined): string | undefined {
+  if (!h) return undefined
+  if (!h.backups.count) {
+    return `No nightly snapshots found${h.backups.folder ? ` in ${h.backups.folder}` : ''}. Check that the nightly backup ran on the server and that Tally can read that folder.`
+  }
+  return `${h.backups.count === 1 ? '1 nightly snapshot' : `${h.backups.count} nightly snapshots`} on the server${h.offsite ? ', and an off-site copy' : ''}. Your Mac copies them to iCloud each day.`
 }
 
 export default function Settings() {
@@ -66,7 +77,8 @@ export default function Settings() {
           <Row label="Accounts" value={b ? String(b.accounts.filter((a) => a.active).length) : ''} sf="building.columns" md="account_balance" href="/settings/accounts" />
           <Row label="Categories" value={b ? String(b.categories.filter((x) => x.active).length) : ''} sf="square.grid.2x2" md="category" href="/settings/categories" />
           <Row label="Budgets" value={budgets ? `${budgets} set` : 'None'} sf="gauge.with.needle" md="speed" href="/settings/budgets" />
-          <Row label="Goals" sub="Emergency fund, Roth IRA, interest" sf="target" md="flag" href="/settings/general" />
+          <Row label="Goals" sub="Emergency fund and Roth IRA" sf="target" md="flag" href="/settings/general" />
+          <Row label="Month end" sub="Where savings interest is logged" sf="calendar.badge.checkmark" md="event_available" href="/settings/monthend" />
         </Group>
         <Group header="App">
           <Row label="Theme" value={themeById(theme).name} sf="paintpalette" md="palette" href="/settings/theme" />
@@ -82,7 +94,7 @@ export default function Settings() {
           <Row label="Server" value={url ? url.replace(/^https?:\/\//, '').split('.')[0] : process.env.EXPO_OS === 'web' ? 'This site' : 'Not set'} sf="server.rack" md="dns" href="/settings/server" />
           {queued.length > 0 && <Row label="Waiting to send" value={String(queued.length)} sf="icloud.and.arrow.up" md="cloud_upload" href="/settings/server" />}
         </Group>
-        <Group header="Backups" footer={h ? `${h.backups.count} nightly snapshots on the server${h.offsite ? ', and an off-site copy' : ''}. Your Mac copies them to iCloud each day.` : undefined}>
+        <Group header="Backups" footer={backupNote(h)}>
           <Row label="On the server" chevron={false}
             leading={<Icon sf={stale ? 'exclamationmark.triangle.fill' : 'checkmark.shield'} md={stale ? 'warning' : 'verified_user'} size={18} color={stale ? c.neg : c.label2} />}
             value={<Txt variant="body" tone={stale ? 'neg' : 'label2'}>{last ? ago(last.at, now) : health.isLoading ? '' : health.isError ? 'Unknown' : 'None found'}</Txt>} />
@@ -95,6 +107,10 @@ export default function Settings() {
             <Row label="Database check" chevron={false} leading={<Icon sf="exclamationmark.triangle.fill" md="warning" size={18} color={c.neg} />}
               value={<Txt variant="body" tone="neg">Failed</Txt>} />
           )}
+        </Group>
+        <Group header="Export" footer="A CSV file through the share sheet: save it to Files, AirDrop it, or open it in Numbers.">
+          <Row label="Every entry" value="CSV" sf="list.bullet.rectangle" md="list_alt" chevron={false} onPress={() => shareCsv('/export/log.csv', 'tally-entries.csv')} />
+          <Row label="Months" value="CSV" sf="calendar" md="calendar_month" chevron={false} onPress={() => shareCsv('/export/months.csv', 'tally-months.csv')} />
         </Group>
         <View style={{ alignItems: 'center', gap: 2 }}>
           <Txt variant="foot" tone="label2">Tally {Constants.expoConfig?.version ?? ''}{h?.version && h.version !== Constants.expoConfig?.version ? ` · server ${h.version}` : ''}</Txt>

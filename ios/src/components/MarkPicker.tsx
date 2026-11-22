@@ -1,12 +1,14 @@
 // A place's logo, chosen on its page: Automatic (Tally recognizes the name), a brand from the list, a letter on one
 // of the category colors, or no logo (the category's symbol). Saved in the `merchant_marks` setting, keyed by the
-// place's name, so every entry with that name follows.
-import { useState } from 'react'
-import { View } from 'react-native'
+// place's name, so every entry with that name follows. Brands that share a word with the place come first, and a
+// search narrows them.
+import { useState, type Ref } from 'react'
+import { TextInput, View } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { MARK_OPTIONS, overrideKey, parseOverrides, specFor } from '@/icons/merchants'
 import { write } from '@/lib/admin'
 import { api } from '@/lib/api'
+import { rankMarks } from '@/lib/marks'
 import { play } from '@/lib/sound'
 import { useTally } from '@/lib/tally'
 import { radius, space, TINTS, useTheme } from '@/theme'
@@ -17,10 +19,12 @@ import { Panel, Section } from './Panel'
 import { Tap } from './Tap'
 import { Txt } from './Txt'
 
-export function MarkPicker({ what, merchant }: { what: string; merchant: string }) {
+/** `searchRef`: the brand search field, for the place's page to focus when its mark is tapped. */
+export function MarkPicker({ what, merchant, searchRef }: { what: string; merchant: string; searchRef?: Ref<TextInput> }) {
   const { c } = useTheme()
   const t = useTally()
   const [all, setAll] = useState(false)
+  const [query, setQuery] = useState('')
   const o = parseOverrides(t.b?.settings.merchant_marks)
   const k = overrideKey(what, o)
   const cur = k && o[k] !== 'auto' ? o[k] : null // null: automatic
@@ -34,10 +38,17 @@ export function MarkPicker({ what, merchant }: { what: string; merchant: string 
     else if (k && k !== merchant) next[merchant] = 'auto'
     write(() => api.putSettings({ merchant_marks: next }))
   }
-  const brands = all ? MARK_OPTIONS : MARK_OPTIONS.slice(0, 12)
+  const ranked = rankMarks(MARK_OPTIONS, what, query)
+  const brands = all || query ? ranked : ranked.slice(0, 12)
   return (
     <Section title="Logo">
       <Panel style={{ gap: space.l }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, backgroundColor: c.fill, borderRadius: radius.input, paddingHorizontal: space.m, height: 38 }}>
+          <Icon sf="magnifyingglass" md="search" size={15} color={c.label2} />
+          <TextInput ref={searchRef} value={query} onChangeText={setQuery} placeholder={`Search ${MARK_OPTIONS.length} brands`} placeholderTextColor={c.label3}
+            autoCorrect={false} returnKeyType="search" clearButtonMode="while-editing" accessibilityLabel="Search brands"
+            style={{ flex: 1, fontSize: 17, color: c.label }} />
+        </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
           <Chip label="Automatic" selected={cur == null} onDark onPress={() => choose(null)} />
           <Chip label="Category symbol" selected={cur === 'category'} onDark onPress={() => choose('category')} />
@@ -56,7 +67,7 @@ export function MarkPicker({ what, merchant }: { what: string; merchant: string 
           </View>
         </View>
         <View style={{ gap: space.s }}>
-          <Txt variant="sub" tone="label2">A brand</Txt>
+          <Txt variant="sub" tone="label2">{query ? (brands.length ? `Brands matching "${query.trim()}"` : `No brand matches "${query.trim()}". A letter works for any place.`) : 'A brand'}</Txt>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
             {brands.map((m) => (
               <Pick key={m.id} on={cur === m.id} label={m.spec.title} onPress={() => choose(m.id)}>
@@ -64,7 +75,7 @@ export function MarkPicker({ what, merchant }: { what: string; merchant: string 
               </Pick>
             ))}
           </View>
-          {!all && (
+          {!all && !query && (
             <Tap feedback="opacity" onPress={() => setAll(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: space.xs }}>
               <Txt variant="callout" style={{ fontWeight: '600' }}>Show all {MARK_OPTIONS.length}</Txt>
               <Icon sf="chevron.down" md="expand_more" size={12} color={c.label} />

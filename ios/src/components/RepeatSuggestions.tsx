@@ -21,10 +21,13 @@ const HIDDEN = 'tally.repeats.hidden'
 const FREQ = { weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly', yearly: 'Yearly' }
 const keyOf = (r: Repeat) => `${r.category_id}|${r.what.toLowerCase()}`
 
-export function RepeatSuggestions({ b }: { b: Bootstrap }) {
+/** `folded`: one row ("3 more look like they repeat") that opens the list, for under the templates, where keeping them
+ *  up is the main job. Five suggestions above them used to push the real bills off the screen. */
+export function RepeatSuggestions({ b, folded }: { b: Bootstrap; folded?: boolean }) {
   const { c, tint } = useTheme()
   const all = useAllTxns()
   const [hidden, setHidden] = useState<string[] | null>(null)
+  const [open, setOpen] = useState(!folded)
   useEffect(() => {
     AsyncStorage.getItem(HIDDEN).then((v) => setHidden(v ? JSON.parse(v) : [])).catch(() => setHidden([]))
   }, [])
@@ -38,16 +41,24 @@ export function RepeatSuggestions({ b }: { b: Bootstrap }) {
     setHidden(next)
     AsyncStorage.setItem(HIDDEN, JSON.stringify(next.slice(-200))).catch(() => {})
   }
-  const open = (r: Repeat) => router.push({ pathname: '/edit', params: { kind: 'recurring', prefill: JSON.stringify({
+  const setUp = (r: Repeat) => router.push({ pathname: '/edit', params: { kind: 'recurring', prefill: JSON.stringify({
     label: r.what, what: r.what, category_id: r.category_id, from_account_id: r.from_id, to_account_id: r.to_id,
     amount: dollarsText(r.amount), freq: r.freq, next_date: r.next }) } })
+  if (!open) {
+    return (
+      <Group>
+        <Row label={list.length === 1 ? '1 more looks like it repeats' : `${list.length} more look like they repeat`} sf="wand.and.stars" md="auto_fix_high" chevron={false}
+          trailing={<Icon sf="chevron.down" md="expand_more" size={13} color={c.label3} weight="bold" />} onPress={() => { Haptics.selectionAsync().catch(() => {}); setOpen(true) }} />
+      </Group>
+    )
+  }
   return (
     <Group header="Looks like it repeats" footer="From entries with the same name, accounts and amount on a steady schedule. Tap one to set it up; nothing is added until you save.">
       {list.map((r) => {
         const cat = b.categories.find((x) => x.id === r.category_id)
         const v = cat ? categoryVisual(cat) : null
         return (
-          <Row key={keyOf(r)} label={r.what} sub={`${FREQ[r.freq]}, ${formatCents(r.amount)}, ${nextDue(r.next, b.today)}`} onPress={() => open(r)}
+          <Row key={keyOf(r)} label={r.what} sub={`${FREQ[r.freq]}, ${formatCents(r.amount)}, ${nextDue(r.next, b.today)}`} onPress={() => setUp(r)}
             leading={v ? <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={30} /> : undefined}
             trailing={
               <Tap feedback="opacity" onPress={() => hide(r)} hitSlop={10} accessibilityLabel={`Not recurring: ${r.what}`}>
