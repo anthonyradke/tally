@@ -118,12 +118,17 @@ export function closingBalances(a: Account, rows: Txn[], start: string): Map<str
   return out
 }
 
-/** A row's amount from one account's side (`here`, the account whose rows a list shows): + for money into it, − for
- *  money out, so a statement can be followed line by line. Green for money in and refunds, plain for spending, muted
- *  for transfers, saving and loans, as everywhere else. Undefined when the row moves nothing in or out of it. */
-export function accountAmount(type: CatType, t: Pick<Txn, 'from_id' | 'to_id' | 'amount'>, here: number): { cents: number; sign: Sign; tone: Tone; muted: boolean } | undefined {
-  const v = (t.to_id === here ? t.amount : 0) - (t.from_id === here ? t.amount : 0)
+/** A row's amount from one account's side (`here`, the account whose rows a list shows), the way its own statement
+ *  puts it, so it can be followed line by line. A cash account: + for money into it, − for money out. A card or a
+ *  loan: charges plain, as spending is everywhere, and payments and refunds onto it as green + credits. Otherwise
+ *  green for money in and refunds, plain for spending, muted for transfers, saving and loans, as everywhere else.
+ *  Undefined when the row moves nothing in or out of it. */
+export function accountAmount(type: CatType, t: Pick<Txn, 'from_id' | 'to_id' | 'amount'>, here: Pick<Account, 'id' | 'kind'>): { cents: number; sign: Sign; tone: Tone; muted: boolean } | undefined {
+  const v = (t.to_id === here.id ? t.amount : 0) - (t.from_id === here.id ? t.amount : 0)
   if (!v) return undefined
   const moved = type !== 'Spending' && type !== 'Money in'
+  if (here.kind === 'card' || here.kind === 'loan') {
+    return v > 0 ? { cents: v, sign: 'always', tone: 'pos', muted: false } : { cents: -v, sign: 'never', tone: 'neutral', muted: moved }
+  }
   return { cents: v, sign: 'always', tone: moved ? 'neutral' : v > 0 ? 'pos' : type === 'Money in' ? 'neg' : 'neutral', muted: moved }
 }

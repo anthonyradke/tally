@@ -17,7 +17,8 @@ Changes to anything below get written here first.
   menu lists that tag's entries.
 - **Grouped by day, inset panels.** Activity reads like a statement: day headers with the day's spending, entries on
   rounded panels, the account under each amount. One account's rows (its page, Catch up, Activity filtered to it)
-  are signed from its side, + for money in and − for money out, in the same tones; Activity filtered to just that
+  read like that account's own statement: on a cash account + for money in and − for money out; on a card or a loan,
+  charges plain as spending is everywhere, and payments and refunds onto it as green + credits; Activity filtered to just that
   cash account or card, by date, also shows the balance each day ended on in its day header, to check against the
   bank line by line.
 - **What's coming, drawn ahead.** Scheduled entries carry a cash account's line past today as a dashed path (red

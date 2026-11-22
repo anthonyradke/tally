@@ -45,17 +45,31 @@ test('statement: day headers carry the closing balance', () => {
 })
 
 test('statement: amounts signed from the account side, toned as everywhere else', () => {
+  const chk = acct(1, 'cash'), sav = acct(2, 'cash')
   const spend = row('2026-11-12', 4500, { from_id: 1 })
-  assert.deepEqual(accountAmount('Spending', spend, 1), { cents: -4500, sign: 'always', tone: 'neutral', muted: false })
+  assert.deepEqual(accountAmount('Spending', spend, chk), { cents: -4500, sign: 'always', tone: 'neutral', muted: false })
   const refund = row('2026-11-12', -1200, { from_id: 1 })
-  assert.deepEqual(accountAmount('Spending', refund, 1), { cents: 1200, sign: 'always', tone: 'pos', muted: false })
+  assert.deepEqual(accountAmount('Spending', refund, chk), { cents: 1200, sign: 'always', tone: 'pos', muted: false })
   const pay = row('2026-11-12', 300000, { from_id: null, to_id: 1 })
-  assert.deepEqual(accountAmount('Money in', pay, 1), { cents: 300000, sign: 'always', tone: 'pos', muted: false })
+  assert.deepEqual(accountAmount('Money in', pay, chk), { cents: 300000, sign: 'always', tone: 'pos', muted: false })
   // A transfer is out of one side and into the other, muted on both.
   const move = row('2026-11-12', 40000, { from_id: 1, to_id: 2 })
-  assert.deepEqual(accountAmount('Transfer', move, 1), { cents: -40000, sign: 'always', tone: 'neutral', muted: true })
-  assert.deepEqual(accountAmount('Transfer', move, 2), { cents: 40000, sign: 'always', tone: 'neutral', muted: true })
-  assert.equal(accountAmount('Spending', spend, 9), undefined) // not this account's: the usual look
+  assert.deepEqual(accountAmount('Transfer', move, chk), { cents: -40000, sign: 'always', tone: 'neutral', muted: true })
+  assert.deepEqual(accountAmount('Transfer', move, sav), { cents: 40000, sign: 'always', tone: 'neutral', muted: true })
+  assert.equal(accountAmount('Spending', spend, acct(9, 'cash')), undefined) // not this account's: the usual look
+})
+
+test('statement: a card or a loan reads like its statement, charges plain and credits a green +', () => {
+  const card = acct(3, 'card'), loan = acct(4, 'loan')
+  assert.deepEqual(accountAmount('Spending', row('2026-11-12', 4500, { from_id: 3 }), card), { cents: 4500, sign: 'never', tone: 'neutral', muted: false })
+  assert.deepEqual(accountAmount('Spending', row('2026-11-12', -1200, { from_id: 3 }), card), { cents: 1200, sign: 'always', tone: 'pos', muted: false })
+  const payment = row('2026-11-12', 50000, { from_id: 1, to_id: 3, category_id: 8 })
+  assert.deepEqual(accountAmount('Transfer', payment, card), { cents: 50000, sign: 'always', tone: 'pos', muted: false })
+  assert.deepEqual(accountAmount('Transfer', payment, acct(1, 'cash')), { cents: -50000, sign: 'always', tone: 'neutral', muted: true }) // checking's side
+  const cashback = row('2026-11-12', 2500, { from_id: null, to_id: 3, category_id: 1 })
+  assert.deepEqual(accountAmount('Money in', cashback, card), { cents: 2500, sign: 'always', tone: 'pos', muted: false })
+  assert.deepEqual(accountAmount('Loan', row('2026-11-12', 61000, { from_id: 1, to_id: 4 }), loan), { cents: 61000, sign: 'always', tone: 'pos', muted: false })
+  assert.deepEqual(accountAmount('Transfer', row('2026-11-12', 30000, { from_id: 3, to_id: 1 }), card), { cents: 30000, sign: 'never', tone: 'neutral', muted: true }) // a cash advance
 })
 
 test('recently deleted: a search that finds nothing points to deleted matches', () => {

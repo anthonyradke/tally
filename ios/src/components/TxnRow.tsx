@@ -51,7 +51,8 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
 }) {
   const theme = useTheme()
   const v = categoryVisual(c)
-  const amt = (here != null && accountAmount(c.type, t, here)) || rowAmount(c.type, t.amount) // signed from the account's side
+  const own = here != null ? acct.get(here) : undefined
+  const amt = (own && accountAmount(c.type, t, own)) || rowAmount(c.type, t.amount) // as the account's statement puts it
   const future = isFuture(t.date, today)
   const where = accountLine(t, c, acct, here)
   // From → To is long: it goes under the name, where the category would be, instead of squeezing both into "Chase CC
