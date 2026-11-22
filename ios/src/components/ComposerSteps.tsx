@@ -1,6 +1,6 @@
 // The new-entry composer's pages and small parts (app/new.tsx holds the flow): "What was it?", the category and
 // account pages, the extras on the review, the progress dots and the keys and pill around the keypad.
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react'
 import { ScrollView, Switch, TextInput, View } from 'react-native'
 import Animated, { interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
@@ -89,11 +89,15 @@ export function CatMark({ id, size = 30 }: { id: number; size?: number }) {
   return <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={size} />
 }
 
+/** What the composer's Next button calls on "What was it?", so it does what Return does. */
+export interface WhatHandle { submit: () => void }
+
 /** "What was it?": a name, with past places under it. Typing matches every kind; picking one copies its category and
  *  accounts (and its kind, said under the row). A name typed in full that is one past place of this kind counts as
- *  picking it, except on a page opened from the review (`fixing`): there Return only keeps the new name, and the
- *  category and accounts already set stay as they are. */
-export function What({ history, fixing, onPick, onSubmit }: { history: Txn[]; fixing: boolean; onPick: (x: Txn) => void; onSubmit: () => void }) {
+ *  picking it, whether it's left with Return or the bar's Next (`ref`), except on a page opened from the review
+ *  (`fixing`): there it only keeps the new name, and the category and accounts already set stay as they are.
+ *  `onSubmit` moves on without a pick. */
+export function What({ ref, history, fixing, onPick, onSubmit }: { ref?: Ref<WhatHandle>; history: Txn[]; fixing: boolean; onPick: (x: Txn) => void; onSubmit: () => void }) {
   const { c } = useTheme()
   const t = useTally()
   const { d, set } = useDraft()
@@ -109,6 +113,7 @@ export function What({ history, fixing, onPick, onSubmit }: { history: Txn[]; fi
     if (x) pick(x)
     else onSubmit()
   }
+  useImperativeHandle(ref, () => ({ submit }))
   const list = useMemo(() => places(history, t.catOf, { text: d.what, kind: d.kind, category: d.category_id }),
     [d.what, d.kind, d.category_id, history]) // eslint-disable-line react-hooks/exhaustive-deps
   return (

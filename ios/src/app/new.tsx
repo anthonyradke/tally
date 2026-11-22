@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { CheckDraw } from '@/components/CheckDraw'
 import { QuickChips, Review } from '@/components/ComposerReview'
-import { Accounts, Categories, DatePill, Dot, OpKey, What } from '@/components/ComposerSteps'
+import { Accounts, Categories, DatePill, Dot, OpKey, What, type WhatHandle } from '@/components/ComposerSteps'
 import { Keypad, typeOver } from '@/components/Keypad'
 import { EASE } from '@/components/ease'
 import { Pages } from '@/components/Pages'
@@ -163,7 +163,10 @@ function Composer() {
     quickGave.current = false // the sum is yours now, whatever started it
     set({ amount: '' })
   }
-  const next = () => {
+  // On "What was it?", Next is Return: a place typed in full is picked, with its category and accounts.
+  const whatPage = useRef<WhatHandle>(null)
+  const next = () => (step === 'what' && whatPage.current ? whatPage.current.submit() : advance())
+  const advance = () => {
     if (step === 'amount' && !settle()) return
     const now = useDraft.getState().d
     if (step === 'amount' && !toCents(now.amount)) { refuse(); return }
@@ -345,7 +348,7 @@ function Composer() {
               </View>
             )}
 
-            {s === 'what' && <What history={past} fixing={toReview} onPick={pickPast} onSubmit={next} />}
+            {s === 'what' && <What ref={whatPage} history={past} fixing={toReview} onPick={pickPast} onSubmit={advance} />}
 
             {s === 'category' && <Categories heading={heading.category!} onPick={(id) => { set({ category_id: id }); next() }} onKind={setKind} />}
 
