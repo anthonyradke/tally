@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics'
 import { router } from 'expo-router'
 import { api, ApiError, type Txn } from './api'
 import { invalidateAll } from './data'
+import { todayISO } from './dates'
 import { dollarsText } from './forms'
 import { formatCents } from './money'
 import { markFresh } from './motion'
@@ -56,12 +57,18 @@ export function openEntry(id?: number, mode?: 'duplicate') {
   else router.push({ pathname: '/entry', params: { id: String(id), ...(mode ? { mode } : {}) } })
 }
 
-/** A new recurring template filled in from an entry, monthly from the same day next time round. Nothing is added
- *  until it's saved. */
+/** A monthly template's fields from an entry, from the same day next time round. `anchor_day` is the entry's day:
+ *  one from Jan 31 starts on Feb 28 and still comes back to the 31st. `today` is never taken as earlier than the
+ *  phone's date (a list's bootstrap can be from yesterday). */
+export function repeatFields(t: Txn, today: string, label: string) {
+  const now = today > todayISO() ? today : todayISO()
+  return { label, what: t.what || label, category_id: t.category_id, from_account_id: t.from_id, to_account_id: t.to_id,
+    amount: dollarsText(t.amount), freq: 'monthly', next_date: nextMonthly(t.date, now), anchor_day: Number(t.date.slice(8, 10)) }
+}
+
+/** A new recurring template filled in from an entry. Nothing is added until it's saved. */
 export function repeatEntry(t: Txn, today: string, label: string) {
-  router.push({ pathname: '/edit', params: { kind: 'recurring', prefill: JSON.stringify({
-    label, what: t.what || label, category_id: t.category_id, from_account_id: t.from_id, to_account_id: t.to_id,
-    amount: dollarsText(t.amount), freq: 'monthly', next_date: nextMonthly(t.date, today) }) } })
+  router.push({ pathname: '/edit', params: { kind: 'recurring', prefill: JSON.stringify(repeatFields(t, today, label)) } })
 }
 
 /** A new quick action filled in from an entry. */
