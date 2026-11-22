@@ -101,7 +101,7 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
               {future ? `Scheduled, ${sub}` : sub}
             </Txt>
             {tag && (
-              <Tap feedback="opacity" onPress={showTag} disabled={selecting} hitSlop={{ top: 12, bottom: 12, left: 6, right: 6 }} style={{ flexShrink: 2 }}>
+              <Tap feedback="opacity" onPress={showTag} disabled={selecting} accessibilityRole="link" hitSlop={{ top: 12, bottom: 12, left: 6, right: 6 }} style={{ flexShrink: 2 }}>
                 <Txt variant="sub" tone="label2" numberOfLines={1} style={{ fontWeight: '600' }}>{`#${tag}${t.tags.length > 1 ? ` +${t.tags.length - 1}` : ''}`}</Txt>
               </Tap>
             )}
