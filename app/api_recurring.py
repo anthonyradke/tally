@@ -2,7 +2,7 @@
 Templates are validated like entries: generate() inserts their rows without further checks, so a template that
 broke the From/To rules (a paycheck with only a From) would post rows that move money the wrong way."""
 from __future__ import annotations
-from datetime import date
+from datetime import date, timedelta
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from . import db
@@ -68,11 +68,20 @@ async def create_recurring(request: Request, con: Con):
 
 @router.put("/recurring/{id}")  # rows already posted for today and before stay as they are
 async def update_recurring(id: int, request: Request, con: Con):
+    """`next_date` is the next date the app shows (`next_due` in /admin) or the template's own next date (which older
+    versions of the app showed): either leaves the schedule as it is. Another date, or `"move": true`, moves it, and
+    its rows still ahead are posted again from that date. The template's own date is past the rows already posted,
+    so editing it to move rent from the 1st to the 3rd used to wipe December's and January's."""
     old = _get(con, "recurring", id)
-    f = _fields(con, await body(request))
+    b = await body(request)
+    f = _fields(con, b)
+    today = date.today().isoformat()
+    moved = flag(b.get("move", False), "move") or f["next_date"] not in (old["next_date"], _next_due(con, old, today))
     same_cadence = f["freq"] == old["freq"]
-    if f["next_date"] == old["next_date"] and old["anchor_day"] and same_cadence:
-        f["anchor_day"] = old["anchor_day"]  # unchanged date: keep aiming for the 31st even if next is Feb 28
+    if not moved:
+        f["next_date"] = old["next_date"]
+        if old["anchor_day"] and same_cadence:
+            f["anchor_day"] = old["anchor_day"]  # unchanged date: keep aiming for the 31st even if next is Feb 28
     # Rows it already posted for dates still ahead are replaced: they're posted again with the new amount, category and
     # accounts (or not at all while paused). Leaving them made an edit post a second row next to an old one, and a
     # new amount only showed up after the rows already scheduled.
@@ -81,21 +90,42 @@ async def update_recurring(id: int, request: Request, con: Con):
     same = ("recurring_id=? AND date > ? AND amount=? AND category_id=? AND from_account_id IS ? AND to_account_id IS ?"
             " AND what=? AND note='' AND tags='' AND receipt IS NULL AND split_group IS NULL"
             " AND (slot IS NULL OR slot = date)")
-    args = (id, date.today().isoformat(), old["amount"], old["category_id"], old["from_account_id"],
+    args = (id, today, old["amount"], old["category_id"], old["from_account_id"],
             old["to_account_id"], old["what"] or old["label"])
     ahead = con.execute(f"SELECT date FROM transactions WHERE {same} ORDER BY date", args).fetchall()
     if ahead:
         con.execute(f"DELETE FROM transactions WHERE {same}", args)
-        if f["next_date"] == old["next_date"]:  # date untouched: start again from the first one that hadn't happened
+        if not moved:  # date untouched: start again from the first one that hadn't happened
             f["next_date"] = min(ahead[0]["date"], f["next_date"])
             if not same_cadence:  # weekly to monthly: aim for the day it now starts on, not the day it was created on
                 f["anchor_day"] = date.fromisoformat(f["next_date"]).day
+    if moved:
+        _reslot(con, id, f, today)
     if f["active"] and not old["active"]:
         f["next_date"] = first_on_or_after(date.fromisoformat(f["next_date"]), f["freq"], f["anchor_day"],
                                            date.today()).isoformat()
     _upsert(con, "recurring", _counted(con, f), id)
     con.commit()
     return _get(con, "recurring", id)
+
+
+HALF = {"weekly": 3, "biweekly": 7, "monthly": 15, "yearly": 182}  # days: half of each cadence's step
+
+
+def _reslot(con, id: int, f: dict, today: str) -> None:
+    """After a move, a row still ahead that was changed by hand stands for the new date nearest it (within half a
+    step), so generate() doesn't post that date as well: moving rent from the 1st to the 3rd would otherwise keep the
+    December rent you'd edited and post a second one on Dec 3."""
+    taken: set[str] = set()
+    kept = con.execute("SELECT id, COALESCE(slot, date) AS s FROM transactions WHERE recurring_id=? AND date > ? "
+                       "ORDER BY s", (id, today)).fetchall()
+    for r in kept:
+        s, d = date.fromisoformat(r["s"]), date.fromisoformat(f["next_date"])
+        while d < s - timedelta(days=HALF[f["freq"]]):
+            d = step(d, f["freq"], f["anchor_day"])
+        if abs((d - s).days) <= HALF[f["freq"]] and d.isoformat() not in taken:
+            taken.add(d.isoformat())
+            con.execute("UPDATE transactions SET slot=? WHERE id=?", (d.isoformat(), r["id"]))
 
 
 @router.delete("/recurring/{id}")
