@@ -46,3 +46,8 @@ export function nextStep(from: Step, d: Draft, seen: ReadonlySet<Step>): Step {
   const steps = stepsFor(d.kind)
   return steps.slice(steps.indexOf(from) + 1).find((s) => !filled(s, d, seen)) ?? 'review'
 }
+
+/** The steps a quick action or a past entry answers for you: its category and accounts, even an optional To it leaves
+ *  empty (a Saving chip with no To walked every page to reach the review). Counted as seen, so Next can pass them; a
+ *  step still needed (no category, a required account missing) stays unanswered all the same. */
+export const answeredBy = (kind: CatType): Step[] => stepsFor(kind).filter((s) => s === 'category' || s === 'from' || s === 'to')

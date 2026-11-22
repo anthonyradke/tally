@@ -1,7 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatType, Favorite, Txn } from '@/lib/api'
-import { addedText, addLabel, dayNote, exactPlace, namesPlace, places, quickFill, signed } from '@/lib/compose'
+import { addedText, addLabel, chipIn, chipOut, exactPlace, namesPlace, places, quickFill, signed, toKind, withKind } from '@/lib/compose'
+import { blank, type Draft } from '@/lib/draft'
+import { formatCents } from '@/lib/money'
+import { rowAmount } from '@/lib/txn'
 import { row } from './fixtures.ts'
 
 process.env.TZ = 'America/Denver'
@@ -30,6 +33,13 @@ test('quick action: a label that is only the category name leaves the name to fi
   assert.equal(quickFill(fav({}), CATS[2], false).what, '')
   assert.equal(quickFill(fav({ label: 'Chevron' }), CATS[2], false).what, 'Chevron')
   assert.equal(quickFill(fav({ category_id: 1, label: 'Paycheck' }), CATS[1], false).kind, 'Money in')
+})
+
+test('quick action: a chip with its own amount keeps its name, even when it is the category name', () => {
+  const rent = fav({ label: 'Rent', category_id: 6, amount: 140000 })
+  const f = quickFill(rent, { type: 'Spending', name: 'Rent' }, false)
+  assert.deepEqual([f.what, f.amount], ['Rent', '1400'])
+  assert.equal(quickFill(rent, { type: 'Spending', name: 'Rent' }, true).what, 'Rent') // the amount typed over it
 })
 
 // Newest first, like the history the composer loads.
@@ -66,28 +76,89 @@ test('exactPlace: a name typed in full is that place, case aside', () => {
   assert.equal(exactPlace(history, catOf, 'Chev', 'Spending'), undefined)
   assert.equal(exactPlace(history, catOf, '', 'Spending'), undefined)
   assert.equal(exactPlace(history, catOf, 'transfer to savings', 'Transfer')?.category_id, 5)
-  assert.equal(exactPlace(history, catOf, 'transfer to savings', 'Spending')?.category_id, 4)
+  assert.equal(exactPlace(history, catOf, 'transfer to savings', 'Spending'), undefined) // only under Saving and Transfer
+  assert.equal(exactPlace(history, catOf, 'acme corp', 'Spending'), undefined) // Return doesn't switch the kind
 })
 
 test('the figure reads like Activity: money in and refunds green with a +', () => {
-  assert.deepEqual(signed(6226, 'Spending', false), { text: '$62.26', pos: false })
-  assert.deepEqual(signed(6226, 'Spending', true), { text: '+$62.26', pos: true })
-  assert.deepEqual(signed(218540, 'Money in', false), { text: '+$2,185.40', pos: true })
-  assert.deepEqual(signed(500, 'Money in', true), { text: '−$5.00', pos: false })
-  assert.deepEqual(signed(50000, 'Transfer', false), { text: '$500.00', pos: false })
+  assert.deepEqual(signed(6226, 'Spending', false), { text: '$62.26', tone: 'neutral' })
+  assert.deepEqual(signed(6226, 'Spending', true), { text: '+$62.26', tone: 'pos' })
+  assert.deepEqual(signed(218540, 'Money in', false), { text: '+$2,185.40', tone: 'pos' })
+  assert.deepEqual(signed(500, 'Money in', true), { text: '−$5.00', tone: 'neg' })
+  assert.deepEqual(signed(50000, 'Transfer', false), { text: '$500.00', tone: 'neutral' })
   assert.equal(addLabel(6226, 'Spending', true), 'Add refund $62.26')
   assert.equal(addLabel(540, 'Spending', false), 'Add $5.40')
+})
+
+test('the figure matches the Activity row for every kind and sign', () => {
+  for (const kind of ['Spending', 'Money in', 'Transfer', 'Saving', 'Loan'] as CatType[]) {
+    for (const refund of [false, true]) {
+      const r = rowAmount(kind, refund ? -1234 : 1234)
+      const f = signed(1234, kind, refund)
+      assert.equal(f.text, formatCents(r.cents, { sign: r.sign }), `${kind} ${refund}`)
+      assert.equal(f.tone, r.tone)
+    }
+  }
+  // A negative saving reads like Activity's, with no −.
+  assert.deepEqual(signed(2500, 'Saving', true), { text: '$25.00', tone: 'neutral' })
 })
 
 test('the toast after Add says what went where, and the day when it is not today', () => {
   const base = { cents: 11284, kind: 'Spending' as CatType, refund: false, what: 'Safeway', category: 'Groceries', account: undefined, date: '2026-11-22', today: '2026-11-22' }
   assert.equal(addedText(base), 'Added $112.84 to Groceries')
-  assert.equal(addedText({ ...base, date: '2026-11-14' }), 'Added $112.84 to Groceries, Sat Nov 14')
-  assert.equal(addedText({ ...base, date: '2026-11-21' }), 'Added $112.84 to Groceries, yesterday')
+  assert.equal(addedText({ ...base, date: '2026-11-14' }), 'Added $112.84 to Groceries on Sat, Nov 14')
+  assert.equal(addedText({ ...base, date: '2026-11-21' }), 'Added $112.84 to Groceries yesterday')
+  assert.equal(addedText({ ...base, date: '2026-11-23' }), 'Added $112.84 to Groceries tomorrow')
+  assert.equal(addedText({ ...base, date: '2025-12-30', today: '2026-01-05' }), 'Added $112.84 to Groceries on Tue, Dec 30, 2025')
   assert.equal(addedText({ ...base, cents: 6226, refund: true, category: 'Shopping' }), 'Refunded $62.26 to Shopping')
   assert.equal(addedText({ ...base, cents: 218540, kind: 'Money in', what: 'Acme Corp', category: 'Paycheck', account: 'Checking' }), 'Acme Corp, +$2,185.40 to Checking')
   assert.equal(addedText({ ...base, cents: 218540, kind: 'Money in', what: ' ', account: 'Checking' }), 'Added +$2,185.40 to Checking')
-  assert.equal(dayNote('2025-12-30', '2026-01-05'), 'Tue Dec 30 2025')
-  assert.equal(dayNote('2026-11-23', '2026-11-22'), 'tomorrow')
-  assert.equal(dayNote('2026-11-22', '2026-11-22'), '')
+})
+
+const draft = (x: Partial<Draft> = {}): Draft => ({ ...blank('2026-11-22'), ...x })
+const apply = (d: Draft, p: Partial<Draft>): Draft => ({ ...d, ...p })
+
+test('quick actions: switching chips swaps the amount a chip brought, never one you typed', () => {
+  const coffee = fav({ id: 1, label: 'Coffee', category_id: 3, amount: 575 })
+  const lunch = fav({ id: 2, label: 'Lunch', category_id: 3, amount: 1200 })
+  const gas = fav({ id: 3, label: 'Gas', category_id: 2, amount: null })
+  const a = chipIn(draft(), coffee, CATS[3], { gave: false, summing: false })
+  const d1 = apply(draft(), a.patch)
+  assert.deepEqual([d1.amount, a.gave], ['5.75', true])
+  // Back to the amount page, Lunch instead: its $12 replaces Coffee's.
+  const b = chipIn(d1, lunch, CATS[3], { gave: a.gave, summing: false })
+  assert.deepEqual([apply(d1, b.patch).amount, b.gave], ['12', true])
+  // A chip with no amount after one that brought it: Coffee's $5.75 goes with Coffee.
+  const g = chipIn(d1, gas, CATS[2], { gave: true, summing: false })
+  assert.deepEqual([apply(d1, g.patch).amount, g.gave], ['', false])
+  // An amount you typed (gave is false once a key is pressed) stays through any chip.
+  const typed = draft({ amount: '4.50' })
+  const t = chipIn(typed, lunch, CATS[3], { gave: false, summing: false })
+  assert.deepEqual([apply(typed, t.patch).amount, t.gave], ['4.50', false])
+})
+
+test('quick actions: taking one back out keeps what you typed, the kind and the account it was opened from', () => {
+  const d = draft({ kind: 'Money in', amount: '20', what: 'Acme', category_id: 1, to_id: 4 })
+  assert.deepEqual(chipOut(d, false, 4), { ...draft(), kind: 'Money in', from_id: null, to_id: 4, amount: '20' })
+  assert.equal(chipOut(d, true, null).amount, '') // the chip's amount goes with it
+  const spent = chipOut(draft({ amount: '3', refund: true, category_id: 3, from_id: 2 }), false, 2)
+  assert.deepEqual([spent.from_id, spent.category_id, spent.refund], [2, null, true])
+})
+
+test('a refund does not survive a change to another kind', () => {
+  const refund = draft({ refund: true, amount: '5.00' })
+  const paycheck = fav({ label: 'Paycheck', category_id: 1, from_account_id: null, to_account_id: 4 })
+  assert.equal(apply(refund, chipIn(refund, paycheck, CATS[1], { gave: false, summing: false }).patch).refund, false)
+  assert.equal(withKind(refund, { kind: 'Money in', category_id: 1 }).refund, false) // a past Money in row
+  assert.equal(withKind(refund, { kind: 'Spending', category_id: 3 }).refund, true) // still spending: it stays
+  assert.equal(toKind(refund, 'Transfer', 'Spending', null).refund, false)
+  // A chip saved with a negative amount brings its own.
+  const fix = fav({ label: 'Paycheck fix', category_id: 1, amount: -500, from_account_id: null, to_account_id: 4 })
+  assert.equal(chipIn(draft(), fix, CATS[1], { gave: false, summing: false }).patch.refund, true)
+})
+
+test('the kind switch keeps the account it was opened from on the side that fits', () => {
+  const d = draft({ from_id: 4, category_id: 3 })
+  assert.deepEqual(toKind(d, 'Money in', 'Spending', 4), { kind: 'Money in', category_id: null, from_id: null, to_id: 4, refund: false })
+  assert.deepEqual(toKind(d, 'Spending', 'Spending', 4), { kind: 'Spending', category_id: 3, from_id: 4, to_id: null, refund: false })
 })

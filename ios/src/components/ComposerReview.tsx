@@ -44,7 +44,7 @@ export function Review({ onGo, onSplit, errors }: { onGo: (s: Step) => void; onS
   return (
     <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
       <Tap feedback="opacity" onPress={() => onGo('amount')} style={{ alignItems: 'center', paddingVertical: space.s }} accessibilityLabel={`Amount ${figure.text}. Change`}>
-        <Txt style={{ fontSize: 44, fontWeight: '700', letterSpacing: -1.2, color: figure.pos ? c.pos : c.label }}>{figure.text}</Txt>
+        <Txt style={{ fontSize: 44, fontWeight: '700', letterSpacing: -1.2, color: figure.tone === 'pos' ? c.pos : figure.tone === 'neg' ? c.neg : c.label }}>{figure.text}</Txt>
         <Txt variant="callout" tone="label2">{d.refund && d.kind === 'Spending' ? 'Refund' : KIND_NAME[d.kind]}</Txt>
       </Tap>
       <Group>
