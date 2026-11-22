@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { repeatFields } from '@/lib/actions'
 import { todayISO } from '@/lib/dates'
 import { blank } from '@/lib/draft'
-import { addTag, balanceFirst, nextMonthly, parseTags, tagSuggestions } from '@/lib/txn'
+import { addTag, balanceFirst, nextMonthly, parseTags, putLine, tagSuggestions } from '@/lib/txn'
 import { snap } from '@/lib/unsaved'
 import { row } from './fixtures.ts'
 
@@ -17,6 +17,19 @@ test('the first split line takes what the others leave', () => {
   // More in the other lines than the total: line 1 goes to nothing, never below.
   assert.equal(balanceFirst([lines[0], { ...lines[1], amount: '150.00' }], 12000)[0].amount, '')
   assert.deepEqual(balanceFirst([lines[0]], 500), [lines[0]])
+})
+
+test('line 1 stops balancing once typed into, and the draft remembers it', () => {
+  const start = [{ key: 'a', category_id: 1, amount: '120.00' }, { key: 'b', category_id: null, amount: '' }]
+  let lines = putLine(start, 'a', '50.00', 12000)
+  assert.equal(lines[0].typed, true)
+  lines = putLine(lines, 'b', '40.00', 12000)
+  assert.deepEqual(lines.map((l) => l.amount), ['50.00', '40.00'])
+  // A restored draft is a copy of the store's: the flag travels with it, so line 1 keeps the $50 typed into it.
+  const restored = JSON.parse(JSON.stringify(lines))
+  assert.deepEqual(putLine(restored, 'b', '45.00', 12000).map((l) => l.amount), ['50.00', '45.00'])
+  // Untouched, it still takes what's left.
+  assert.deepEqual(putLine(start, 'b', '40.00', 12000).map((l) => l.amount), ['80', '40.00'])
 })
 
 test('a repeat starts on the same day of the month after today', () => {

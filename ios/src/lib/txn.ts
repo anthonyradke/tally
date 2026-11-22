@@ -32,12 +32,18 @@ export function groupByDay(items: Txn[], typeOf: (t: Txn) => CatType): DayGroup[
 export const FREQ_LABEL: Record<Freq, string> = { weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly', yearly: 'Yearly' }
 
 /** A split whose first line takes whatever the other lines leave of the total (never below zero), so typing $40
- *  into line 2 of $120 reads $80 / $40 at once. Used until line 1 is typed into itself. */
+ *  into line 2 of $120 reads $80 / $40 at once. Not once line 1 has been typed into itself (`typed`). */
 export function balanceFirst(lines: Line[], total: number): Line[] {
-  if (lines.length < 2) return lines
+  if (lines.length < 2 || lines[0].typed) return lines
   const left = Math.max(0, total - lines.slice(1).reduce((n, l) => n + toCents(l.amount), 0))
   const amount = left ? fromCents(left) : ''
   return lines[0].amount === amount ? lines : [{ ...lines[0], amount }, ...lines.slice(1)]
+}
+
+/** A split after an amount goes into line `key`: that line is marked typed, and line 1 rebalances unless it's the
+ *  one typed into. */
+export function putLine(lines: Line[], key: string, amount: string, total: number): Line[] {
+  return balanceFirst(lines.map((l) => (l.key === key ? { ...l, amount, typed: true } : l)), total)
 }
 
 /** The first date after `today` on the same day of the month as `from` (the 31st falls back to a short month's

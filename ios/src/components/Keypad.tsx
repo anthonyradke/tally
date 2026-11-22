@@ -3,11 +3,19 @@ import { Pressable, View } from 'react-native'
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
 import { play } from '@/lib/sound'
-import { useTheme } from '@/theme'
+import { useTheme, type Palette } from '@/theme'
 import { Icon } from './Icon'
 import { Txt } from './Txt'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', 'del']
+
+/** How an amount the keypad opened on shows while it's selected, like text (the first digit types over it, see
+ *  `pressOver`): a light wash behind the figure, and what VoiceOver says for it (`text`, the figure as shown).
+ *  `label` is undefined while it isn't selected. */
+export const typeOver = (c: Palette, over: boolean, text: string) => ({
+  fill: over ? `${c.ink}2E` : 'transparent',
+  label: over ? `${text}, selected. Typing replaces it` : undefined,
+})
 
 /** The amount keypad (Cash App grammar: big keys, no chrome). Digits shift in from the right, so there's no decimal
  *  point key; 00 sits in its place. A tick on every press, like the system keyboard, and the key's label pops;
