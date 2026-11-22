@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics'
 import { router } from 'expo-router'
 import { api, ApiError, type Txn } from './api'
 import { invalidateAll } from './data'
+import { formatCents } from './money'
 import { markFresh } from './motion'
 import { play } from './sound'
 import { toast } from './toast'
@@ -18,7 +19,8 @@ export async function deleteTxns(rows: Txn[]): Promise<boolean> {
     await invalidateAll()
     if (!gone.length) { toast({ text: 'Those entries were already gone.' }); return true }
     toast({
-      text: gone.length === 1 ? `Deleted ${gone[0].what || 'entry'}` : `Deleted ${gone.length} entries`,
+      // The amount tells apart two Coffees on the same day.
+      text: gone.length === 1 ? `Deleted ${gone[0].what || 'entry'}, ${formatCents(Math.abs(gone[0].amount))}` : `Deleted ${gone.length} entries`,
       action: { label: 'Undo', run: () => undo(gone) },
     })
     return true

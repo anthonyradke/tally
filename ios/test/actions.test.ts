@@ -11,7 +11,7 @@ test('undo that fails says so instead of doing nothing', async () => {
   api.deleteTxn = async () => t
   await deleteTxns([t])
   const shown = useToast.getState().toast!
-  assert.equal(shown.text, 'Deleted Coffee')
+  assert.equal(shown.text, 'Deleted Coffee, $12.50')
   api.restore = async () => { throw new TypeError('Network request failed') }
   await shown.action!.run() // must not reject: the toast's button awaits it with nothing to catch
   const after = useToast.getState().toast!
