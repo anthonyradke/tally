@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Recurring } from '@/lib/api'
-import { findRepeats } from '@/lib/repeats'
+import { billKeys, findRepeats } from '@/lib/repeats'
 import { row } from './fixtures.ts'
 
 process.env.TZ = 'America/Denver'
@@ -33,4 +33,19 @@ test('groceries, stopped subscriptions and planned ones are left out', () => {
 test('the 31st steps to the end of a short month', () => {
   const rows = [row('2026-07-31', 500, { what: 'Gym' }), row('2026-08-31', 500, { what: 'Gym' })]
   assert.equal(findRepeats(rows, [], '2026-09-10')[0].next, '2026-09-30')
+})
+
+test('billKeys: monthly rhythms, from the same groups findRepeats reads', () => {
+  const at = (what: string, dates: string[], amounts: number[], x = {}) => dates.map((d, i) => row(d, amounts[i], { what, ...x }))
+  const rows = [
+    ...at('Netflix', ['2026-07-03', '2026-08-03'], [1549, 1549]),                                   // two alike: a repeat, so a bill
+    ...at('Xcel Energy', ['2026-07-12', '2026-08-12', '2026-09-12'], [7012, 12500, 9350], { category_id: 3 }), // three, season-varied
+    ...at('Costco', ['2026-07-02', '2026-08-01', '2026-09-03'], [4000, 21000, 9000]),               // monthly, but 5x apart
+    ...at('Gym', ['2026-08-02', '2026-09-02'], [3000, 4500]),                                       // two, not alike
+    ...at('Sweetgreen', ['2026-08-28', '2026-09-12', '2026-10-16'], [1154, 1360, 1375]),            // alike a month apart, but twice in September
+    ...at('Coffee', ['2026-09-01', '2026-09-08', '2026-09-15'], [575, 575, 575]),                   // weekly: everyday
+    ...at('Hulu', ['2026-01-05', '2026-02-05'], [999, 999]),                                        // stopped long ago, still a bill then
+    ...at('Rent', ['2026-08-01', '2026-09-01'], [140000, 140000], { recurring_id: 1 }),           // a template's: billTest knows it already
+  ]
+  assert.deepEqual([...billKeys(rows, today)].sort(), ['2|hulu', '2|netflix', '3|xcel energy'])
 })

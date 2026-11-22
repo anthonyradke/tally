@@ -16,8 +16,9 @@ import { Icon } from '@/components/Icon'
 import { StoryControls, storyPages, type Page } from '@/components/StoryPages'
 import { Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
-import { useTransactions } from '@/lib/data'
-import { lastOfMonth, monthBefore, monthOf } from '@/lib/dates'
+import { useAllTxns } from '@/lib/balances'
+import { billTest } from '@/lib/budgets'
+import { monthOf } from '@/lib/dates'
 import { close } from '@/lib/nav'
 import { play } from '@/lib/sound'
 import { buildStory } from '@/lib/story'
@@ -31,10 +32,12 @@ export default function StoryRoute() {
   const t = useTally()
   const b = t.b
   const month = params.month ?? (b ? monthOf(b.today) : '')
-  const q = useTransactions({ start: month ? monthBefore(month) : undefined, end: month ? lastOfMonth(month) : undefined, limit: 8000 }, !!month)
+  // The whole ledger (one cached request): it holds the month and the one before, and tells bills typed by hand each
+  // month from everyday spending, so the electricity bill isn't the biggest day "bills aside".
+  const q = useAllTxns(!!month)
   const pages = useMemo(() => {
     if (!b || !q.data) return null
-    const s = buildStory(b, month, q.data.items)
+    const s = buildStory(b, month, q.data.items, billTest(b, q.data.items))
     return s ? storyPages(s, { markFor: t.markFor, today: b.today }) : []
   }, [b, q.data, month, t.markFor])
   return (

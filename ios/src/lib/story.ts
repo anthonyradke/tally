@@ -12,9 +12,9 @@ export interface Story {
   /** Share of money in that was left over, 0..1, or null with nothing in. */
   kept: number | null
   top: { c: Category; cents: number; share: number }[]
-  /** The top list leaves out bill categories (mostly recurring rows, like rent), so it says "besides your bills". */
+  /** The top list leaves out bill categories (mostly bills, like rent), so it says "besides your bills". */
   besidesBills: boolean
-  /** The costliest day, counting everyday spending only: recurring bills left out. */
+  /** The costliest day, counting everyday spending only: bills left out (`billTest`). */
   biggestDay: { date: string; cents: number; rows: Txn[]; billsAside: boolean } | null
   biggest: Txn | null
   /** Days with no spending, out of the days in the month. */
@@ -35,8 +35,11 @@ const isSpend = (b: Bootstrap) => {
   return (t: Txn) => types.get(t.category_id) === 'Spending'
 }
 
-/** `rows`: the month's entries, and the month before's for comparing a month still going. */
-export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | null {
+type Bill = (t: Pick<Txn, 'recurring_id' | 'category_id' | 'what'>) => boolean
+
+/** `rows`: the month's entries, and the month before's for comparing a month still going (the whole ledger is fine).
+ *  `bill`: budgets' `billTest`; given the ledger, it also knows bills typed by hand each month. */
+export function buildStory(b: Bootstrap, month: string, rows: Txn[], bill: Bill = billTest(b)): Story | null {
   const i = b.months.findIndex((r) => r.month === month)
   if (i < 0) return null
   const m = b.months[i], prev = b.months[i - 1]
@@ -45,8 +48,7 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
   const inMonth = rows.filter((t) => t.date >= month && t.date <= end && t.date <= b.today)
   const spendRow = isSpend(b)
   const spending = inMonth.filter(spendRow)
-  const { top, besidesBills } = topSpending(b, m, spending)
-  const bill = billTest(b)
+  const { top, besidesBills } = topSpending(b, m, spending, bill)
 
   const days = new Map<string, Txn[]>()
   for (const t of spending) days.set(t.date, [...(days.get(t.date) ?? []), t])
@@ -129,19 +131,18 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
   }
 }
 
-/** A month's top three spending categories. Bills (categories whose month is mostly recurring rows) step aside when
+/** A month's top three spending categories. Bills (categories whose month is mostly bill rows) step aside when
  *  they'd lead, so it says "besides your bills": "Most of it went to Rent, 60%" said nothing new. `spending`: the
  *  month's spending rows so far. The story and Home's month in review both use it. */
-export function topSpending(b: Bootstrap, m: MonthRow, spending: Pick<Txn, 'recurring_id' | 'category_id' | 'what' | 'amount'>[]):
+export function topSpending(b: Bootstrap, m: MonthRow, spending: Pick<Txn, 'recurring_id' | 'category_id' | 'what' | 'amount'>[], bill: Bill = billTest(b)):
   { top: Story['top']; besidesBills: boolean } {
   const cats = new Map(b.categories.map((c) => [c.id, c]))
-  const recurring = new Map<number, number>()
-  const bill = billTest(b)
-  for (const t of spending) if (bill(t)) recurring.set(t.category_id, (recurring.get(t.category_id) ?? 0) + t.amount)
+  const bills = new Map<number, number>()
+  for (const t of spending) if (bill(t)) bills.set(t.category_id, (bills.get(t.category_id) ?? 0) + t.amount)
   const byCat = Object.entries(m.by_category)
     .map(([id, cents]) => ({ c: cats.get(Number(id))!, cents }))
     .filter((x) => x.c?.type === 'Spending' && x.cents > 0).sort((a, z) => z.cents - a.cents)
-  const everyday = byCat.filter((x) => (recurring.get(x.c.id) ?? 0) * 2 < x.cents)
+  const everyday = byCat.filter((x) => (bills.get(x.c.id) ?? 0) * 2 < x.cents)
   const besidesBills = everyday.length > 0 && everyday.length < byCat.length && everyday[0] !== byCat[0]
   const top = (besidesBills ? everyday : byCat).slice(0, 3).map((x) => ({ ...x, share: m.spent > 0 ? x.cents / m.spent : 0 }))
   return { top, besidesBills }

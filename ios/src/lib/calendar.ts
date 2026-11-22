@@ -18,7 +18,7 @@ type Row = Pick<Txn, 'date' | 'amount'> & { recurring_id?: number | null }
 
 /** The weekday with the highest average spending over the `weeks` full weeks before `until` (today, or the day after
  *  the month being looked at), and how it compares with the average day. Each weekday's single costliest day is left
- *  out and so are bills (`bill`: the calendar passes budgets' `billTest`, so rent typed by hand counts too; by default
+ *  out and so are bills (`bill`: the calendar passes budgets' `billTest`, so bills typed by hand count too; by default
  *  rows a template posted), so a rent day doesn't decide it. Null with under four weeks of history or no clear winner
  *  (under 1.3× the average day). */
 export function bigWeekday<T extends Row>(rows: T[], until: string, start: string, weeks = 12, bill: (t: T) => boolean = (t) => !!t.recurring_id) {
