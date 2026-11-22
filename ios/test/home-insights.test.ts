@@ -6,7 +6,7 @@ import { bigWeekday } from '@/lib/calendar'
 import { addDays, fromISO } from '@/lib/dates'
 import { aheadLine } from '@/lib/forecast'
 import { formatChange } from '@/lib/money'
-import { ledgerMonth } from '@/lib/months'
+import { ledgerMonth, monthChart } from '@/lib/months'
 import { buildStory, topSpending } from '@/lib/story'
 import { acct, boot, cat, month, row } from './fixtures.ts'
 
@@ -92,4 +92,14 @@ test('bigWeekday: hand-typed bills stay out when the calendar passes its bill te
   assert.equal(fromISO('2026-09-01').getDay(), 2)
   assert.equal(bigWeekday([...flat, ...typed], '2026-10-01', '2026-07-01')?.day, 'Tuesdays') // recurring_id alone misses them
   assert.equal(bigWeekday([...flat, ...typed], '2026-10-01', '2026-07-01', 12, billTest(b)), null)
+})
+
+test('monthChart: a category page opened on a past month rests its chart there, still', () => {
+  const b = boot({ today: '2026-11-22', months: [month('2026-09-01'), month('2026-10-01'), month('2026-11-01'), month('2026-12-01')] })
+  assert.deepEqual((({ k, live }) => ({ k, live }))(monthChart(b, '2026-10-01')), { k: 1, live: false })
+  const now = monthChart(b, null)
+  assert.deepEqual([now.months.length, now.k, now.live], [3, 2, true]) // next month's scheduled rows don't count
+  assert.deepEqual((({ k, live }) => ({ k, live }))(monthChart(b, '2026-11-01')), { k: 2, live: true })
+  assert.equal(monthChart({ ...b, today: '2026-11-30' }, null).live, false) // the month's last day: nothing still going
+  assert.equal(monthChart(b, '2025-01-01').k, 2) // a month outside the chart: this month
 })

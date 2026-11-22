@@ -16,7 +16,7 @@ import { budgetFor, elapsed, paceOver, paidBill, USUAL_MONTHS, usualBefore, usua
 import { useTransactions } from '@/lib/data'
 import { dayLabel, fromISO, lastOfMonth, monthLabel, monthOf } from '@/lib/dates'
 import { formatCents, pct } from '@/lib/money'
-import { ledgerMonth } from '@/lib/months'
+import { ledgerMonth, monthChart } from '@/lib/months'
 import { useTally } from '@/lib/tally'
 import { useAllTxns } from '@/lib/balances'
 import { placesIn } from '@/lib/merchant'
@@ -58,9 +58,7 @@ export default function CategoryDetail() {
   if (!x || !b) return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}><StateView q={t.q} /></ScrollView>
   const v = categoryVisual(x)
   const color = tint(v.tint)
-  const months = b.months.filter((m) => m.month <= monthOf(b.today))
-  const found = scoped ? months.findIndex((m) => m.month === scoped) : -1
-  const k = found >= 0 ? found : months.length - 1
+  const { months, k, live } = monthChart(b, scoped)
   const at = months[k] // the month on show
   const values = months.map((m) => Math.abs(m.by_category[String(x.id)] ?? 0))
   const spent = at ? at.by_category[String(x.id)] ?? 0 : 0
@@ -106,9 +104,9 @@ export default function CategoryDetail() {
           )}
           {values.length > 1 && (
             <Panel style={{ gap: space.s }}>
-              {/* The last point is a month still going, so it nearly always sits low: its dot breathes, and the line
-                  under the chart says what's usual by now. */}
-              <ScrubChart scrub={scrub} slots={values.length} zero series={[{ values, color }]} height={110} guide={budget} live={elapsed(months.at(-1)!.month, b.today) < 1} />
+              {/* The chart rests on the month on show, the months after it dimmed. This month, still going, nearly always
+                  sits low: its dot breathes, and the line under the chart says what's usual by now. */}
+              <ScrubChart scrub={scrub} slots={values.length} zero series={[{ values, color }]} height={110} guide={budget} at={k} live={live} />
               {avg != null && <Txt variant="foot" tone="label2" num>{usualLine(name, k > USUAL_MONTHS, avg, vsUsual(Math.abs(spent), usual), partial, usualNow)}</Txt>}
             </Panel>
           )}
