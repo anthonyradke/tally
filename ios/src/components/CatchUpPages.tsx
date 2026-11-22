@@ -1,13 +1,12 @@
-// The pages of a catch-up (app/catchup.tsx): where the account left off, what it was, the amount, and the two lists
-// (every category, the other account of a transfer) that the amount page sends you to.
+// The pages of a catch-up (app/catchup.tsx) for one entry: what it was, the amount, and the two lists (every category,
+// the other account of a transfer) that the amount page sends you to. The first page is in CatchUpStart.
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { ScrollView, TextInput, View } from 'react-native'
-import Animated from 'react-native-reanimated'
+import Animated, { ZoomIn } from 'react-native-reanimated'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import type { Account, CatType, Kind, Txn } from '@/lib/api'
-import { otherSide, suggest, usualCategories } from '@/lib/catchup'
-import { daysSince, useCaughtUp } from '@/lib/caughtUp'
-import { dayLabel, fromISO } from '@/lib/dates'
+import { balanceWords, otherSide, suggest, usualCategories } from '@/lib/catchup'
+import { dayLabel } from '@/lib/dates'
 import { press, toCents, useDraft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
@@ -15,6 +14,7 @@ import { SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
 import { radius, space, useTheme } from '@/theme'
 import { AccountMark } from './AccountMark'
+import { CheckDraw } from './CheckDraw'
 import { Chip } from './Chip'
 import { DateStrip } from './DateStrip'
 import { Field } from './Field'
@@ -23,11 +23,9 @@ import { Keypad } from './Keypad'
 import { Mark } from './Mark'
 import { Money } from './Money'
 import { PAGE_MS } from './Pages'
-import { Hairline } from './Panel'
 import { RollingText } from './Rolling'
 import { Group, Row } from './Row'
-import { Tap } from './Tap'
-import { TxnRow } from './TxnRow'
+import { Button, Tap } from './Tap'
 import { Txt } from './Txt'
 
 const TYPES: CatType[] = ['Spending', 'Money in', 'Transfer', 'Saving', 'Loan']
@@ -47,71 +45,36 @@ function CatMark({ id, size = 30 }: { id: number; size?: number }) {
   return <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={size} />
 }
 
-/** The account being caught up, small, at the top of a line's pages. */
-export function AccountLine({ a, count }: { a: Account; count: number }) {
+/** The account being caught up, small, at the top of a line's pages. "N added" opens what this session added. */
+export function AccountLine({ a, count, onCount }: { a: Account; count: number; onCount?: () => void }) {
+  const { c } = useTheme()
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
       <AccountMark a={a} size={22} />
       <Txt variant="sub" style={{ fontWeight: '600' }}>{a.name}</Txt>
-      {count > 0 && <Txt variant="sub" tone="label2">{count} added</Txt>}
+      {count > 0 && (
+        <Tap feedback="opacity" onPress={onCount} disabled={!onCount} hitSlop={10} accessibilityLabel={`${count} added. Show them`}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+          <Txt variant="sub" tone="label2">{count} added</Txt>
+          {onCount && <Icon sf="chevron.right" md="chevron_right" size={11} color={c.label3} weight="bold" />}
+        </Tap>
+      )}
     </View>
   )
 }
 
-/** First page: pick the account, then see its newest entries, which is where the bank's list picks up. */
-export function LeftOff({ accounts, acct, onAcct, rows, loading, added, onCheck }: {
-  accounts: Account[]; acct: Account; onAcct: (id: number) => void; rows: Txn[]; loading: boolean; added: number; onCheck: () => void
-}) {
-  const { c } = useTheme()
-  const t = useTally()
-  const at = useCaughtUp((s) => s.at[String(acct.id)])
-  if (!t.b) return null
-  const today = t.today
-  const since = at ? daysSince(at) : null
-  const newest = rows[0]?.date
-  const ago = newest ? Math.round((fromISO(today).getTime() - fromISO(newest).getTime()) / 864e5) : 0
-  return (
-    <ScrollView contentContainerStyle={{ paddingVertical: space.s, gap: space.l }}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
-        {accounts.map((a) => <Chip key={a.id} label={a.name} selected={a.id === acct.id} leading={<AccountMark a={a} size={28} />} onPress={() => onAcct(a.id)} />)}
-      </ScrollView>
-      <View style={{ paddingHorizontal: space.l + space.xs, gap: 4 }}>
-        <Txt variant="title2" accessibilityRole="header">Where you left off</Txt>
-        <Txt variant="callout" tone="label2">
-          {loading && !rows.length ? ' '
-            : !newest ? `Nothing is on ${acct.name} yet.`
-            : `The newest entry on ${acct.name} is from ${ago === 0 ? 'today' : ago === 1 ? 'yesterday' : `${dayLabel(newest, today)}, ${ago} days ago`}. Pick up after it in the bank's app.`}
-        </Txt>
-        {added > 0 && <Txt variant="callout" tone="label2">{added === 1 ? '1 entry' : `${added} entries`} added to it just now.</Txt>}
-        {since != null && added === 0 && (
-          <Txt variant="callout" tone="label2">{`Last caught up ${since === 0 ? 'today' : since === 1 ? 'yesterday' : `${since} days ago`}.`}</Txt>
-        )}
-      </View>
-      {rows.length > 0 && (
-        <View style={{ marginHorizontal: space.l, backgroundColor: c.panel, borderRadius: radius.panel, borderCurve: 'continuous', overflow: 'hidden' }}>
-          {rows.map((r, i) => (
-            <View key={r.id}>
-              {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-              <TxnRow t={r} c={t.catOf(r)} acct={t.acct} mark={t.markFor(r.what)} today={today} showDate={dayLabel(r.date, today)}
-                padTop={i === 0 ? space.xs : 0} padBottom={i === rows.length - 1 ? space.xs : 0} />
-            </View>
-          ))}
-        </View>
-      )}
-      <View style={{ marginHorizontal: space.l }}>
-        <Row label="Check the balance against the bank" sub="Or match a statement file, line by line" sf="checkmark.seal" md="verified" onPress={onCheck} />
-      </View>
-    </ScrollView>
-  )
-}
-
 /** The entry just added, with a way to take it back. Queued offline, there's nothing to take back yet. */
-export interface Last { row: Txn | null; label: string; cents: number; error?: string }
+export interface Last {
+  row: Txn | null; label: string; cents: number; error?: string
+  /** The account's balance once it was in, on its day (cash and cards). */
+  after?: { cents: number; date: string } | null
+}
 
 /** "What was it?": the day (it stays from one entry to the next) and the name, with this account's usual places under
  *  it. Picking one copies its category and accounts and moves on. */
-export function What({ acct, history, count, last, onUndo, onPick, onSubmit }: {
+export function What({ acct, history, count, last, onUndo, onPick, onSubmit, onCount }: {
   acct: Account; history: Txn[]; count: number; last: Last | null; onUndo: () => void; onPick: (x: Txn) => void; onSubmit: () => void
+  onCount: () => void
 }) {
   const { c } = useTheme()
   const t = useTally()
@@ -125,15 +88,22 @@ export function What({ acct, history, count, last, onUndo, onPick, onSubmit }: {
   const list = useMemo(() => suggest(history, acct.id, d.what), [history, acct.id, d.what])
   return (
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
-      <AccountLine a={acct} count={count} />
+      <AccountLine a={acct} count={count} onCount={onCount} />
       {last && (
-        <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingLeft: space.l, paddingRight: space.s, minHeight: 44, borderRadius: radius.pill, backgroundColor: c.panel }}>
+        <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingLeft: space.l, paddingRight: space.s, paddingVertical: space.xs, minHeight: 44, borderRadius: 22, borderCurve: 'continuous', backgroundColor: c.panel }}>
           <Icon sf={last.row ? 'checkmark.circle.fill' : 'icloud.and.arrow.up'} md={last.row ? 'check_circle' : 'cloud_upload'} size={16} color={last.error ? c.neg : last.row ? c.pos : c.warn} />
-          <Txt variant="sub" numberOfLines={1} style={{ flex: 1 }} tone={last.error ? 'neg' : 'label'}>
-            {last.error ?? (last.row ? `Added ${last.label}, ${formatCents(last.cents)}` : `${last.label} is saved on your phone for now.`)}
-          </Txt>
+          <View style={{ flex: 1 }}>
+            <Txt variant="sub" numberOfLines={1} tone={last.error ? 'neg' : 'label'}>
+              {last.error ?? (last.row ? `Added ${last.label}, ${formatCents(last.cents)}` : `${last.label} is saved on your phone for now.`)}
+            </Txt>
+            {last.row && !last.error && last.after && (
+              <Txt variant="foot" tone="label2" num numberOfLines={1}>
+                {`${acct.name} after it: ${balanceWords(acct.kind, last.after.cents, formatCents)}, ${dayLabel(last.after.date, t.today)}`}
+              </Txt>
+            )}
+          </View>
           {last.row && !last.error && (
-            <Tap feedback="opacity" onPress={onUndo} hitSlop={8} style={{ paddingHorizontal: space.m, height: 32, justifyContent: 'center' }}>
+            <Tap feedback="opacity" onPress={onUndo} hitSlop={8} accessibilityLabel={`Undo ${last.label} and fix it`} style={{ paddingHorizontal: space.m, height: 32, justifyContent: 'center' }}>
               <Txt variant="sub" style={{ fontWeight: '600' }}>Undo</Txt>
             </Tap>
           )}
@@ -156,16 +126,20 @@ export function What({ acct, history, count, last, onUndo, onPick, onSubmit }: {
 }
 
 /** The amount on the keypad, with the category as a row of chips (this account's usual ones) and, for a transfer,
- *  the other account. A lookalike already in Tally is pointed out, not refused. */
-export function Amount({ acct, history, count, lookalike, errors, shake, after, onWhat, onCategory, onMoreCategories, onOther, onFlip, onRefuse }: {
+ *  the other account. A lookalike already in Tally is pointed out, not refused, with a way to skip it. A figure that's
+ *  only a suggestion (`fresh`: a past place's last amount, or one typed before going back) is drawn lighter, and the
+ *  first key replaces it. */
+export function Amount({ acct, history, count, lookalike, errors, shake, after, fresh, suggested, onTyped, onWhat, onCategory, onMoreCategories, onOther, onFlip, onRefuse, onSkip, onCount }: {
   acct: Account; history: Txn[]; count: number; lookalike: Txn | null; errors: string[]; shake: object; after: number | null
+  fresh: boolean; suggested: boolean; onTyped: () => void
   onWhat: () => void; onCategory: (id: number) => void; onMoreCategories: () => void; onOther: () => void; onFlip: () => void; onRefuse: () => void
+  onSkip: () => void; onCount: () => void
 }) {
   const { c, tint } = useTheme()
   const t = useTally()
   const { d, set } = useDraft()
   const cents = toCents(d.amount)
-  const usual = useMemo(() => usualCategories(history, acct.id), [history, acct.id])
+  const usual = useMemo(() => usualCategories(history, acct.id, 6, (id) => t.cat.get(id)?.type === 'Spending'), [history, acct.id, t.cat])
   const chips = [...(d.category_id ? [d.category_id] : []), ...usual.filter((x) => x !== d.category_id)]
     .map((id) => t.cat.get(id)).filter((x) => x && (x.active || x.id === d.category_id))
   const two = SHAPES[d.kind].from !== 'blank' && SHAPES[d.kind].to !== 'blank'
@@ -173,23 +147,29 @@ export function Amount({ acct, history, count, lookalike, errors, shake, after, 
   const other = o.id ? t.acct.get(o.id) : undefined
   return (
     <View style={{ flex: 1, paddingTop: space.s, gap: space.m }}>
-      <AccountLine a={acct} count={count} />
+      <AccountLine a={acct} count={count} onCount={onCount} />
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xs, paddingHorizontal: space.l }}>
-        <Animated.View style={shake}>
-          <RollingText text={`${d.refund ? '−' : ''}${formatCents(cents)}`} style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
+        <Animated.View style={shake} accessibilityHint={fresh && d.amount ? 'Typing replaces it' : undefined}>
+          <RollingText text={`${d.refund ? '−' : ''}${formatCents(cents)}`} style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: !d.amount ? c.label3 : fresh ? c.label2 : c.label }} />
         </Animated.View>
+        {fresh && suggested && cents > 0 && <Txt variant="foot" tone="label3">Same as last time. Typing replaces it.</Txt>}
         <Tap feedback="opacity" onPress={onWhat} hitSlop={8} accessibilityLabel={`${d.what || 'No name'}. Change`}>
           <Txt variant="callout" tone="label2" numberOfLines={1}>{d.what || 'Add a name'}</Txt>
         </Tap>
         {after != null && cents > 0 && (
           <Txt variant="foot" tone="label2" num numberOfLines={1}>
-            {`${acct.name} after this: ${acct.kind === 'card' ? `${formatCents(after)} owed` : formatCents(after)}, ${dayLabel(d.date, t.today)}`}
+            {`${acct.name} after this: ${balanceWords(acct.kind, after, formatCents)}, ${dayLabel(d.date, t.today)}`}
           </Txt>
         )}
         {lookalike && (
-          <Txt variant="foot" tone="warn" numberOfLines={2} style={{ textAlign: 'center' }} accessibilityLiveRegion="polite">
-            {`Already in Tally? ${lookalike.what || t.catOf(lookalike).name}, ${dayLabel(lookalike.date, t.today)}, is the same amount.`}
-          </Txt>
+          <View style={{ alignItems: 'center', gap: 2 }} accessibilityLiveRegion="polite">
+            <Txt variant="foot" tone="warn" numberOfLines={2} style={{ textAlign: 'center' }}>
+              {`Already in Tally? ${lookalike.what || t.catOf(lookalike).name}, ${dayLabel(lookalike.date, t.today)}, is the same amount.`}
+            </Txt>
+            <Tap feedback="opacity" onPress={onSkip} hitSlop={8} style={{ paddingVertical: 4 }}>
+              <Txt variant="foot" style={{ fontWeight: '600' }}>{"Skip, it's already in"}</Txt>
+            </Tap>
+          </View>
         )}
         {errors.map((e) => <Txt key={e} variant="foot" tone="neg" style={{ textAlign: 'center' }}>{e}</Txt>)}
       </View>
@@ -218,11 +198,34 @@ export function Amount({ acct, history, count, lookalike, errors, shake, after, 
         </View>
       )}
       <Keypad onKey={(k) => {
+        if (fresh && d.amount) { onTyped(); set({ amount: k === 'del' ? '' : press('', k) }); return } // like typing over a selection
         const n = press(d.amount, k)
         if (n === d.amount && d.amount && k !== 'del') onRefuse()
         else set({ amount: n })
-      }} onClear={() => set({ amount: '' })} />
+      }} onClear={() => { onTyped(); set({ amount: '' }) }} />
     </View>
+  )
+}
+
+/** The bar under the pages: Back (or Done) and the page's own action, which for Add draws its check once saved. */
+export function Bar({ style, back, action }: {
+  style: object; back?: { label: string; onPress: () => void }
+  action: { label: string; onPress: () => void; disabled?: boolean } | 'added' | 'blank' | null
+}) {
+  const { c } = useTheme()
+  const wide = { flex: back ? 2 : 1, height: 52 }
+  return (
+    <Animated.View style={[{ flexDirection: 'row', gap: space.s, paddingHorizontal: space.l, paddingTop: space.s }, style]}>
+      {back && <Button label={back.label} secondary onPress={back.onPress} style={{ flex: 1, height: 52 }} />}
+      {action === 'blank' ? <View style={wide} />
+        : action === 'added' ? (
+          <Animated.View entering={ZoomIn.duration(180)} accessibilityLiveRegion="polite"
+            style={{ ...wide, borderRadius: radius.pill, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s }}>
+            <CheckDraw size={24} color={c.onInk} />
+            <Txt variant="headline" tone="onInk">Added</Txt>
+          </Animated.View>
+        ) : action && <Button label={action.label} onPress={action.onPress} disabled={action.disabled} style={wide} />}
+    </Animated.View>
   )
 }
 

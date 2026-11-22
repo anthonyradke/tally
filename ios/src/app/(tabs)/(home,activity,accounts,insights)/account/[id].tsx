@@ -23,6 +23,7 @@ import { formatCents } from '@/lib/money'
 import { useTally } from '@/lib/tally'
 import { font as ramp, radius, space, useTheme } from '@/theme'
 
+const SHOWN = 12 // rows of history on the page; the rest are in Activity
 const short = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
 export default function AccountDetail() {
@@ -52,13 +53,14 @@ export default function AccountDetail() {
   // What's already scheduled, carried on past today as a dashed line.
   const ahead = useMemo(() => (a && b && daily && all.data ? outlook(a, all.data.items, b.start, b.today) : null), [a, b, daily, all.data])
 
-  // Kept from one render to the next: a new one rebuilds the header's buttons, and a tap in between was lost.
+  // Kept from one render to the next: a new one rebuilds the header's buttons, and a tap in between was lost. Edit
+  // opens the account's own editor (as Settings does); Catch up has its own labeled tile below.
   const name = a?.name
   const header = useMemo(() => (
     <>
       <Stack.Screen options={{ title: name ?? '', headerLargeTitle: false }} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="text.badge.plus" accessibilityLabel="Catch up this account" onPress={() => router.push({ pathname: '/catchup', params: { account: id } })} />
+        <Stack.Toolbar.Button accessibilityLabel={`Edit ${name ?? 'account'}`} onPress={() => router.push({ pathname: '/edit', params: { kind: 'account', id } })}>Edit</Stack.Toolbar.Button>
         <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add an entry" onPress={() => router.push({ pathname: '/new', params: { from: id } })} />
       </Stack.Toolbar>
     </>
@@ -108,6 +110,9 @@ export default function AccountDetail() {
             </Txt>
           )}
           <View style={{ flexDirection: 'row', gap: space.s }}>
+            {a.kind !== 'loan' && (
+              <Action sf="text.badge.plus" md="playlist_add" label="Catch up" onPress={() => router.push({ pathname: '/catchup', params: { account: String(a.id) } })} />
+            )}
             {(a.kind === 'cash' || a.kind === 'card') && (
               <Action sf="checkmark.seal" md="verified" label="Reconcile" onPress={() => router.push({ pathname: '/reconcile/[id]', params: { id: String(a.id) } })} />
             )}
@@ -158,13 +163,24 @@ export default function AccountDetail() {
         <Section title="Entries" href={{ pathname: '/activity', params: { account: String(a.id) } }}>
           <Panel pad={false}>
             {rows.length === 0 && <Txt variant="callout" tone="label2" style={{ padding: space.l }}>{all.isLoading ? ' ' : 'No entries touch this account yet.'}</Txt>}
-            {rows.slice(0, 12).map((x, i, all) => (
+            {rows.slice(0, SHOWN).map((x, i, all) => (
               <View key={x.id}>
                 {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
                 <TxnRow t={x} c={t.catOf(x)} acct={t.acct} mark={t.markFor(x.what)} today={b.today} here={a.id} showDate={`${dayLabel(x.date, b.today)}, ${t.catOf(x).name}`}
-                  padTop={i === 0 ? space.xs : 0} padBottom={i === all.length - 1 ? space.xs : 0} />
+                  padTop={i === 0 ? space.xs : 0} padBottom={i === all.length - 1 && rows.length <= SHOWN ? space.xs : 0} />
               </View>
             ))}
+            {/* The header's See all has scrolled away by the end of the list: the way on is here too. */}
+            {rows.length > SHOWN && (
+              <>
+                <Hairline inset={space.l} />
+                <Tap feedback="highlight" onPress={() => router.push({ pathname: '/activity', params: { account: String(a.id) } })}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 50, paddingHorizontal: space.l }}>
+                  <Txt variant="body">{`Show all ${rows.length} entries`}</Txt>
+                  <Icon sf="chevron.right" md="chevron_right" size={13} color={c.label3} weight="bold" />
+                </Tap>
+              </>
+            )}
           </Panel>
         </Section>
       </ScrollView>

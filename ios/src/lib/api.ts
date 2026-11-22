@@ -27,7 +27,8 @@ export interface BulkBefore { id: number; category_id: number; tags: string[]; f
 /** `exact`: how many of the first rows have the very amount a search typed (they come first). */
 export interface TxnPage { total: number; sum: number; by_type: Partial<Record<CatType, number>>; exact: number; items: Txn[] }
 export interface TxnQuery { q?: string; category?: number; account?: number; type?: CatType | ''; start?: string; end?: string; amount_min?: number; amount_max?: number; tag?: string; group?: string; sort?: 'date' | 'amount'; dir?: 'asc' | 'desc'; limit?: number; offset?: number }
-export interface Diagnosis { expected: number; actual: number; gap: number; saved: boolean; doubled: Txn[]; single: Txn[]; future: Txn[] }
+/** `id`: the reconciliation saved (with `save`), for Undo. */
+export interface Diagnosis { expected: number; actual: number; gap: number; saved: boolean; id: number | null; doubled: Txn[]; single: Txn[]; future: Txn[] }
 /** `loans`: each loan's balance for the month as Tally works it out, and the statement balance typed over it, if any. */
 export interface MonthEnd { month: string; typed: Record<string, number | null>; loans: Record<string, { typed: number | null; balance: number }>; recon: Record<string, { actual: number; expected: number; date: string } | null>; interest: Record<string, { logged: Txn[]; proposed: number }>; typed_done: boolean; interest_done: boolean; recon_done: boolean }
 export interface Reconciliation { id: number; account_id: number; date: string; actual: number; expected: number }
@@ -123,6 +124,7 @@ export const api = {
   reconcile: (accountId: number, actualCents: number, save = false) =>
     call<Diagnosis>('POST', `/reconcile/${accountId}`, { actual: actualCents / 100, save }),
   reconciliations: () => call<Reconciliation[]>('GET', '/reconciliations'),
+  deleteReconciliation: (id: number) => call<void>('DELETE', `/reconciliations/${id}`),
   monthEnd: (ym: string) => call<MonthEnd>('GET', `/month-end/${ym}`),
   /** `cleared`: accounts whose typed balance comes back out (a loan goes back to working itself out). */
   monthEndTyped: (ym: string, byAccount: Record<number, number>, cleared: number[] = []) =>

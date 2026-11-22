@@ -1,5 +1,7 @@
 // Reconcile: type what the bank says, Tally compares it with its own balance (rows dated today or earlier) and, when
-// they differ, points at the likely causes: possible duplicates, a single entry the size of the gap, future rows.
+// they differ, points at the likely causes: possible duplicates, a single entry the size of the gap, future rows. A
+// match saves at once, with Undo. A gap offers to add the missing entry, and lists what's in since the last time it
+// was reconciled, to tick off against the bank's list.
 import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
@@ -7,7 +9,6 @@ import * as DocumentPicker from 'expo-document-picker'
 import { File } from 'expo-file-system'
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
-import { useQueryClient } from '@tanstack/react-query'
 import { closeSwipes } from '@/components/SwipeRow'
 import { CheckDraw } from '@/components/CheckDraw'
 import { Chip } from '@/components/Chip'
@@ -20,13 +21,16 @@ import { useShake } from '@/components/Shake'
 import { Button, Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
-import { api, ApiError, type Diagnosis, type StatementLine, type StatementMatch, type Txn } from '@/lib/api'
+import { ReconcileSince as SinceLast } from '@/components/ReconcileSince'
+import { api, ApiError, type Account, type Diagnosis, type StatementLine, type StatementMatch, type Txn } from '@/lib/api'
+import { handToCatchUp } from '@/lib/caughtUp'
 import { close, useBusy } from '@/lib/nav'
 import { Group, Row } from '@/components/Row'
 import { dayLabel } from '@/lib/dates'
-import { fromCents, press, toCents } from '@/lib/draft'
+import { press, toCents } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { Reveal } from '@/lib/privacy'
+import { toastReconciled } from '@/lib/reconciled'
 import { play } from '@/lib/sound'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
@@ -36,7 +40,6 @@ export default function Reconcile() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { c } = useTheme()
   const t = useTally()
-  const qc = useQueryClient()
   const a = t.acct.get(Number(id))
   const [amount, setAmount] = useState('')
   const [neg, setNeg] = useState(false) // a card in credit, or an overdrawn account: the keypad has no minus
@@ -52,17 +55,18 @@ export default function Reconcile() {
   const check = async (save = false) => {
     setBusy(true)
     try {
-      const r = await api.reconcile(a.id, toCents(amount) * (neg ? -1 : 1), save)
+      const actual = toCents(amount) * (neg ? -1 : 1)
+      let r = await api.reconcile(a.id, actual, save)
+      if (!save && r.gap === 0) r = await api.reconcile(a.id, actual, true) // matched to the cent: saved, with Undo
       setDx(r)
+      if (r.saved) toastReconciled(a.name, r, () => setDx((x) => (x ? { ...x, saved: false, id: null } : x)))
       if (save) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
         play('add')
-        qc.invalidateQueries({ queryKey: ['reconciliations'] })
-        toast({ text: r.gap === 0 ? `${a.name} reconciled` : `Saved with a ${formatCents(Math.abs(r.gap))} gap` })
         close()
       } else {
         Haptics.notificationAsync(r.gap === 0 ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning).catch(() => {})
-        if (r.gap === 0) { setParty((n) => n + 1); play('success') } // matched to the cent
+        if (r.gap === 0) { setParty((n) => n + 1); play('success') }
         else play('tick')
       }
     } catch (e) {
@@ -120,7 +124,7 @@ export default function Reconcile() {
             <Txt variant="callout" style={{ fontWeight: '600' }}>Match a statement file instead</Txt>
           </Tap>
         )}
-        {dx && <Animated.View entering={FadeIn.duration(260)}><Result dx={dx} /></Animated.View>}
+        {dx && <Animated.View entering={FadeIn.duration(260)}><Result dx={dx} a={a} /></Animated.View>}
       </ScrollView>
       {/* The keypad fades away once there's an answer and comes back for "Change amount"; the buttons fade across.
           Nothing animates in with the sheet itself (skipEntering). */}
@@ -141,12 +145,14 @@ export default function Reconcile() {
             <Button label={busy ? 'Checking…' : amount ? 'Check' : 'Check $0.00'} onPress={() => check(false)} disabled={busy} style={{ height: 52 }} />
           </Animated.View>
         ) : dx.gap === 0 ? (
-          <Animated.View key="mark" entering={FadeIn.duration(220)}>
-            <Button label="Mark as reconciled" onPress={() => check(true)} disabled={busy} style={{ height: 52 }} />
+          <Animated.View key={dx.saved ? 'done' : 'mark'} entering={FadeIn.duration(220)}>
+            {dx.saved
+              ? <Button label="Done" onPress={() => close()} style={{ height: 52 }} />
+              : <Button label="Mark as reconciled" onPress={() => check(true)} disabled={busy} style={{ height: 52 }} />}
           </Animated.View>
         ) : (
           <Animated.View key="gap" entering={FadeIn.duration(220)} style={{ flexDirection: 'row', gap: space.s }}>
-            <Button label="Change amount" secondary onPress={() => { setDx(null); setAmount(fromCents(toCents(amount))) }} style={{ flex: 1, height: 52 }} />
+            <Button label="Change amount" secondary onPress={() => { setDx(null); setAmount(''); setNeg(false) }} style={{ flex: 1, height: 52 }} />
             <Button label="Save anyway" onPress={() => check(true)} disabled={busy} style={{ flex: 1, height: 52 }} />
           </Animated.View>
         )}
@@ -191,9 +197,17 @@ function StatementResult({ m, acctId, name }: { m: StatementMatch; acctId: numbe
   )
 }
 
-function Result({ dx }: { dx: Diagnosis }) {
+function Result({ dx, a }: { dx: Diagnosis; a: Account }) {
   const { c } = useTheme()
   const ok = dx.gap === 0
+  // One missing entry the size of the gap: Catch up on this account, with the amount in. Opened from Catch up, it's
+  // the next entry there.
+  const addGap = () => {
+    Haptics.selectionAsync().catch(() => {})
+    const cents = Math.abs(dx.gap)
+    if (handToCatchUp(a.id, cents)) close()
+    else router.replace({ pathname: '/catchup', params: { account: String(a.id), amount: String(cents) } })
+  }
   return (
     <View style={{ gap: space.l }}>
       <View style={{ flexDirection: 'row', gap: space.m, alignItems: 'center', padding: space.l, borderRadius: radius.panel, backgroundColor: c.panel }}>
@@ -205,12 +219,14 @@ function Result({ dx }: { dx: Diagnosis }) {
       </View>
       {!ok && (
         <>
+          <Button label={`Add a ${formatCents(Math.abs(dx.gap))} entry`} secondary onPress={addGap} style={{ height: 48 }} />
           <Rows title="Half the gap" rows={dx.doubled} why="An entry going the wrong direction (or logged twice) would be off by twice its amount." />
           <Rows title="Exactly the gap" rows={dx.single} why="One entry the size of the gap: maybe it hasn't posted at the bank yet, or it's on the wrong account." />
           <Rows title="Dated in the future" rows={dx.future} why="Future-dated entries don't count yet." />
           {dx.doubled.length + dx.single.length + dx.future.length === 0 && (
             <Txt variant="callout" tone="label2" style={{ paddingHorizontal: space.xs }}>{"Nothing obvious. Look for an entry you haven't logged yet, or one with a typo in the amount."}</Txt>
           )}
+          <SinceLast a={a} />
         </>
       )}
     </View>

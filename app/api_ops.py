@@ -23,11 +23,12 @@ async def reconcile(account_id: int, request: Request, con: Con):
     if not a:
         raise HTTPException(404)
     d = st.diagnose(a, money(b.get("actual") or 0, "Balance"))
+    saved = None
     if b.get("save"):
-        st.con.execute("INSERT INTO reconciliations(account_id,date,actual,expected) VALUES(?,?,?,?)",
-                       (a.id, st.today.isoformat(), d.actual, d.expected))
+        saved = st.con.execute("INSERT INTO reconciliations(account_id,date,actual,expected) VALUES(?,?,?,?)",
+                               (a.id, st.today.isoformat(), d.actual, d.expected)).lastrowid
         st.con.commit()
-    return {"expected": d.expected, "actual": d.actual, "gap": d.gap, "saved": bool(b.get("save")),
+    return {"expected": d.expected, "actual": d.actual, "gap": d.gap, "saved": saved is not None, "id": saved,
             "doubled": [_txn(t) for t in d.doubled], "single": [_txn(t) for t in d.single],
             "future": [_txn(t) for t in d.future]}
 
@@ -65,6 +66,14 @@ def reconciliations(con: Con, limit: int = 50):
     limit = max(0, min(limit, 1000))
     return [dict(r) for r in con.execute(
         "SELECT * FROM reconciliations ORDER BY date DESC, id DESC LIMIT ?", (limit,))]
+
+
+@router.delete("/reconciliations/{id}", status_code=204)
+def delete_reconciliation(id: int, con: Con):
+    """Undo for a reconciliation saved a moment ago."""
+    if not con.execute("DELETE FROM reconciliations WHERE id=?", (id,)).rowcount:
+        raise HTTPException(404)
+    con.commit()
 
 
 def _ledger_month(st, ym: str):
