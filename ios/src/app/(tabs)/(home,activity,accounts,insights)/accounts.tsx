@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
+import { router, Stack } from 'expo-router'
+import { Delta } from '@/components/Delta'
+import { FootLink } from '@/components/FootLink'
 import { Glow } from '@/components/Glow'
 import { AccountMark } from '@/components/AccountMark'
-import { Icon } from '@/components/Icon'
 import { Money } from '@/components/Money'
 import { Hairline, Panel } from '@/components/Panel'
 import { RollingMoney } from '@/components/Rolling'
@@ -12,6 +14,7 @@ import { Txt } from '@/components/Txt'
 import { KIND_LABEL } from '@/icons/categories'
 import type { Account, Bootstrap, Kind } from '@/lib/api'
 import { groupTotal, split, useBalancesToday } from '@/lib/balances'
+import { fromISO, lastOfMonth } from '@/lib/dates'
 import { formatCents } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
 import { usePullRefresh } from '@/lib/refresh'
@@ -19,6 +22,13 @@ import { useTally } from '@/lib/tally'
 import { font as ramp, radius, space, useTheme } from '@/theme'
 
 const ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
+
+// One element for good: Accounts re-renders with every refresh, and a new toolbar rebuilds its button (lib/nav).
+const HEADER = (
+  <Stack.Toolbar placement="right">
+    <Stack.Toolbar.Button icon="gearshape" accessibilityLabel="Settings" onPress={() => router.push('/settings')} />
+  </Stack.Toolbar>
+)
 
 export default function Accounts() {
   const { q, b } = useTally()
@@ -28,6 +38,7 @@ export default function Accounts() {
   const [waited] = useState(!b) // the skeleton showed first
   return (
     <>
+      {HEADER}
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, paddingBottom: 120, gap: space.xxl }}
         refreshControl={<RefreshControl {...pull} />}>
@@ -43,12 +54,15 @@ function Body({ b, bal }: { b: Bootstrap; bal: Map<number, number> }) {
   const { assets, debts, net } = split(b, bal)
   const { prev } = monthsNow(b)
   const total = assets + debts || 1
+  // Each row's change, and the one under net worth, are since the last month ended.
+  const since = prev ? fromISO(lastOfMonth(prev.month)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
   return (
     <>
       <View style={{ gap: space.m, paddingHorizontal: space.xs }}>
         <View style={{ gap: 2 }}>
           <Txt variant="sub" tone="label2" style={{ fontSize: 15 }}>Net worth today</Txt>
           <RollingMoney cents={net} style={{ ...ramp.hero, color: c.label }} />
+          {prev && <Delta cents={net - prev.net_worth} suffix={`since ${fromISO(prev.month).toLocaleDateString('en-US', { month: 'long' })}`} />}
         </View>
         {/* What you own against what you owe, one bar. */}
         <View style={{ height: 10, borderRadius: 5, flexDirection: 'row', overflow: 'hidden', gap: 2 }}>
@@ -65,9 +79,11 @@ function Body({ b, bal }: { b: Bootstrap; bal: Map<number, number> }) {
             <Money cents={debts} whole variant="headline" />
           </View>
         </View>
+        {since && <Txt variant="foot" tone="label2">Changes on each account are since {since}.</Txt>}
       </View>
       {ORDER.map((k) => {
-        const list = b.accounts.filter((a) => a.kind === k && a.active)
+        // A hidden account that still holds money stays in its group, marked, so the groups add up to the totals above.
+        const list = b.accounts.filter((a) => a.kind === k && (a.active || (bal.get(a.id) ?? 0) !== 0))
         if (!list.length) return null
         const sum = list.reduce((n, a) => n + (bal.get(a.id) ?? 0), 0)
         return (
@@ -89,10 +105,7 @@ function Body({ b, bal }: { b: Bootstrap; bal: Map<number, number> }) {
           </View>
         )
       })}
-      <Tap href="/settings/accounts" feedback="opacity" style={{ flexDirection: 'row', alignSelf: 'center', alignItems: 'center', gap: 6, padding: space.s }}>
-        <Icon sf="slider.horizontal.3" md="tune" size={14} color={c.label2} />
-        <Txt variant="callout" tone="label2">Manage accounts</Txt>
-      </Tap>
+      <FootLink label="Manage accounts" href="/settings/accounts" />
     </>
   )
 }
@@ -104,7 +117,7 @@ function AccountRow({ a, bal, prev, padTop, padBottom }: { a: Account; bal: numb
   const delta = prev != null ? bal - prev : null
   // For debts, going down is good.
   const good = delta != null && (owed ? delta < 0 : delta > 0)
-  const sub = a.apy ? `${+(a.apy * 100).toFixed(2)}% APY` : a.loan_rate ? `${+(a.loan_rate * 100).toFixed(2)}% interest` : a.ef ? 'Emergency fund' : a.kind === 'investment' ? 'Updated at month end' : null
+  const sub = !a.active ? 'Hidden, still counted' : a.apy ? `${+(a.apy * 100).toFixed(2)}% APY` : a.loan_rate ? `${+(a.loan_rate * 100).toFixed(2)}% interest` : a.ef ? 'Emergency fund' : a.kind === 'investment' ? 'Updated at month end' : null
   return (
     <Tap feedback="highlight" href={{ pathname: '/account/[id]', params: { id: String(a.id) } }}
       style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingTop: space.m + padTop, paddingBottom: space.m + padBottom }}>
@@ -114,7 +127,7 @@ function AccountRow({ a, bal, prev, padTop, padBottom }: { a: Account; bal: numb
         {(sub || a.ef) && (
           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
             {sub && <Txt variant="sub" tone="label2" numberOfLines={1} style={{ flexShrink: 0 }}>{sub}</Txt>}
-            {a.ef && !!a.apy && <View style={{ flexShrink: 1, paddingHorizontal: 6, height: 18, borderRadius: radius.pill, backgroundColor: c.fill, justifyContent: 'center' }}><Txt variant="foot" tone="label2" numberOfLines={1}>Emergency fund</Txt></View>}
+            {a.ef && !!a.apy && a.active && <View style={{ flexShrink: 1, paddingHorizontal: 6, height: 18, borderRadius: radius.pill, backgroundColor: c.fill, justifyContent: 'center' }}><Txt variant="foot" tone="label2" numberOfLines={1}>Emergency fund</Txt></View>}
           </View>
         )}
       </View>
