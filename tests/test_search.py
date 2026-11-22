@@ -73,3 +73,17 @@ def test_search_shortcut_for_last_month(client, world, monkeypatch):
     dates = lambda q: [t["date"] for t in client.get("/api/transactions", params={"q": q}).json()["items"]]
     assert dates("groceries last month") == ["2026-10-12"]
     assert dates("cafe this month") == ["2026-11-02"]
+
+
+def test_search_exact_means_to_the_cent_and_punctuation_alone_matches_as_typed(client, world):
+    for what, amount in (("A&W", 6.99), ("Six", 6), ("Sixty", 65)):
+        client.post("/api/transactions", json=txn(world, what=what, amount=amount))
+    get = lambda q: client.get("/api/transactions", params={"q": q, "sort": "amount", "dir": "asc"}).json()
+    names = lambda q: [t["what"] for t in get(q)["items"]]
+    # "6" finds $6.00, $6.99 and $65, but only $6.00 is the exact amount.
+    r = get("6")
+    assert [t["what"] for t in r["items"]] == ["Six", "A&W", "Sixty"] and r["exact"] == 1
+    assert get("5.")["total"] == 0 and names("6.") == names("6")  # a trailing point is the number still being typed
+    # Punctuation on its own matches where it's written, not every entry.
+    assert names("&") == ["A&W"]
+    assert names("$") == [] and names("...") == [] and names("-") == []
