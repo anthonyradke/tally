@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { blank } from '@/lib/draft'
-import { needed, nextStep, stepAfter, stepsFor, type Step } from '@/lib/steps'
+import { answeredBy, needed, nextStep, stepAfter, stepsFor, type Step } from '@/lib/steps'
 
 const none = new Set<Step>()
 
@@ -66,4 +66,14 @@ test('steps: Next goes to the review once everything after is answered', () => {
   const s = { ...d, kind: 'Saving' as const }
   assert.equal(stepAfter('amount', s), 'what')
   assert.equal(stepAfter('amount', s, new Set<Step>(['to'])), 'review')
+})
+
+test('steps: a Saving chip with no To goes from the amount past the pages it answered', () => {
+  const d = { ...blank('2026-09-25'), kind: 'Saving' as const, amount: '200', what: 'Vanguard', category_id: 4, from_id: 2 }
+  const seen = new Set<Step>(['amount', ...answeredBy('Saving')])
+  assert.equal(stepAfter('amount', d, seen), 'review')
+  assert.equal(stepAfter('amount', { ...d, what: '' }, seen), 'what') // a chip that leaves the name for you
+  assert.equal(stepAfter('what', { ...d, what: '' }, new Set<Step>([...seen, 'what'])), 'review')
+  assert.equal(nextStep('amount', { ...d, from_id: null }, seen), 'from') // a required account still missing
+  assert.deepEqual(answeredBy('Spending'), ['category', 'from'])
 })

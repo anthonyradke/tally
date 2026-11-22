@@ -1,6 +1,6 @@
 // The new-entry composer's pages and small parts (app/new.tsx holds the flow): "What was it?", the category and
 // account pages, the extras on the review, the progress dots and the keys and pill around the keypad.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { ScrollView, Switch, TextInput, View } from 'react-native'
 import Animated, { interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
@@ -14,6 +14,7 @@ import { Money } from './Money'
 import { PAGE_MS } from './Pages'
 import { Receipt } from './Receipt'
 import { Group, Row } from './Row'
+import { TagField } from './TagField'
 import { Tap } from './Tap'
 import { Txt } from './Txt'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
@@ -24,7 +25,6 @@ import { useDraft } from '@/lib/draft'
 import { monthsNow } from '@/lib/months'
 import { SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
-import { parseTags } from '@/lib/txn'
 import { radius, space, useTheme } from '@/theme'
 
 const KIND_ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
@@ -90,8 +90,10 @@ export function CatMark({ id, size = 30 }: { id: number; size?: number }) {
 }
 
 /** "What was it?": a name, with past places under it. Typing matches every kind; picking one copies its category and
- *  accounts (and its kind, said under the row). A name typed in full that is one past place counts as picking it. */
-export function What({ history, onPick, onSubmit }: { history: Txn[]; onPick: (x: Txn) => void; onSubmit: () => void }) {
+ *  accounts (and its kind, said under the row). A name typed in full that is one past place of this kind counts as
+ *  picking it, except on a page opened from the review (`fixing`): there Return only keeps the new name, and the
+ *  category and accounts already set stay as they are. */
+export function What({ history, fixing, onPick, onSubmit }: { history: Txn[]; fixing: boolean; onPick: (x: Txn) => void; onSubmit: () => void }) {
   const { c } = useTheme()
   const t = useTally()
   const { d, set } = useDraft()
@@ -103,7 +105,7 @@ export function What({ history, onPick, onSubmit }: { history: Txn[]; onPick: (x
   const picked = useRef(false)
   const pick = (x: Txn) => { picked.current = true; input.current?.blur(); onPick(x) }
   const submit = () => {
-    const x = exactPlace(history, t.catOf, d.what, d.kind)
+    const x = fixing ? undefined : exactPlace(history, t.catOf, d.what, d.kind)
     if (x) pick(x)
     else onSubmit()
   }
@@ -194,11 +196,11 @@ export function Accounts({ side, heading, onPick }: { side: 'from' | 'to'; headi
   )
 }
 
-/** The rarely needed bits, last: refund, split, note, tags and a receipt. */
+/** The rarely needed bits, last: refund, split, note, tags (with the ones in use offered, as in the editor) and a
+ *  receipt. */
 export function Extras({ onSplit }: { onSplit: () => void }) {
   const { c } = useTheme()
   const { d, set } = useDraft()
-  const [tagText, setTagText] = useState<string | null>(null) // raw text while editing tags
   return (
     <Group>
       {d.kind === 'Spending' && (
@@ -211,13 +213,7 @@ export function Extras({ onSplit }: { onSplit: () => void }) {
         <Field value={d.note} onChangeText={(note) => set({ note })} placeholder="Note" placeholderTextColor={c.label3} multiline
           style={{ flex: 1, fontSize: 17, color: c.label, paddingTop: space.m, paddingBottom: space.m, textAlignVertical: 'center' }} />
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
-        <Icon sf="number" md="tag" size={18} color={c.label2} />
-        <Field value={tagText ?? d.tags.join(' ')} placeholder="Tags, separated by spaces" placeholderTextColor={c.label3}
-          autoCapitalize="none" autoCorrect={false} onBlur={() => setTagText(null)}
-          onChangeText={(v) => { setTagText(v); set({ tags: parseTags(v) }) }}
-          style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
-      </View>
+      <TagField />
       <Receipt />
     </Group>
   )

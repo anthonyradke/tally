@@ -62,7 +62,7 @@ export function press(cur: string, key: string): string {
  *  digit replaces it, like typing over selected text; delete still trims it. Any press ends the selection. */
 export const pressOver = (cur: string, key: string, over: boolean): string => press(over && key !== 'del' ? '' : cur, key)
 
-export const fromTxn =(t: Txn, type: CatType): Draft => ({
+export const fromTxn = (t: Txn, type: CatType): Draft => ({
   ...blank(t.date), id: t.id, date: t.date, what: t.what, category_id: t.category_id, from_id: t.from_id, to_id: t.to_id,
   amount: fromCents(t.amount), refund: t.amount < 0, note: t.note, tags: t.tags, receipt: t.receipt, kind: type,
 })

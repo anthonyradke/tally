@@ -23,11 +23,11 @@ import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { openEntry } from '@/lib/actions'
 import { api, ApiError, type CatType, type Txn } from '@/lib/api'
-import { addedText, addLabel, KIND_NAME, quickFill, signed } from '@/lib/compose'
+import { addedText, addLabel, chipIn, chipOut, KIND_NAME, quickFill, signed, toKind, withKind } from '@/lib/compose'
 import { close, useBusy, useCloseHere } from '@/lib/nav'
 import { useDraftOwner } from '@/lib/draftOwner'
 import { invalidateAll, useTransactions } from '@/lib/data'
-import { blank, fromCents, pressOver, toCents, toInputs, useDraft } from '@/lib/draft'
+import { blank, fromCents, pressOver, toCents, toInputs, useDraft, type Draft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { markFresh, useQuickFloat } from '@/lib/motion'
 import { QUEUED, sendOrQueue } from '@/lib/outbox'
@@ -35,8 +35,9 @@ import { Reveal } from '@/lib/privacy'
 import { play } from '@/lib/sound'
 import { expression, operate, total, type Calc } from '@/lib/calc'
 import { fromLink } from '@/lib/capture'
-import { fits, HINT, SHAPES } from '@/lib/shapes'
-import { needed, nextStep, stepAfter, stepsFor, type Step } from '@/lib/steps'
+import { fits, HINT } from '@/lib/shapes'
+import type { Tone } from '@/lib/txn'
+import { answeredBy, needed, nextStep, stepAfter, stepsFor, type Step } from '@/lib/steps'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
@@ -78,9 +79,11 @@ function Composer() {
     return link.amount || link.what ? { ...base, ...fromLink(link, t.b, history.data?.items ?? []) } : base
   }
   const [seed] = useState(makeSeed)
-  const [step, setStep] = useState<Step>(() => (seed?.amount ? nextStep('amount', seed, new Set()) : 'amount'))
+  // Steps shown, or answered by a quick action (its category and accounts), which Next may pass.
+  const seenFor = (s: Draft | null) => new Set<Step>(['amount', ...(fav && s?.category_id ? answeredBy(s.kind) : [])])
+  const [seen, setSeen] = useState(() => seenFor(seed))
+  const [step, setStep] = useState<Step>(() => (seed?.amount ? nextStep('amount', seed, seenFor(seed)) : 'amount'))
   const [dir, setDir] = useState<1 | -1>(1)
-  const [seen, setSeen] = useState<Set<Step>>(new Set(['amount']))
   const [quick, setQuick] = useState<number | null>(fav ? Number(fav) : null) // the quick action filling the draft
   const quickGave = useRef(false) // it brought the amount, so taking it back out clears that too
   // The amount shows as selected when its page opens with one already there: the first digit types over it.
@@ -101,7 +104,8 @@ function Composer() {
     const s = seed ?? makeSeed()!
     reset(s, owner)
     quickGave.current = !!fav && !!s.amount
-    if (!seed && s.amount) setStep(nextStep('amount', s, new Set())) // eslint-disable-line react-hooks/set-state-in-effect
+    if (!seed) setSeen(seenFor(s)) // eslint-disable-line react-hooks/set-state-in-effect
+    if (!seed && s.amount) setStep(nextStep('amount', s, seenFor(s)))
   }, [t.b]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A link's place seen before the history loaded: fill in its category and accounts once it does.
@@ -136,6 +140,9 @@ function Composer() {
   // Next from a step, given the draft as it is after that step's answer (a pick updates the store and moves on at once).
   // + and − on the amount page add things up; Next (or =) takes the total.
   const [calc, setCalc] = useState<Calc | null>(null)
+  const shown = calc ? formatCents(total(calc, d.amount)) : figure.text
+  const sel = typeOver(c, over, shown)
+  const tone = (x: Tone) => (x === 'pos' ? c.pos : x === 'neg' ? c.neg : c.label)
   function settle() {
     if (!calc) return true
     const sum = total(calc, d.amount)
@@ -153,6 +160,7 @@ function Composer() {
     // − before anything is typed on spending marks a refund rather than starting a sum ("− 62.26" with an = key).
     if (sign < 0 && !calc && !d.amount && d.kind === 'Spending') { set({ refund: !d.refund }); return }
     setCalc(operate(calc, d.amount, sign, d.refund ? -1 : 1)) // a refund already typed starts the sum below zero
+    quickGave.current = false // the sum is yours now, whatever started it
     set({ amount: '' })
   }
   const next = () => {
@@ -162,50 +170,51 @@ function Composer() {
     if (needed(step, now)) { refuse(); return } // a second tap on Next can't fly past an unpicked category
     go(toReview ? nextStep(step, now, seen) : stepAfter(step, now, seen))
   }
-  const back = () => (at > 0 ? go(steps[at - 1], true) : close())
+  // Back from a page opened from the review goes back to the review, where it came from.
+  const back = () => (toReview ? go('review', true) : at > 0 ? go(steps[at - 1], true) : close())
   const refuse = () => { shake(); play('error', 0.6); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
   const onKey = (k: string) => {
     const n = pressOver(d.amount, k, over)
     if (over) setOver(false)
     else if (n === d.amount && d.amount && k !== 'del') { refuse(); return }
+    quickGave.current = false // typed over a chip's amount: it's yours, and stays if the chip is taken back out
     set({ amount: n })
   }
+  const clear = () => { setOver(false); quickGave.current = false; set({ amount: '' }) }
 
-  // Changing the kind drops a category and accounts that no longer fit it. Nothing is picked for you, except that the
-  // account it was opened from (an account's page, or Activity filtered to it) moves to whichever side still fits.
-  const setKind = (kind: CatType) => {
-    const s = SHAPES[kind]
-    let from_id = s.from === 'blank' ? null : d.from_id
-    let to_id = s.to === 'blank' ? null : d.to_id
-    const home = from ? Number(from) : null
-    if (home && t.acct.has(home) && from_id !== home && to_id !== home) {
-      if (s.from === 'blank' && !to_id) to_id = home
-      else if (s.to === 'blank' && !from_id) from_id = home
-    }
-    set({ kind, category_id: cat?.type === kind ? d.category_id : null, refund: kind === 'Spending' ? d.refund : false, from_id, to_id })
-  }
-  // A quick action fills the draft, keeping an amount already typed, and moves on once there's an amount: to the
-  // review, or to "What was it?" when its label only names the category. Tapping it again takes it back out.
+  // The account it was opened from (an account's page, or Activity filtered to it) stays through kind changes.
+  const home = from && t.acct.has(Number(from)) ? Number(from) : null
+  const setKind = (kind: CatType) => set(toKind(d, kind, cat?.type, home))
+  // A quick action fills the draft, keeping an amount you typed (not one the chip before it brought), and moves on
+  // once there's an amount: to the review, or to "What was it?" when its label only names the category. Tapping it
+  // again takes it back out, keeping the kind, an amount you typed and the account it was opened from.
   const pickQuick = (id: number) => {
     Haptics.selectionAsync().catch(() => {})
     if (quick === id) {
       setQuick(null)
-      set({ ...blank(d.date), ...(quickGave.current ? {} : { amount: d.amount, refund: d.refund }) })
+      set(chipOut(d, quickGave.current, home))
+      quickGave.current = false
+      setSeen(new Set(['amount']))
       return
     }
     const f = t.b!.favorites.find((x) => x.id === id)!
-    const typed = !!d.amount || !!calc
+    const { patch, gave } = chipIn(d, f, t.cat.get(f.category_id), { gave: quickGave.current, summing: !!calc })
     setQuick(id)
-    quickGave.current = !typed && !!f.amount
-    set(quickFill(f, t.cat.get(f.category_id), typed))
+    set(patch)
+    quickGave.current = gave
     const now = useDraft.getState().d
-    if (now.amount || calc) go(nextStep('amount', now, seen))
+    const answered = new Set([...seen, ...answeredBy(now.kind)])
+    setSeen(answered)
+    if (now.amount || calc) go(nextStep('amount', now, answered))
   }
   // The chips that fit: all of them on Spending (one for another kind switches to it), only that kind's elsewhere.
   const chips = (t.b?.favorites ?? []).filter((f) => d.kind === 'Spending' || f.id === quick || t.cat.get(f.category_id)?.type === d.kind)
   const pickPast = (x: Txn) => {
-    set({ what: x.what, category_id: x.category_id, from_id: x.from_id, to_id: x.to_id, kind: t.catOf(x).type })
-    go(nextStep('what', useDraft.getState().d, seen))
+    set(withKind(d, { what: x.what, category_id: x.category_id, from_id: x.from_id, to_id: x.to_id, kind: t.catOf(x).type }))
+    const now = useDraft.getState().d
+    const answered = new Set([...seen, ...answeredBy(now.kind)])
+    setSeen(answered)
+    go(nextStep('what', now, answered))
   }
   // Splitting needs the full form: it slides in as one more page, with the split already started. (Swapping this
   // modal for the editor's dropped the sheet without animating and slid a new one up.)
@@ -272,7 +281,7 @@ function Composer() {
   // Back grows in beside Next once there's somewhere to go back to, instead of popping in and squeezing it. It grows
   // from no width at all: `flex: 0` would size it to its label, and Next came up short on the first step.
   const reduce = useReducedMotion()
-  const canBack = at > 0
+  const canBack = at > 0 || toReview
   const backK = useSharedValue(canBack ? 1 : 0)
   useEffect(() => { backK.set(reduce ? (canBack ? 1 : 0) : withTiming(canBack ? 1 : 0, { duration: 320, easing: EASE })) }, [canBack]) // eslint-disable-line react-hooks/exhaustive-deps
   const backStyle = useAnimatedStyle(() => ({ flexGrow: backK.get(), marginRight: -space.s * (1 - backK.get()), opacity: backK.get() }))
@@ -311,15 +320,18 @@ function Composer() {
                 <Segmented options={KINDS} value={d.kind} onChange={setKind} />
                 <QuickChips list={chips} quick={quick} onPick={pickQuick} />
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xs }}>
-                  <DatePill />
-                  {/* An amount already there when the page opens shows as selected: the first digit replaces it. */}
-                  <Animated.View style={[shakeStyle, { borderRadius: radius.input, borderCurve: 'continuous', paddingHorizontal: space.s, backgroundColor: typeOver(c, over, figure.text).fill }]}
-                    accessibilityLabel={typeOver(c, over, figure.text).label}>
-                    <RollingText text={calc ? formatCents(total(calc, d.amount)) : figure.text}
-                      style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: !d.amount && !calc ? c.label3 : !calc && figure.pos ? c.pos : c.label }} />
-                  </Animated.View>
+                  <View style={{ alignItems: 'center' }}>
+                    {/* Just above the figure, taking no room: tapping it away doesn't move the figure. */}
+                    <View style={{ position: 'absolute', bottom: '100%', paddingBottom: space.xs }}><DatePill /></View>
+                    {/* An amount already there when the page opens shows as selected: the first digit replaces it. */}
+                    <Animated.View style={[shakeStyle, { borderRadius: radius.input, borderCurve: 'continuous', paddingHorizontal: space.s, backgroundColor: sel.fill }]}
+                      accessible accessibilityRole="text" accessibilityLabel={sel.label ?? shown}>
+                      <RollingText text={shown}
+                        style={{ fontSize: 64, fontWeight: '700', letterSpacing: -1.5, color: !d.amount && !calc ? c.label3 : calc ? c.label : tone(figure.tone) }} />
+                    </Animated.View>
+                  </View>
                   {/* Always there (a blank line when there's nothing to say), so the figure doesn't jump when a sum starts. */}
-                  <Txt variant="callout" tone={!calc && d.refund ? 'pos' : 'label2'} num={!!calc} numberOfLines={1}>
+                  <Txt variant="callout" tone={!calc && d.refund && d.kind === 'Spending' ? 'pos' : 'label2'} num={!!calc} numberOfLines={1}>
                     {calc ? expression(calc, d.amount) : d.refund && d.kind === 'Spending' ? 'Refund' : d.what || ' '}
                   </Txt>
                 </View>
@@ -329,11 +341,11 @@ function Composer() {
                     hint={calc || d.amount || d.kind !== 'Spending' ? 'Subtract the next amount' : d.refund ? 'Refund. Tap to make it spending again' : 'A refund: type the amount back'} />
                   <OpKey label="+" hint="Add another amount" onPress={() => op(1)} on={calc?.sign === 1} />
                 </View>
-                <Keypad onKey={onKey} onClear={() => { setOver(false); set({ amount: '' }) }} />
+                <Keypad onKey={onKey} onClear={clear} />
               </View>
             )}
 
-            {s === 'what' && <What history={past} onPick={pickPast} onSubmit={next} />}
+            {s === 'what' && <What history={past} fixing={toReview} onPick={pickPast} onSubmit={next} />}
 
             {s === 'category' && <Categories heading={heading.category!} onPick={(id) => { set({ category_id: id }); next() }} onKind={setKind} />}
 
