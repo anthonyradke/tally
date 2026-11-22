@@ -2,6 +2,7 @@ import type { Bootstrap, Category, MonthRow, Txn } from '@/lib/api'
 import { merchantKey } from '@/icons/merchants'
 import { fromISO, lastOfMonth, monthOf } from './dates'
 import { formatCents } from './money'
+import { billKeys } from './repeats'
 
 /** A category's budget for a month: that month's override, else its default. */
 export const budgetFor = (b: Bootstrap, c: Category, month: string): number | null =>
@@ -104,10 +105,13 @@ export function paidBill(b: Bootstrap, id: number, spent: number, budget: number
   return spent > 0 && Math.abs(budget - spent) <= 100 && b.recurring.some((r) => r.category_id === id && !!r.active)
 }
 
-/** Whether a row is a bill: posted by a recurring template, or the same place and category as one (rent typed in by
- *  hand before its template existed). Story highlights and the day-by-day shading leave bills out. */
-export function billTest(b: Bootstrap): (t: Pick<Txn, 'recurring_id' | 'category_id' | 'what'>) => boolean {
+/** Whether a row is a bill: posted by a recurring template, the same place and category as one (rent typed in by
+ *  hand before its template existed), or, given the ledger (`history`, any order), a place whose hand-typed rows come
+ *  a month apart (repeats' `billKeys`: an electricity bill typed in each month). Story highlights, Home's month in
+ *  review and the day-by-day shading leave bills out. */
+export function billTest(b: Bootstrap, history?: Txn[]): (t: Pick<Txn, 'recurring_id' | 'category_id' | 'what'>) => boolean {
   const known = new Set(b.recurring.filter((r) => r.active).map((r) => `${r.category_id}|${merchantKey(r.what || r.label)}`))
+  if (history) for (const k of billKeys([...history].sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : x.id - y.id)), b.today)) known.add(k)
   return (t) => !!t.recurring_id || known.has(`${t.category_id}|${merchantKey(t.what)}`)
 }
 

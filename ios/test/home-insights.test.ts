@@ -6,7 +6,7 @@ import { bigWeekday } from '@/lib/calendar'
 import { addDays, fromISO } from '@/lib/dates'
 import { aheadLine } from '@/lib/forecast'
 import { formatChange } from '@/lib/money'
-import { ledgerMonth } from '@/lib/months'
+import { ledgerMonth, monthChart } from '@/lib/months'
 import { buildStory, topSpending } from '@/lib/story'
 import { acct, boot, cat, month, row } from './fixtures.ts'
 
@@ -92,4 +92,41 @@ test('bigWeekday: hand-typed bills stay out when the calendar passes its bill te
   assert.equal(fromISO('2026-09-01').getDay(), 2)
   assert.equal(bigWeekday([...flat, ...typed], '2026-10-01', '2026-07-01')?.day, 'Tuesdays') // recurring_id alone misses them
   assert.equal(bigWeekday([...flat, ...typed], '2026-10-01', '2026-07-01', 12, billTest(b)), null)
+})
+
+test('monthChart: a category page opened on a past month rests its chart there, still', () => {
+  const b = boot({ today: '2026-11-22', months: [month('2026-09-01'), month('2026-10-01'), month('2026-11-01'), month('2026-12-01')] })
+  assert.deepEqual((({ k, live }) => ({ k, live }))(monthChart(b, '2026-10-01')), { k: 1, live: false })
+  const now = monthChart(b, null)
+  assert.deepEqual([now.months.length, now.k, now.live], [3, 2, true]) // next month's scheduled rows don't count
+  assert.deepEqual((({ k, live }) => ({ k, live }))(monthChart(b, '2026-11-01')), { k: 2, live: true })
+  assert.equal(monthChart({ ...b, today: '2026-11-30' }, null).live, false) // the month's last day: nothing still going
+  assert.equal(monthChart(b, '2025-01-01').k, 2) // a month outside the chart: this month
+})
+
+const xcel = (date: string, amount: number) => row(date, amount, { what: 'Xcel Energy', category_id: 3 })
+
+test('billTest: a bill typed by hand each month counts, given the ledger', () => {
+  // Varying with the season, so "Looks like it repeats" wouldn't offer it, but three a month apart make it a bill.
+  const history = [xcel('2026-08-12', 7012), xcel('2026-09-12', 11578), xcel('2026-10-12', 9350)]
+  const b = boot({ today: '2026-11-22', categories: [cat(1, 'Money in'), cat(2, 'Spending'), cat(3, 'Spending')] })
+  assert.equal(billTest(b)(history[2]), false) // without the ledger: templates only
+  const bill = billTest(b, [...history].reverse()) // any order
+  assert.equal(bill(xcel('2026-11-12', 12000)), true)
+  assert.equal(bill(row('2026-10-12', 9350, { what: 'Xcel Energy', category_id: 2 })), false) // another category
+  assert.equal(bill(row('2026-10-12', 4000, { what: 'Market', category_id: 3 })), false)
+})
+
+test('buildStory: the biggest day bills aside skips a bill typed by hand', () => {
+  const b = boot({
+    today: '2026-11-22',
+    categories: [cat(1, 'Money in'), cat(2, 'Spending'), cat(3, 'Spending')],
+    months: [month('2026-09-01'), month('2026-10-01', { spent: 16578, by_category: { 2: 5000, 3: 11578 } }), month('2026-11-01')],
+  })
+  const rows = [xcel('2026-08-12', 7012), xcel('2026-09-12', 9350), xcel('2026-10-12', 11578), row('2026-10-20', 5000, { what: 'Market' })]
+  assert.equal(buildStory(b, '2026-10-01', rows)?.biggestDay?.date, '2026-10-12') // templates only: the bill wins
+  const s = buildStory(b, '2026-10-01', rows, billTest(b, rows))!
+  assert.equal(s.biggestDay?.date, '2026-10-20')
+  assert.equal(s.biggestDay?.billsAside, true)
+  assert.deepEqual(topSpending(b, s.m, rows.filter((t) => t.date >= '2026-10-01'), billTest(b, rows)).top.map((x) => x.c.id), [2])
 })

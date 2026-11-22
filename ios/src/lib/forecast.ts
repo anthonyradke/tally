@@ -53,6 +53,15 @@ export function outlooks(b: Bootstrap, rows: Txn[], ahead = AHEAD): Outlook[] {
     .sort((x, y) => (x.a.kind === y.a.kind ? 0 : x.a.kind === 'cash' ? -1 : 1))
 }
 
+/** Spending scheduled in the window (tomorrow through today + `ahead`), every account: the same rows and sum as the
+ *  "Scheduled" total of the list Home's See all opens (Activity on the next 30 days). Home used to quote only what was
+ *  leaving cash accounts, so a card's subscription made the two disagree. */
+export function scheduledSpend(b: Bootstrap, rows: Txn[], ahead = AHEAD): number {
+  const spending = new Set(b.categories.filter((c) => c.type === 'Spending').map((c) => c.id))
+  const end = addDays(b.today, ahead)
+  return rows.reduce((n, t) => (t.date > b.today && t.date <= end && spending.has(t.category_id) ? n + t.amount : n), 0)
+}
+
 /** One scale for every small line in Next 30 days: the biggest swing among them. Each line scaled to itself drew a
  *  card's $12 charge as tall a step as rent out of checking. */
 export function sharedSpan(list: Pick<Outlook, 'days'>[]): number {

@@ -30,7 +30,8 @@ import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import type { Bootstrap, MonthRow } from '@/lib/api'
-import { budgetFor, budgetGuide, budgetLine, elapsed, paceOver, paidBill, usualFor } from '@/lib/budgets'
+import { billTest, budgetFor, budgetGuide, budgetLine, elapsed, paceOver, paidBill, usualFor } from '@/lib/budgets'
+import { useAllTxns } from '@/lib/balances'
 import { efAccount, efCover, efPace } from '@/lib/goals'
 import { useTransactions } from '@/lib/data'
 import { fromISO, lastOfMonth, monthLabel } from '@/lib/dates'
@@ -467,10 +468,12 @@ function MonthReview({ b }: { b: Bootstrap }) {
   const { c } = useTheme()
   const { prev } = monthsNow(b)
   const on = !!prev && fromISO(b.today).getDate() <= 7
-  // The month's rows tell bills from everyday spending, the same way its story does ("Besides your bills").
+  // The month's rows tell bills from everyday spending, the same way its story does ("Besides your bills"); the
+  // ledger knows the bills typed by hand each month.
   const q = useTransactions({ type: 'Spending', start: prev?.month, end: prev ? lastOfMonth(prev.month) : undefined, limit: 3000 }, on)
+  const all = useAllTxns(on)
   if (!prev || !on) return null
-  const lead = q.data ? topSpending(b, prev, q.data.items) : null
+  const lead = q.data && all.data ? topSpending(b, prev, q.data.items, billTest(b, all.data.items)) : null
   const top = lead?.top[0]
   return (
     <Section title={`${monthName(prev.month)} in review`}>

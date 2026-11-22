@@ -9,7 +9,7 @@ import type { Bootstrap } from '@/lib/api'
 import { useAllTxns } from '@/lib/balances'
 import { addDays, fromISO } from '@/lib/dates'
 import { useTransactions } from '@/lib/data'
-import { aheadLine, AHEAD, outlooks, sharedSpan, type Outlook } from '@/lib/forecast'
+import { aheadLine, AHEAD, outlooks, scheduledSpend, sharedSpan, type Outlook } from '@/lib/forecast'
 import { formatCents } from '@/lib/money'
 import { useTally } from '@/lib/tally'
 import { space, useTheme } from '@/theme'
@@ -24,11 +24,11 @@ import { Txt } from './Txt'
 
 const short = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-/** The accounts with something scheduled in the next 30 days, or null while the rows load (or when not `enabled`:
- *  it reads the whole ledger). */
-export function useOutlooks(b: Bootstrap, enabled = true): Outlook[] | null {
+/** The accounts with something scheduled in the next 30 days and the spending scheduled in them, or null while the
+ *  rows load (or when not `enabled`: it reads the whole ledger). */
+export function useOutlooks(b: Bootstrap, enabled = true): { list: Outlook[]; spend: number } | null {
   const all = useAllTxns(enabled)
-  return all.data ? outlooks(b, all.data.items).slice(0, 4) : null
+  return all.data ? { list: outlooks(b, all.data.items).slice(0, 4), spend: scheduledSpend(b, all.data.items) } : null
 }
 
 /** Home's Coming up: the next few scheduled entries, and with `paths` each account's next 30 days above them. Next 30
@@ -36,17 +36,17 @@ export function useOutlooks(b: Bootstrap, enabled = true): Outlook[] | null {
  *  entries filled the rows and hid what's coming. */
 export function ComingUp({ b, paths }: { b: Bootstrap; paths: boolean }) {
   const t = useTally()
-  const list = useOutlooks(b, paths)
+  const out = useOutlooks(b, paths)
   const q = useTransactions({ start: addDays(b.today, 1), end: addDays(b.today, AHEAD), sort: 'date', dir: 'asc', limit: 6 })
   // With paths, nothing shows until they're known: 4 rows first dropped to 3 when the account lines came in.
-  if (paths && !list) return null
-  const ahead = paths && list ? list : []
+  if (paths && !out) return null
+  const ahead = paths && out ? out.list : []
   const rows = (q.data?.items ?? []).slice(0, ahead.length ? 3 : 4)
   if (!rows.length && !ahead.length) return null
   return (
     <Section title="Coming up" href={{ pathname: '/activity', params: { when: 'upcoming' } }}>
       <Panel pad={false}>
-        {ahead.length > 0 && <ForecastRows b={b} list={ahead} closes={!rows.length} />}
+        {ahead.length > 0 && <ForecastRows b={b} list={ahead} spend={out?.spend ?? 0} closes={!rows.length} />}
         {rows.map((x, i) => (
           <View key={x.id}>
             {(i > 0 || ahead.length > 0) && <Hairline inset={i > 0 ? space.l + 40 + space.m : 0} />}
@@ -62,31 +62,31 @@ export function ComingUp({ b, paths }: { b: Bootstrap; paths: boolean }) {
 
 /** Next 30 days as a section of its own, when Home's layout leaves Coming up off. */
 export function Forecast({ b }: { b: Bootstrap }) {
-  const list = useOutlooks(b)
-  if (!list?.length) return null
+  const out = useOutlooks(b)
+  if (!out?.list.length) return null
   return (
     <Section title={`Next ${AHEAD} days`} href={{ pathname: '/activity', params: { when: 'upcoming' } }} action="Scheduled">
-      <Panel pad={false}><ForecastRows b={b} list={list} closes /></Panel>
+      <Panel pad={false}><ForecastRows b={b} list={out.list} spend={out.spend} closes /></Panel>
     </Section>
   )
 }
 
-/** A line on what's already scheduled, then a row per account, every small line on the same scale. `closes`: these
- *  rows end the panel, so the last one pads its bottom. */
-export function ForecastRows({ b, list, closes }: { b: Bootstrap; list: Outlook[]; closes?: boolean }) {
-  const out = list.filter((o) => o.a.kind === 'cash').reduce((n, o) => n + o.outflow, 0)
+/** A line on what's already scheduled, then a row per account, every small line on the same scale. `spend`: the
+ *  spending scheduled in the window (`scheduledSpend`), the figure See all's list totals too. `closes`: these rows end
+ *  the panel, so the last one pads its bottom. */
+export function ForecastRows({ b, list, spend, closes }: { b: Bootstrap; list: Outlook[]; spend: number; closes?: boolean }) {
   const span = sharedSpan(list)
   return (
     <>
-      {out > 0 && (
+      {spend > 0 && (
         <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l, paddingTop: space.l }}>
-          Where each account is headed by {short(addDays(b.today, AHEAD))}, with the {formatCents(out, { cents: false })} already scheduled. Everyday spending comes on top.
+          Where each account is headed by {short(addDays(b.today, AHEAD))}, with {formatCents(spend)} of spending already scheduled. Everyday spending comes on top.
         </Txt>
       )}
       {list.map((o, i) => (
         <View key={o.a.id}>
           {i > 0 && <Hairline inset={space.l + 40 + space.m} />}
-          <Ahead o={o} span={span} first={i === 0 && !out} last={!!closes && i === list.length - 1} />
+          <Ahead o={o} span={span} first={i === 0 && !(spend > 0)} last={!!closes && i === list.length - 1} />
         </View>
       ))}
     </>

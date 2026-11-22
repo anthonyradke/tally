@@ -1,6 +1,6 @@
 // The signature: every trend chart is touchable. Dragging moves a hairline cursor and dot, the line past the finger
 // dims, and the figure above (ScrubFigure) is rewritten on the UI thread to the value under the finger. Releasing
-// hands the chart back to "now". No axes: the figure is the axis.
+// hands the chart back to "now" (or to `at`, the point it rests on). No axes: the figure is the axis.
 import { useEffect, useId, useMemo, useState } from 'react'
 import { View } from 'react-native'
 import Svg, { ClipPath, Defs, G, Line, Path, Rect } from 'react-native-svg'
@@ -40,7 +40,7 @@ function monotonePath(xs: number[], ys: number[]): string {
   return d
 }
 
-export function ScrubChart({ series, slots, height = 150, scrub, zero = false, guide, live }: {
+export function ScrubChart({ series, slots, height = 150, scrub, zero = false, guide, live, at: restAt }: {
   /** series[0] is the one the finger reads. Values are cents, one per slot from the left. */
   series: Series[]
   /** Total slots across the width (e.g. days in the month); series may be shorter (month to date). */
@@ -52,8 +52,12 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
   zero?: boolean
   /** A dashed horizontal reference (a budget), in cents. */
   guide?: number | null
-  /** The line ends at today: its end dot breathes while the chart is at rest. */
+  /** The resting point breathes while the chart is at rest: pass it only when that point is today (a month still
+   *  going), not a month looked back at. */
   live?: boolean
+  /** The point the chart rests on, when it isn't the last (a page opened on a past month): the dot sits there and the
+   *  line after it dims, as if a finger held it. */
+  at?: number
 }) {
   const { c } = useTheme()
   const [w, setW] = useState(0)
@@ -77,6 +81,7 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
   // Pixel positions of the primary series, captured by the worklets below (re-created when the geometry changes).
   const xs = geo.xs
   const ys = geo.ys
+  const rest = restIndex(xs.length, restAt)
   const shown = useSharedValue(0) // cursor opacity
   const reduce = useReducedMotion()
   const breath = useSharedValue(0)
@@ -126,27 +131,28 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
 
   const line = useAnimatedStyle(() => {
     const i = scrub.get()
-    const x = i >= 0 && i < xs.length ? xs[i] : xs.length ? xs[xs.length - 1] : 0
+    const x = i >= 0 && i < xs.length ? xs[i] : xs[rest] ?? 0
     return { opacity: shown.get(), transform: [{ translateX: x - 0.5 }] }
-  }, [xs])
+  }, [xs, rest])
   const dot = useAnimatedStyle(() => {
     const i = scrub.get()
-    const k = i >= 0 && i < xs.length ? i : xs.length - 1
+    const k = i >= 0 && i < xs.length ? i : rest
     return { opacity: interpolate(drawn.get(), [0.75, 1], [0, 1], 'clamp'), transform: [{ translateX: (xs[k] ?? 0) - 5 }, { translateY: (ys[k] ?? 0) - 5 }] }
-  }, [xs, ys])
+  }, [xs, ys, rest])
   const halo = useAnimatedStyle(() => {
     const k = breath.get()
-    const n = xs.length - 1
+    const n = rest
     return {
       opacity: (1 - k) * 0.45 * (1 - shown.get()) * (drawn.get() === 1 ? 1 : 0),
       transform: [{ translateX: (xs[n] ?? 0) - 5 }, { translateY: (ys[n] ?? 0) - 5 }, { scale: 1 + k * 1.9 }],
     }
-  }, [xs, ys])
-  // Everything right of the finger fades back; at rest the full line shows.
+  }, [xs, ys, rest])
+  // Everything right of the finger fades back; at rest the full line shows, or up to the resting point.
   const clip = useAnimatedProps(() => {
     const i = scrub.get()
-    return { width: i >= 0 && i < xs.length ? xs[i] : w + 10 }
-  }, [xs, w])
+    const k = i >= 0 && i < xs.length ? i : rest
+    return { width: k < xs.length - 1 ? xs[k] : w + 10 }
+  }, [xs, w, rest])
 
   const primary = series[0]
   const count = primary?.values.length ?? 0
@@ -154,7 +160,7 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
   // VoiceOver: swipe up or down to step through the points, like dragging a finger along it.
   const step = (e: { nativeEvent: { actionName: string } }) => {
     if (!count) return
-    const from = at < 0 ? count - 1 : at
+    const from = at < 0 ? rest : at
     const next = e.nativeEvent.actionName === 'increment' ? Math.min(count - 1, from + 1) : Math.max(0, from - 1)
     setAx(next)
     scrub.set(next)
@@ -165,7 +171,7 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
         accessibilityRole="adjustable" accessibilityLabel="Chart. Swipe up or down to read values."
         accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]} onAccessibilityAction={step}
         accessibilityValue={at >= 0 && primary ? { text: `${formatCents(primary.values[at])}, ${at + 1} of ${count}` }
-          : primary && count ? { text: formatCents(primary.values[count - 1]) } : undefined}>
+          : primary && count ? { text: formatCents(primary.values[rest]) } : undefined}>
         {w > 0 && (
           <Animated.View style={[{ height, overflow: 'hidden' }, reveal]}>
           <Svg width={w} height={height}>
@@ -205,4 +211,9 @@ export function ScrubChart({ series, slots, height = 150, scrub, zero = false, g
       </View>
     </GestureDetector>
   )
+}
+
+/** The index a chart of `n` points rests on: `at` when it's one of them, else the last. */
+function restIndex(n: number, at?: number): number {
+  return at != null && Number.isInteger(at) && at >= 0 && at < n ? at : n - 1
 }

@@ -1,11 +1,12 @@
-// Insights' month calendar: each day a tile, deeper ink the more everyday spending went out that day (recurring bills
-// mark their day with a dot instead), hollow when nothing did. Tapping a day
+// Insights' month calendar: each day a tile, deeper ink the more everyday spending went out that day (bills mark their
+// day with a dot instead), hollow when nothing did. Tapping a day
 // reads out its total; tapping it again (or "See entries") opens that day in Activity.
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { View } from 'react-native'
 import { router } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import type { Bootstrap } from '@/lib/api'
+import { useAllTxns } from '@/lib/balances'
 import { billTest } from '@/lib/budgets'
 import { bigWeekday, daysOf } from '@/lib/calendar'
 import { useTransactions } from '@/lib/data'
@@ -32,8 +33,10 @@ export function SpendCalendar({ b, month }: { b: Bootstrap; month: string }) {
   const items = q.data?.items ?? []
   const days = daysOf(month, items)
   // Shading follows everyday spending: with rent in it, the 1st went solid and every other day the same pale grey.
-  // A recurring bill marks its day with a dot instead.
-  const bill = billTest(b)
+  // A bill marks its day with a dot instead: a template's rows, and (from the ledger) bills typed by hand each month,
+  // or the electricity bill made its day the brightest tile.
+  const all = useAllTxns()
+  const bill = useMemo(() => billTest(b, all.data?.items), [b, all.data])
   const everyday = new Map(daysOf(month, items.filter((t) => !bill(t))).map((d) => [d.date, d.cents]))
   const bills = new Set(items.filter(bill).map((t) => t.date))
   const max = Math.max(1, ...days.filter((d) => d.date <= b.today).map((d) => everyday.get(d.date) ?? 0))
