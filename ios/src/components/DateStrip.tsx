@@ -22,10 +22,11 @@ function span(first: string, last: string): string[] {
 }
 
 /** The date: this past week as a row of days, since entries often get caught up at the end of the week, and the
- *  calendar for anything older. A draft that starts on an older day (Catch up resuming where an account left off)
- *  stretches the row back to it, and the row scrolls from there to today, so the bank's list can be followed day by
- *  day. It only ever grows while it's open, so nothing moves under a finger. */
-export function DateStrip() {
+ *  calendar for anything older. With `stretch` (Catch up, resuming where an account left off), a draft on an older
+ *  day stretches the row back to it, and the row scrolls from there to today, so the bank's list can be followed day
+ *  by day; it only ever grows while it's open. Elsewhere (the composer, the editor) an older day is the calendar's,
+ *  named above a week with nothing picked, as it always was. */
+export function DateStrip({ stretch = false }: { stretch?: boolean }) {
   const { c } = useTheme()
   const t = useTally()
   const { d, set } = useDraft()
@@ -34,9 +35,10 @@ export function DateStrip() {
   const [width, setWidth] = useState(0)
   const scroller = useRef<ScrollView>(null)
   const x = useRef(0)
+  const placed = useRef(false)
   const today = t.today
   const week = addDays(today, -6)
-  const older = d.date < week && d.date >= addDays(today, -REACH) ? d.date : null
+  const older = stretch && d.date < week && d.date >= addDays(today, -REACH) ? d.date : null
   if (older && (!reach || older < reach)) setReach(older)
   const first = reach && reach < week ? reach : week
   const days = t.b ? span(first, today).filter((x) => x >= t.b!.start) : []
@@ -44,17 +46,19 @@ export function DateStrip() {
   const cell = width ? (width - GAP * 6) / 7 : 0
   const step = cell + GAP
 
-  // Keep the picked day in view: on the first layout, and when the calendar picks one that's scrolled off.
-  useEffect(() => {
-    if (!scrolls || !cell) return
+  // Keep the picked day in view, the days after it to its right. `x` follows the scroll (onScroll).
+  const place = (animated: boolean, force = false) => {
     const i = days.indexOf(d.date)
-    if (i < 0) return
+    if (i < 0 || !step) return
     const left = Math.round(x.current / step)
-    if (i >= left && i < left + 7) return
-    const to = Math.min((days.length - 7) * step, i * step) // the picked day first, the days after it to its right
-    scroller.current?.scrollTo({ x: to, animated: x.current > 0 })
+    if (!force && i >= left && i < left + 7) return
+    const to = Math.max(0, Math.min((days.length - 7) * step, i * step))
+    scroller.current?.scrollTo({ x: to, animated })
     x.current = to
-  }, [d.date, scrolls, cell, days.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
+  // First placed once the content has a size (a scrollTo before that can be dropped), then again when the calendar
+  // picks a day that's scrolled off.
+  useEffect(() => { if (scrolls && placed.current) place(true) }, [d.date]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!t.b) return null
   const inStrip = days.includes(d.date)
@@ -85,6 +89,8 @@ export function DateStrip() {
         <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
           {cell > 0 && (
             <ScrollView ref={scroller} horizontal showsHorizontalScrollIndicator={false} snapToInterval={step} decelerationRate="fast"
+              keyboardShouldPersistTaps="handled" // the first tap on a day picks it, with the name's keyboard up
+              onContentSizeChange={() => { place(false, !placed.current); placed.current = true }}
               onScroll={(e) => { x.current = e.nativeEvent.contentOffset.x }} scrollEventThrottle={32} contentContainerStyle={{ gap: GAP }}>
               {days.map(day)}
             </ScrollView>
