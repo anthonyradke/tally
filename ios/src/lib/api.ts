@@ -19,7 +19,10 @@ export interface Budget { category_id: number; month: string; amount: number }
 export interface Recurring { id: number; label: string; category_id: number; from_account_id: number | null; to_account_id: number | null; amount: number; what: string; freq: Freq; next_date: string; horizon_days: number; active: number; anchor_day: number | null; created_at: string }
 export interface SavedView { id: number; name: string; query: string; icon: string | null; sort: number }
 export interface MonthRow { month: string; money_in: number; spent: number; loan: number; saving: number; left_over: number; by_category: Record<string, number>; balances: Record<string, number>; cash: number; invested: number; cards: number; loans: number; net_worth: number }
-export interface Bootstrap { today: string; start: string; accounts: Account[]; categories: Category[]; favorites: Favorite[]; budgets: Budget[]; recurring: Recurring[]; saved_views: SavedView[]; settings: Record<string, string>; months: MonthRow[]; ef: { goal: number; progress: number }; roth: { ytd: number; limit: number; category_id: number | null } }
+/** A tag in use and how many entries carry it. */
+export interface TagCount { tag: string; count: number }
+/** `tags`: most used first. Missing from a bootstrap kept on the phone from before the server sent it. */
+export interface Bootstrap { today: string; start: string; accounts: Account[]; categories: Category[]; favorites: Favorite[]; budgets: Budget[]; recurring: Recurring[]; saved_views: SavedView[]; tags?: TagCount[]; settings: Record<string, string>; months: MonthRow[]; ef: { goal: number; progress: number }; roth: { ytd: number; limit: number; category_id: number | null } }
 export interface BulkBefore { id: number; category_id: number; tags: string[] }
 export interface TxnPage { total: number; sum: number; by_type: Partial<Record<CatType, number>>; items: Txn[] }
 export interface TxnQuery { q?: string; category?: number; account?: number; type?: CatType | ''; start?: string; end?: string; amount_min?: number; amount_max?: number; tag?: string; group?: string; sort?: 'date' | 'amount'; dir?: 'asc' | 'desc'; limit?: number; offset?: number }

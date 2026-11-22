@@ -1,8 +1,9 @@
-// The composer: a modal with its own Cancel/Save. Amount on a big keypad, then what, category, accounts and date.
+// The editor: a modal with its own Cancel/Save. Amount on a big keypad, then what, category, accounts and date.
 // A new entry starts empty: no category or account is guessed for you.
 // New entries go through the outbox, so saving never fails just because the phone is off Tailscale.
+// Closing it with changes unsaved (the X, or a swipe down) never asks: a toast says so and Restore reopens it as it was.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Keyboard, ScrollView, Switch, TextInput, View } from 'react-native'
+import { Keyboard, ScrollView, TextInput, View } from 'react-native'
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, ZoomIn } from 'react-native-reanimated'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
@@ -11,14 +12,17 @@ import * as Haptics from 'expo-haptics'
 import { Field } from '@/components/Field'
 import { CheckDraw } from '@/components/CheckDraw'
 import { Chip } from '@/components/Chip'
+import { DateStrip } from '@/components/DateStrip'
 import { Icon } from '@/components/Icon'
 import { Keypad } from '@/components/Keypad'
 import { Receipt } from '@/components/Receipt'
+import { EmptyMark, SplitGroup } from '@/components/SplitGroup'
 import { Mark } from '@/components/Mark'
 import { Segmented } from '@/components/native/Segmented'
 import { RollingText } from '@/components/Rolling'
 import { useShake } from '@/components/Shake'
 import { Group, Row } from '@/components/Row'
+import { TagField } from '@/components/TagField'
 import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
@@ -26,9 +30,8 @@ import { merchantKey } from '@/icons/merchants'
 import { api, ApiError, type CatType, type Txn } from '@/lib/api'
 import { close, useBusy, useCloseHere, useLatest } from '@/lib/nav'
 import { useDraftOwner } from '@/lib/draftOwner'
-import { deleteTxns } from '@/lib/actions'
+import { deleteTxns, quickFromEntry, repeatEntry } from '@/lib/actions'
 import { cachedTxn, invalidateAll, useTransactions } from '@/lib/data'
-import { addDays, dayLabel } from '@/lib/dates'
 import { blank, fromCents, fromTxn, press, toCents, toInputs, useDraft, type Draft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { markFresh, useQuickFloat } from '@/lib/motion'
@@ -38,6 +41,8 @@ import { play } from '@/lib/sound'
 import { fits, HINT, SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
+import { balanceFirst, FREQ_LABEL } from '@/lib/txn'
+import { forgetUnsaved, peekUnsaved, snap, useUnsaved } from '@/lib/unsaved'
 import { radius, space, useTheme } from '@/theme'
 
 const KINDS: [CatType, string][] = [['Spending', 'Spent'], ['Money in', 'Income'], ['Transfer', 'Transfer'], ['Saving', 'Saving'], ['Loan', 'Loan']]
@@ -52,13 +57,17 @@ export function Entry({ embedded }: { embedded?: boolean }) {
   const { c, tint } = useTheme()
   const insets = useSafeAreaInsets()
   const t = useTally()
-  const params = useLocalSearchParams<{ id?: string; mode?: string; fav?: string; from?: string }>()
-  const { id, mode, fav, from } = embedded ? {} : params
-  const { d, set, reset, setLine } = useDraft()
+  const params = useLocalSearchParams<{ id?: string; mode?: string; fav?: string; from?: string; restore?: string }>()
+  const { id, mode, fav, from, restore } = embedded ? {} : params
+  const [kept] = useState(() => (restore ? peekUnsaved() : null)) // reopened from "Changes not saved"
+  const { d, set, reset } = useDraft()
   const [typing, setTyping] = useState(false)
   const [pad, setPad] = useState(!id)
+  // The amount the keypad opened on is selected, like text: the first digit types over it instead of onto its end.
+  const [fresh, setFresh] = useState(false)
+  // A split's first line takes what the other lines leave of the total, until it's typed into itself.
+  const [autoFirst, setAutoFirst] = useState(true)
   const [quick, setQuick] = useState<number | null>(fav ? Number(fav) : null) // the quick action filling the draft
-  const [tagText, setTagText] = useState<string | null>(null) // raw text while editing tags
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
   const [shakeStyle, shake] = useShake()
@@ -71,7 +80,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     initialData: () => (id ? cachedTxn(Number(id)) : undefined), initialDataUpdatedAt: 0 })
   // "Duplicate to today" from the menu turns this editor into a new entry in place, rather than closing the sheet and
   // opening another one.
-  const [dup, setDup] = useState(mode === 'duplicate')
+  const [dup, setDup] = useState(kept ? kept.dup : mode === 'duplicate')
   const editing = !!id && !dup
   const loaded = useRef(false)
   const owner = useDraftOwner()
@@ -84,18 +93,27 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     const d0 = fromTxn(r, t.catOf(r).type)
     return mode === 'duplicate' ? { ...d0, id: undefined, date: t.today, receipt: null } : d0
   }
-  const fillFrom = (r: Txn) => {
-    reset(seed(r), owner)
-    seededFrom.current = JSON.stringify(r)
-    seededDraft.current = JSON.stringify(useDraft.getState().d)
+  const start = (d0: Draft, from: string | null = null) => {
+    reset(d0, owner)
+    seededFrom.current = from
+    seededDraft.current = snap(useDraft.getState().d)
   }
+  const fillFrom = (r: Txn) => start(seed(r), JSON.stringify(r))
 
-  // Seed the draft once: edit, duplicate, a quick action, or a blank entry with sensible defaults. Before the first
-  // paint, so the last entry's draft never flashes up in this one.
+  // Seed the draft once: a restored draft, edit, duplicate, a quick action, or a blank entry with sensible defaults.
+  // Before the first paint, so the last entry's draft never flashes up in this one.
   useLayoutEffect(() => {
     if (loaded.current || !t.b) return
     if (embedded) { loaded.current = true; return }
     const today = t.today
+    if (kept) {
+      loaded.current = true
+      forgetUnsaved()
+      reset(kept.d, owner)
+      seededFrom.current = kept.from
+      seededDraft.current = kept.seed
+      return
+    }
     if (id) {
       if (!one.data) { if (useDraft.getState().d.id !== Number(id)) reset(blank(today), owner); return }
       loaded.current = true
@@ -106,13 +124,17 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     const f = fav ? t.b.favorites.find((x) => x.id === Number(fav)) : undefined
     if (f) {
       const cat = t.cat.get(f.category_id)
-      reset({ ...blank(today), what: f.label, category_id: f.category_id, from_id: f.from_account_id, to_id: f.to_account_id,
-        amount: f.amount ? fromCents(f.amount) : '', kind: cat?.type ?? 'Spending' }, owner)
+      start({ ...blank(today), what: f.label, category_id: f.category_id, from_id: f.from_account_id, to_id: f.to_account_id,
+        amount: f.amount ? fromCents(f.amount) : '', kind: cat?.type ?? 'Spending' })
       return
     }
     // Opened from an account's page: the entry starts from that account.
-    reset({ ...blank(today), from_id: from && t.acct.has(Number(from)) ? Number(from) : null }, owner)
+    start({ ...blank(today), from_id: from && t.acct.has(Number(from)) ? Number(from) : null })
   }, [t.b, one.data]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const leaving = useRef(false) // saved, saving or deleted: closing loses nothing
+  const reopen = useLatest({ id, mode: dup ? 'duplicate' : undefined, fav, from })
+  useUnsaved(!embedded, owner, () => ({ leaving: leaving.current, loaded: loaded.current, seed: seededDraft.current, from: seededFrom.current, params: reopen.current }))
 
   // The form fills on its first frame from a copy already in a list, which can be old (a bulk recategorize changed
   // it since). When the fresh copy arrives and differs, and nothing has been typed yet, the form takes it: saving
@@ -121,7 +143,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     if (!id || embedded || !loaded.current || !one.data || !one.isFetchedAfterMount) return
     if (JSON.stringify(one.data) === seededFrom.current) return
     const cur = useDraft.getState()
-    if (cur.owner !== owner || JSON.stringify(cur.d) !== seededDraft.current) return // edited already: keep it
+    if (cur.owner !== owner || snap(cur.d) !== seededDraft.current) return // edited already: keep it
     fillFrom(one.data)
   }, [one.data, one.isFetchedAfterMount]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -164,17 +186,29 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     set({ what: x.what, category_id: x.category_id, from_id: x.from_id, to_id: x.to_id, kind: ty })
     setTyping(false)
   }
+  // Puts an amount into the total or a split line. While line 1 hasn't been typed into, it takes what's left.
+  const put = (amount: string) => {
+    const first = d.split?.[0]?.key
+    if (!d.split || d.target === 'main') {
+      set({ amount, ...(d.split && autoFirst ? { split: balanceFirst(d.split, toCents(amount)) } : {}) })
+      return
+    }
+    if (d.target === first) setAutoFirst(false)
+    const lines = d.split.map((l) => (l.key === d.target ? { ...l, amount } : l))
+    set({ split: autoFirst && d.target !== first ? balanceFirst(lines, cents) : lines })
+  }
   // A digit that can't go in (the amount is at its cap) shakes the figure instead of silently doing nothing.
   const onKey = (k: string) => {
     const line = d.target === 'main' ? null : d.split?.find((x) => x.key === d.target)
     const cur = line ? line.amount : d.amount
-    const next = press(cur, k)
-    if (next === cur && cur && k !== 'del') { refuse(); return }
-    if (line) setLine(line.key, { amount: next })
-    else set({ amount: next })
+    const base = fresh && /^\d+$/.test(k) ? '' : cur
+    const next = press(base, k)
+    setFresh(false)
+    if (next === base && base && k !== 'del') { refuse(); return }
+    put(next)
   }
   const refuse = () => { shake(); play('error', 0.6); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
-  const onClear = () => (d.target === 'main' ? set({ amount: '' }) : setLine(d.target, { amount: '' }))
+  const onClear = () => { setFresh(false); put('') }
 
   const splitSum = d.split?.reduce((n, l) => n + toCents(l.amount), 0) ?? 0
   const left = cents - splitSum
@@ -193,6 +227,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     setErrors(errs)
     if (errs.length) { if (!cents) shake(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}); return }
     setSaving(true)
+    leaving.current = true // swiped down while it saves: nothing is lost
     try {
       let saved: Txn[] = []
       if (editing) {
@@ -221,6 +256,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
       toast(lost ? { text: `${editing ? 'Saved' : `Added ${formatCents(cents)}`}, but the receipt photo didn't upload. Try adding it again.`, tone: 'error' }
         : { text: editing ? 'Saved' : `Added ${formatCents(cents)}${cat && !d.split ? ` to ${cat.name}` : ''}` })
     } catch (e) {
+      leaving.current = false
       setErrors(e instanceof ApiError ? e.errors : ['Tally is unreachable. Check Tailscale and try again.'])
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
       play('error')
@@ -247,14 +283,31 @@ export function Entry({ embedded }: { embedded?: boolean }) {
   const padStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - padT.get()) * (padH + 30) }] }))
   const openPad = (target: string) => {
     if (!pad) Haptics.selectionAsync().catch(() => {})
+    setFresh(!!toCents((target === 'main' ? d.amount : d.split?.find((l) => l.key === target)?.amount) ?? ''))
     set({ target })
     setPad(true)
   }
-  const closePad = () => { Haptics.selectionAsync().catch(() => {}); setPad(false) }
+  // Starting a split puts the keypad on line 2, which line 1 makes room for as it's typed.
+  const splitNow = (on: boolean) => {
+    setAutoFirst(true)
+    setFresh(false)
+    setPad(on)
+  }
+  // Done after a split line's amount: a line with no category yet goes straight on to picking one.
+  const closePad = () => {
+    Haptics.selectionAsync().catch(() => {})
+    setPad(false)
+    setFresh(false)
+    const line = d.split?.find((l) => l.key === d.target)
+    if (line && !line.category_id && toCents(line.amount)) router.push({ pathname: '/pick', params: { kind: 'category', line: line.key } })
+  }
 
   // Kept from one render to the next (this screen renders on every key): a new one rebuilds the header's buttons, and a
   // tap in between was lost.
   const live = useLatest({ row: one.data, today: t.today })
+  // A template is one line: a split line, or an entry that already repeats, can't start one.
+  const canRepeat = !!one.data && !one.data.recurring_id && !one.data.split_group
+  const template = editing && one.data?.recurring_id ? t.b?.recurring.find((r) => r.id === one.data!.recurring_id) : undefined
   const header = useMemo(() => (
     <>
       {!embedded && <Stack.Screen options={{ title: editing ? 'Edit entry' : 'New entry' }} />}
@@ -271,8 +324,20 @@ export function Entry({ embedded }: { embedded?: boolean }) {
               setDup(true)
               set({ id: undefined, date: live.current.today ?? useDraft.getState().d.date, receipt: null, removeReceipt: false })
             }}>Duplicate to today</Stack.Toolbar.MenuAction>
+            {/* An array, not a conditional child: a native menu is where Release builds drop those. */}
+            {[...(canRepeat ? [
+              <Stack.Toolbar.MenuAction key="repeat" icon="repeat" onPress={() => {
+                const row = live.current.row
+                if (row) repeatEntry(row, live.current.today, row.what || t.catOf(row).name)
+              }}>Repeat…</Stack.Toolbar.MenuAction>,
+            ] : [])]}
+            <Stack.Toolbar.MenuAction icon="bolt" onPress={() => {
+              const row = live.current.row
+              if (row) quickFromEntry(row, row.what || t.catOf(row).name)
+            }}>Make quick action</Stack.Toolbar.MenuAction>
             <Stack.Toolbar.MenuAction icon="trash" destructive onPress={() => {
               const row = live.current.row
+              leaving.current = true
               close()
               if (row) deleteTxns([row])
             }}>Delete</Stack.Toolbar.MenuAction>
@@ -280,7 +345,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
         </Stack.Toolbar>
       )}
     </>
-  ), [embedded, editing]) // eslint-disable-line react-hooks/exhaustive-deps
+  ), [embedded, editing, canRepeat]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -289,11 +354,12 @@ export function Entry({ embedded }: { embedded?: boolean }) {
         <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentInsetAdjustmentBehavior="automatic"
           automaticallyAdjustKeyboardInsets onScrollBeginDrag={() => { if (pad) setPad(false) }}
           contentContainerStyle={{ padding: space.l, gap: space.l, paddingBottom: space.xxl }}>
-          <Segmented options={KINDS} value={d.kind} onChange={setKind} />
+          {/* A split is spending made of other entries: no type to choose, no quick action to start from. */}
+          {!d.split && <Segmented options={KINDS} value={d.kind} onChange={setKind} />}
 
           {/* Quick actions fill the draft; tapping the chosen one again takes it back out. They stay put while you
               type, so the form never jumps under your finger. */}
-          {!editing && !id && t.b && t.b.favorites.length > 0 && (
+          {!editing && !id && !d.split && t.b && t.b.favorites.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l }} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
               {t.b.favorites.map((f) => {
                 const fc = t.cat.get(f.category_id)
@@ -314,7 +380,8 @@ export function Entry({ embedded }: { embedded?: boolean }) {
 
           <Tap feedback="opacity" onPress={() => openPad('main')} accessibilityLabel={`Amount ${display}`}
             style={{ alignItems: 'center', paddingVertical: space.s }}>
-            <Animated.View style={shakeStyle}>
+            <Animated.View style={[shakeStyle, { borderRadius: radius.input, borderCurve: 'continuous', paddingHorizontal: space.s,
+              backgroundColor: fresh && showPad && mainActive ? c.fill : 'transparent' }]}>
               <RollingText text={display} style={{ fontSize: display.length > 11 ? 46 : display.length > 9 ? 52 : 60, fontWeight: '700', letterSpacing: -1.5, color: d.amount ? c.label : c.label3 }} />
             </Animated.View>
             {d.split && (
@@ -347,49 +414,19 @@ export function Entry({ embedded }: { embedded?: boolean }) {
             {shape.to !== 'blank' && (
               <Row label={shape.to === 'optional' ? 'To (optional)' : 'To'} value={acctName(d.to_id)} sf="arrow.down.left" md="south_west" onPress={() => router.push({ pathname: '/pick', params: { kind: 'to' } })} />
             )}
-            <Row label="Date" value={dayLabel(d.date, t.today)} sf="calendar" md="calendar_today" onPress={() => router.push({ pathname: '/pick', params: { kind: 'date' } })} />
           </Group>
 
-          {t.b && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.l, marginTop: -space.s }} contentContainerStyle={{ gap: space.s, paddingHorizontal: space.l }}>
-              <Chip label="Today" selected={d.date === t.today} onPress={() => set({ date: t.today })} />
-              <Chip label="Yesterday" selected={d.date === addDays(t.today, -1)} onPress={() => set({ date: addDays(t.today, -1) })} />
-              <Chip label={dayLabel(addDays(t.today, -2), t.today)} selected={d.date === addDays(t.today, -2)} onPress={() => set({ date: addDays(t.today, -2) })} />
-            </ScrollView>
-          )}
+          <DateStrip />
 
-          {d.kind === 'Spending' && (
-            <Group footer={d.split ? 'Each line is saved as its own entry, linked together, so budgets see the right categories.' : undefined}>
-              <Row label="Refund" sub={d.refund ? 'Counts as money back in this category' : undefined} sf="arrow.uturn.backward" md="undo"
-                trailing={<Switch value={d.refund} onValueChange={(refund) => set({ refund })} />} chevron={false} />
-              {!editing && (
-                <Row label="Split across categories" sf="square.split.2x1" md="call_split" chevron={false}
-                  trailing={<Switch value={!!d.split} onValueChange={(on) => set(on
-                    ? { split: [{ key: 'a', category_id: d.category_id, amount: d.amount }, { key: 'b', category_id: null, amount: '' }], target: 'b' }
-                    : { split: null, target: 'main' })} />} />
-              )}
-              {d.split?.map((l, i) => {
-                const lc = l.category_id ? t.cat.get(l.category_id) : undefined
-                const lv = lc ? categoryVisual(lc) : null
-                const active = d.target === l.key
-                return (
-                  <Row key={l.key} label={lc?.name ?? `Line ${i + 1}`}
-                    leading={lv ? <Mark kind="glyph" sf={lv.sf} md={lv.md} tint={tint(lv.tint)} size={30} /> : <EmptyMark />}
-                    onPress={() => router.push({ pathname: '/pick', params: { kind: 'category', line: l.key } })}
-                    trailing={
-                      <Tap feedback="opacity" onPress={() => openPad(l.key)} hitSlop={8}
-                        style={{ minWidth: 88, height: 34, borderRadius: radius.pill, paddingHorizontal: space.m, alignItems: 'flex-end', justifyContent: 'center', backgroundColor: active ? c.ink : c.fill }}>
-                        <Txt variant="callout" num tone={active ? 'onInk' : 'label'} style={{ fontWeight: '600' }}>{formatCents(toCents(l.amount))}</Txt>
-                      </Tap>
-                    } chevron={false} />
-                )
-              })}
-              {d.split && (
-                <Row label="Add a line" sf="plus" md="add" chevron={false}
-                  onPress={() => { const key = Math.random().toString(36).slice(2, 7); set({ split: [...d.split!, { key, category_id: null, amount: left > 0 ? fromCents(left) : '' }], target: key }) }} />
-              )}
+          {/* A scheduled bill: where it came from. Changing this one entry leaves the series as it is. */}
+          {template && (
+            <Group footer="Changes here are for this entry only. The recurring entry sets the ones still to come.">
+              <Row label={`From ${template.label}`} value={FREQ_LABEL[template.freq]} sf="repeat" md="repeat"
+                onPress={() => router.push({ pathname: '/edit', params: { kind: 'recurring', id: String(template.id) } })} />
             </Group>
           )}
+
+          {d.kind === 'Spending' && <SplitGroup canSplit={!editing} left={left} onAmount={openPad} onSplit={splitNow} />}
 
           <Group>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
@@ -397,13 +434,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
               <Field value={d.note} onChangeText={(note) => set({ note })} placeholder="Note" placeholderTextColor={c.label3} multiline
                 onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} style={{ flex: 1, fontSize: 17, color: c.label, paddingTop: space.m, paddingBottom: space.m, textAlignVertical: 'center' }} />
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
-              <Icon sf="number" md="tag" size={18} color={c.label2} />
-              <Field value={tagText ?? d.tags.join(' ')} placeholder="Tags, separated by spaces" placeholderTextColor={c.label3}
-                autoCapitalize="none" autoCorrect={false} onFocus={() => setTyping(true)} onBlur={() => { setTyping(false); setTagText(null) }}
-                onChangeText={(v) => { setTagText(v); set({ tags: v.split(/[\s,]+/).map((x) => x.replace(/^#/, '').toLowerCase()).filter(Boolean) }) }}
-                style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
-            </View>
+            <TagField onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} />
             <Receipt />
           </Group>
 
@@ -443,9 +474,4 @@ export function Entry({ embedded }: { embedded?: boolean }) {
       </View>
     </>
   )
-}
-
-function EmptyMark() {
-  const { c } = useTheme()
-  return <View style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: c.label3, borderStyle: 'dashed' }} />
 }

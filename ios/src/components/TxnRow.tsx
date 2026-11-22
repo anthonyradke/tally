@@ -4,7 +4,7 @@ import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withDelay
 import { Link, router } from 'expo-router'
 import { scheduleOnRN } from 'react-native-worklets'
 import type { Account, Category, Txn } from '@/lib/api'
-import { deleteTxns, openEntry } from '@/lib/actions'
+import { deleteTxns, openEntry, openTag, quickFromEntry, repeatEntry } from '@/lib/actions'
 import { isFuture } from '@/lib/dates'
 import { useFresh } from '@/lib/motion'
 import { rowAmount } from '@/lib/txn'
@@ -66,6 +66,12 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
   const duplicate = () => openEntry(t.id, 'duplicate')
   const place = merchantKey(t.what)
   const visit = () => router.push({ pathname: '/merchant/[key]', params: { key: place } })
+  const tag = t.tags[0]
+  const showTag = () => openTag(tag)
+  // A template or quick action is one line: a split line or a row that already repeats doesn't offer them.
+  const single = !t.split_group
+  const repeat = () => repeatEntry(t, today, t.what || c.name)
+  const quick = () => quickFromEntry(t, t.what || c.name)
   const left: SwipeAction[] = [{ label: 'Duplicate', sf: 'plus.square.on.square', md: 'content_copy', color: '#0A84FF', run: duplicate }]
   const right: SwipeAction[] = [
     { label: 'Category', sf: 'square.grid.2x2', md: 'category', color: '#8E8E93', run: recategorize },
@@ -94,6 +100,11 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
             <Txt variant="sub" tone="label2" numberOfLines={1} style={{ flexShrink: 1 }}>
               {future ? `Scheduled, ${sub}` : sub}
             </Txt>
+            {tag && (
+              <Tap feedback="opacity" onPress={showTag} disabled={selecting} accessibilityRole="link" hitSlop={{ top: 12, bottom: 12, left: 6, right: 6 }} style={{ flexShrink: 2 }}>
+                <Txt variant="sub" tone="label2" numberOfLines={1} style={{ fontWeight: '600' }}>{`#${tag}${t.tags.length > 1 ? ` +${t.tags.length - 1}` : ''}`}</Txt>
+              </Tap>
+            )}
             {t.split_group && <Icon sf="square.split.2x1" md="call_split" size={11} color={theme.c.label2} />}
             {t.receipt && <Icon sf="paperclip" md="attach_file" size={11} color={theme.c.label2} />}
             {t.recurring_id && <Icon sf="repeat" md="repeat" size={11} color={theme.c.label2} />}
@@ -116,12 +127,12 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
           toggles), and the swipe and menu actions are its custom actions. */}
       <View onLayout={(e) => fold.measured(e.nativeEvent.layout.height)}
         accessible accessibilityRole="button"
-        accessibilityLabel={`${t.what || c.name}, ${c.name}, ${amt.sign === 'always' ? '+' : ''}${(amt.cents / 100).toFixed(2)} dollars${where ? `, ${where}` : ''}${future ? ', scheduled' : ''}`}
+        accessibilityLabel={`${t.what || c.name}, ${c.name}, ${amt.sign === 'always' ? '+' : ''}${(amt.cents / 100).toFixed(2)} dollars${where ? `, ${where}` : ''}${future ? ', scheduled' : ''}${t.tags.length ? `, tagged ${t.tags.join(', ')}` : ''}`}
         accessibilityState={selecting ? { selected: !!selected } : undefined}
-        accessibilityActions={[{ name: 'activate' }, ...(selecting ? [] : [{ name: 'edit', label: 'Edit' }, { name: 'duplicate', label: 'Duplicate to today' }, { name: 'category', label: 'Change category' }, ...(place ? [{ name: 'place', label: `All at ${t.what}` }] : []), { name: 'delete', label: 'Delete' }])]}
+        accessibilityActions={[{ name: 'activate' }, ...(selecting ? [] : [{ name: 'edit', label: 'Edit' }, { name: 'duplicate', label: 'Duplicate to today' }, { name: 'category', label: 'Change category' }, ...(place ? [{ name: 'place', label: `All at ${t.what}` }] : []), ...(tag ? [{ name: 'tag', label: `All tagged ${tag}` }] : []), ...(single && !t.recurring_id ? [{ name: 'repeat', label: 'Repeat' }] : []), ...(single ? [{ name: 'quick', label: 'Make quick action' }] : []), { name: 'delete', label: 'Delete' }])]}
         onAccessibilityAction={(e) => {
           const n = e.nativeEvent.actionName
-          if (n === 'activate') press(); else if (n === 'edit') openEntry(t.id); else if (n === 'duplicate') duplicate(); else if (n === 'category') recategorize(); else if (n === 'place') visit(); else if (n === 'delete') remove()
+          if (n === 'activate') press(); else if (n === 'edit') openEntry(t.id); else if (n === 'duplicate') duplicate(); else if (n === 'category') recategorize(); else if (n === 'place') visit(); else if (n === 'tag') showTag(); else if (n === 'repeat') repeat(); else if (n === 'quick') quick(); else if (n === 'delete') remove()
         }}>
         <SwipeRow left={left} right={right} enabled={!selecting} resetKey={`${t.id}:${attempt}`}>
           {web ? row : (
@@ -134,6 +145,9 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
                   <Link.MenuAction key="dup" title="Duplicate to today" icon="plus.square.on.square" onPress={duplicate} />,
                   <Link.MenuAction key="cat" title="Change category" icon="square.grid.2x2" onPress={recategorize} />,
                   ...(place ? [<Link.MenuAction key="place" title={`All at ${t.what}`} icon="storefront" onPress={visit} />] : []),
+                  ...(tag ? [<Link.MenuAction key="tag" title={`All tagged #${tag}`} icon="number" onPress={showTag} />] : []),
+                  ...(single && !t.recurring_id ? [<Link.MenuAction key="repeat" title="Repeat…" icon="repeat" onPress={repeat} />] : []),
+                  ...(single ? [<Link.MenuAction key="quick" title="Make quick action" icon="bolt" onPress={quick} />] : []),
                   <Link.MenuAction key="del" title="Delete" icon="trash" destructive onPress={remove} />,
                 ]}
               </Link.Menu>
