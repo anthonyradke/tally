@@ -5,6 +5,7 @@ import { ScrollView, TextInput, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { AccountMark } from '@/components/AccountMark'
+import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
@@ -27,9 +28,9 @@ const TYPE_ORDER: CatType[] = ['Spending', 'Money in', 'Transfer', 'Saving', 'Lo
 const KIND_ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
 
 export default function Pick() {
-  const { kind, line, ids, current } = useLocalSearchParams<{ kind: string; line?: string; ids?: string; current?: string }>()
+  const { kind, line, ids, current, side } = useLocalSearchParams<{ kind: string; line?: string; ids?: string; current?: string; side?: string }>()
   const { c } = useTheme()
-  const title = { category: 'Category', from: 'From', to: 'To', date: 'Date', 'bulk-category': ids?.includes(',') ? 'Move to category' : 'Category', 'bulk-tag': 'Add a tag' }[kind] ?? ''
+  const title = { category: 'Category', from: 'From', to: 'To', date: 'Date', 'bulk-category': ids?.includes(',') ? 'Move to category' : 'Category', 'bulk-tag': 'Add a tag', 'bulk-account': ids?.includes(',') ? 'Move to account' : 'Account' }[kind] ?? ''
   return (
     <ScrollView contentContainerStyle={{ padding: space.l, paddingTop: space.xl, gap: space.l, paddingBottom: 48 }} style={{ backgroundColor: c.bg }}>
       <Txt variant="title2" accessibilityRole="header" style={{ paddingHorizontal: space.xs }}>{title}</Txt>
@@ -37,6 +38,7 @@ export default function Pick() {
       {(kind === 'from' || kind === 'to') && <Accounts side={kind} />}
       {kind === 'date' && <DateSheet />}
       {kind === 'bulk-tag' && <BulkTag ids={ids ?? ''} />}
+      {kind === 'bulk-account' && <BulkAccount ids={ids ?? ''} side={side} />}
     </ScrollView>
   )
 }
@@ -108,11 +110,8 @@ function Categories({ line, ids, checked }: { line?: string; ids?: string; check
 }
 
 function Accounts({ side }: { side: 'from' | 'to' }) {
-  const t = useTally()
   const { c } = useTheme()
   const { d, set } = useDraft()
-  if (!t.b) return null
-  const bal = monthsNow(t.b).cur?.balances ?? {}
   const current = side === 'from' ? d.from_id : d.to_id
   const optional = SHAPES[d.kind][side] === 'optional'
   const choose = (id: number | null) => { set(side === 'from' ? { from_id: id } : { to_id: id }); done() }
@@ -121,20 +120,67 @@ function Accounts({ side }: { side: 'from' | 'to' }) {
       {optional && (
         <Group><Row label="None" onPress={() => choose(null)} chevron={false} trailing={current == null ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : undefined} /></Group>
       )}
-      {KIND_ORDER.map((k) => {
-        const list = t.b!.accounts.filter((a) => a.kind === k && (a.active || a.id === current))
-        if (!list.length) return null
-        return (
-          <Group key={k} header={KIND_LABEL[k]}>
-            {list.map((a) => (
-              <Row key={a.id} label={a.name} onPress={() => choose(a.id)} chevron={false}
-                leading={<AccountMark a={a} size={30} />}
-                value={<Money cents={bal[String(a.id)] ?? a.start_balance} tone="neutral" muted variant="callout" />}
-                trailing={a.id === current ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : <View style={{ width: 16 }} />} />
-            ))}
-          </Group>
-        )
-      })}
+      <AccountGroups current={current} onPick={choose} />
+    </>
+  )
+}
+
+/** Every account by kind with its balance, the current one ticked. Hidden ones only when current. */
+function AccountGroups({ current, onPick }: { current?: number | null; onPick: (id: number) => void }) {
+  const t = useTally()
+  const { c } = useTheme()
+  if (!t.b) return null
+  const bal = monthsNow(t.b).cur?.balances ?? {}
+  return KIND_ORDER.map((k) => {
+    const list = t.b!.accounts.filter((a) => a.kind === k && (a.active || a.id === current))
+    if (!list.length) return null
+    return (
+      <Group key={k} header={KIND_LABEL[k]}>
+        {list.map((a) => (
+          <Row key={a.id} label={a.name} onPress={() => onPick(a.id)} chevron={false}
+            leading={<AccountMark a={a} size={30} />}
+            value={<Money cents={bal[String(a.id)] ?? a.start_balance} tone="neutral" muted variant="callout" />}
+            trailing={a.id === current ? <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" /> : <View style={{ width: 16 }} />} />
+        ))}
+      </Group>
+    )
+  })
+}
+
+/** Bulk account change: a new From for spending (or To for money in) on every selected entry, with Undo. A mix of
+ *  both asks which side first. */
+function BulkAccount({ ids, side: given }: { ids: string; side?: string }) {
+  const t = useTally()
+  const [side, setSide] = useState<'from' | 'to'>(given === 'to' ? 'to' : 'from')
+  const busy = useBusy()
+  const closeHere = useCloseHere()
+  const list = ids.split(',').map(Number)
+  // The one account they all share on that side is ticked.
+  const now = new Set(list.map((id) => cachedTxn(id)).map((r) => (r ? (side === 'from' ? r.from_id : r.to_id) : undefined)))
+  const current = now.size === 1 ? [...now][0] : undefined
+  const choose = (id: number) => busy(async () => {
+    try {
+      const r = await api.bulk({ ids: list, action: 'account', side, account_id: id })
+      invalidateAll().catch(() => {})
+      const name = t.acct.get(id)?.name ?? 'the account'
+      toast({ text: `Moved ${r.count === 1 ? '1 entry' : `${r.count} entries`} to ${name}`, action: r.before ? undo(r.before) : undefined })
+    } catch (e) { toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' }) }
+    Haptics.selectionAsync().catch(() => {})
+    closeHere()
+  })
+  return (
+    <>
+      {given === 'either' ? (
+        <View style={{ flexDirection: 'row', gap: space.s, paddingHorizontal: space.xs }}>
+          <Chip label="From" selected={side === 'from'} onPress={() => setSide('from')} />
+          <Chip label="To" selected={side === 'to'} onPress={() => setSide('to')} />
+        </View>
+      ) : (
+        <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.xs }}>
+          {side === 'from' ? 'The account the money came out of.' : 'The account the money went into.'}
+        </Txt>
+      )}
+      <AccountGroups current={current} onPick={choose} />
     </>
   )
 }
@@ -150,7 +196,7 @@ function DateSheet() {
   )
 }
 
-/** Undo for a bulk move or tag: puts each row's category and tags back. */
+/** Undo for a bulk move, tag or account change: puts each row's category and tags (and accounts) back. */
 const undo = (before: BulkBefore[]) => ({
   label: 'Undo',
   run: async () => {
