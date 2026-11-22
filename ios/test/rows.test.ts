@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatType } from '@/lib/api'
 import { dailyBalances, groupTotal, split } from '@/lib/balances'
-import { extraCount, fromViewQuery, toQuery, viewQuery, type Filters } from '@/lib/filters'
+import { extraCount, fromViewQuery, isView, toQuery, viewQuery, type Filters } from '@/lib/filters'
 import { fits, SHAPES } from '@/lib/shapes'
 import { groupByDay, rowAmount } from '@/lib/txn'
 import { acct, boot, row } from './fixtures.ts'
@@ -68,9 +68,24 @@ test('filters: badge count and the query sent to the server', () => {
 test('a saved view brings back the filters it saved', () => {
   const f: Filters = { q: 'café & co', type: 'Spending', category: 3, account: 1, start: '2026-09-01', end: '2026-09-30',
     tag: 'trip', group: 'abc123def456', sort: 'amount', dir: 'asc' }
-  assert.deepEqual(fromViewQuery(viewQuery(f)), f)
+  const today = '2026-11-20'
+  assert.deepEqual(fromViewQuery(viewQuery({ ...f, start: '2026-09-03', end: '2026-09-17' }, today), today), { ...f, start: '2026-09-03', end: '2026-09-17' })
   const plain: Filters = { q: '', type: '', sort: 'date', dir: 'desc' }
-  assert.deepEqual(fromViewQuery(viewQuery(plain)), { ...plain, category: undefined, account: undefined, start: undefined, end: undefined, tag: undefined, group: undefined })
+  assert.deepEqual(fromViewQuery(viewQuery(plain, today), today), { ...plain, category: undefined, account: undefined, start: undefined, end: undefined, tag: undefined, group: undefined })
+})
+
+test('a saved view keeps a named range by its name, so last month moves on with the calendar', () => {
+  const f: Filters = { q: '', type: '', category: 5, start: '2026-10-01', end: '2026-10-31', sort: 'date', dir: 'desc' }
+  const saved = viewQuery(f, '2026-11-20')
+  assert.ok(saved.includes('when=last') && !saved.includes('start='))
+  const dec = fromViewQuery(saved, '2026-12-04')
+  assert.deepEqual([dec.start, dec.end, dec.category], ['2026-11-01', '2026-11-30', 5])
+  // A day from Insights, or a month picked from a category, stays that day or month.
+  assert.ok(viewQuery({ ...f, start: '2026-10-05', end: '2026-10-05' }, '2026-11-20').includes('start=2026-10-05'))
+  // An old view saved with dates still reads, and the filters a view puts on light it up.
+  const old = 'category=5&start=2026-10-01&end=2026-10-31&sort=date&dir=desc'
+  assert.ok(isView(old, f, '2026-11-20') && isView(saved, f, '2026-11-20'))
+  assert.ok(!isView(saved, { ...f, q: 'chipotle' }, '2026-11-20'))
 })
 
 test('a card or loan paid past zero reads as a credit, not negative owed', () => {

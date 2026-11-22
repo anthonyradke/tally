@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshControl, TextInput, View } from 'react-native'
-import { router, Stack, useLocalSearchParams } from 'expo-router'
-import { FlashList } from '@shopify/flash-list'
+import { router, Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRoute } from 'expo-router'
+import { FlashList, type FlashListRef } from '@shopify/flash-list'
 import type { SearchBarCommands } from 'react-native-screens'
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import * as Haptics from 'expo-haptics'
-import Animated, { Easing, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
 import { FilterBar } from '@/components/FilterBar'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
@@ -13,56 +13,64 @@ import { merchantKey } from '@/icons/merchants'
 import { Money } from '@/components/Money'
 import { Glow } from '@/components/Glow'
 import { HAIRLINE } from '@/components/Panel'
+import { SelectionBar } from '@/components/SelectionBar'
 import { StateView } from '@/components/StateView'
 import { closeSwipes } from '@/components/SwipeRow'
 import { Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { api, type Txn } from '@/lib/api'
-import { deleteTxns } from '@/lib/actions'
-import { addDays, dayLabel } from '@/lib/dates'
+import { dayLabel, lastOfMonth } from '@/lib/dates'
+import { feedItems, type Item } from '@/lib/feed'
+import { isAhead, next30 } from '@/lib/filterBar'
 import { EMPTY, extraCount, toId, toQuery, useFilters, type Filters } from '@/lib/filters'
 import { formatCents } from '@/lib/money'
 import { useOutbox } from '@/lib/outbox'
 import { usePullRefresh } from '@/lib/refresh'
-import { useLatest } from '@/lib/nav'
+import { useBusy, useLatest } from '@/lib/nav'
 import { useTally } from '@/lib/tally'
+import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
 
 const PAGE = 100
-
-type Item =
-  | { kind: 'sched'; key: string; count: number; cents: number; open: boolean }
-  | { kind: 'head'; key: string; date: string; spent: number }
-  | { kind: 'row'; key: string; t: Txn; first: boolean; last: boolean }
+const MAX_PICK = 5000 // what one bulk action takes (inputs.MAX_IDS)
+const filterKey = () => JSON.stringify(toQuery(useFilters.getState().f))
+const HINT ='Search names, notes, tags and amounts. Try 12.50, >50, yesterday, last week, last month, aug or #trip.'
 
 export default function Activity() {
   const { c } = useTheme()
   const t = useTally()
   const { f, set } = useFilters()
-  const params = useLocalSearchParams<{ q?: string; when?: string; day?: string; category?: string; account?: string; tag?: string; group?: string }>()
+  const params = useLocalSearchParams<{ q?: string; when?: string; day?: string; month?: string; category?: string; account?: string; tag?: string; group?: string }>()
   const [selecting, setSelecting] = useState(false)
   const [picked, setPicked] = useState<Set<number>>(new Set())
+  const [pool, setPool] = useState<Map<number, Txn>>(new Map()) // rows Select all fetched past the loaded pages
+  const [searching, setSearching] = useState(false)
   const queued = useOutbox((s) => s.items)
+  const busy = useBusy()
 
-  // Deep links from Home, a category, an account or a tag start from cleared filters: added to whatever was on (a
-  // Money in chip left from earlier), "See all" often showed no matches. The filters are shared with the Activity
-  // tab, so the ones it had come back when this screen closes.
-  const before = useRef<Filters | null>(null)
-  useEffect(() => () => { if (before.current) useFilters.getState().replace(before.current) }, [])
+  // Activity pushed from another screen (Home's Recent, a category, an account, a tag) starts from cleared filters,
+  // with or without params: a plain link used to open on whatever search the tab had left, often hidden. The filters
+  // are shared with the Activity tab, so the ones it had come back when this screen closes.
+  const nav = useNavigation()
+  const route = useRoute()
+  const [pushed] = useState(() => nav.getState()?.routes[0]?.key !== route.key)
+  const before = useRef<{ f: Filters; view: number | null } | null>(null)
+  useEffect(() => () => { if (before.current) useFilters.getState().replace(before.current.f, before.current.view) }, [])
   useEffect(() => {
-    const p: Partial<typeof f> = {}
-    if (params.when === 'upcoming' && t.b) { p.start = addDays(t.b.today, 1); p.end = undefined; p.sort = 'date'; p.dir = 'asc' }
+    const p: Partial<Filters> = {}
+    if (params.when === 'upcoming' && t.b) Object.assign(p, next30(t.b.today)) // Home's Coming up: the same 30 days
     if (params.day) { p.start = params.day; p.end = params.day; p.sort = 'date'; p.dir = 'desc' } // a day from Insights' calendar
+    if (params.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(params.month)) { p.start = `${params.month}-01`; p.end = lastOfMonth(p.start) } // a month from a category
     if (params.q) p.q = params.q // a place's page: everything with its name
     if (params.category) p.category = toId(params.category)
     if (params.account) p.account = toId(params.account)
     if (params.tag) p.tag = params.tag
     if (params.group) p.group = params.group
-    if (!Object.keys(p).length) return
-    before.current ??= useFilters.getState().f
+    if (!Object.keys(p).length && !pushed) return
+    before.current ??= { f: useFilters.getState().f, view: useFilters.getState().view }
     useFilters.getState().replace({ ...EMPTY, ...p })
-  }, [params.q, params.when, params.day, params.category, params.account, params.tag, params.group, t.b?.today]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [params.q, params.when, params.day, params.month, params.category, params.account, params.tag, params.group, t.b?.today]) // eslint-disable-line react-hooks/exhaustive-deps
   // An account that's gone (deleted since a saved view, or a stale link) would filter to nothing with no chip lit.
   useEffect(() => {
     if (t.b && f.account != null && !t.b.accounts.some((a) => a.id === f.account)) set({ account: undefined })
@@ -90,28 +98,27 @@ export default function Activity() {
     return (q.data?.pages.flatMap((p) => p.items) ?? []).filter((r) => !seen.has(r.id) && !!seen.add(r.id))
   }, [q.data])
   const first = q.data?.pages[0]
+  const today = t.b?.today ?? t.today
+  const ahead = isAhead(f, today)
+
+  // Filters changed from the sheet or a saved view land at the top of the new list, where its count and total are;
+  // edits, deletes and refreshes keep the place. The top is where the first drag started (iOS insets it under the
+  // large title), so a list never dragged is left alone.
+  const list = useRef<FlashListRef<Item>>(null)
+  const topY = useRef<number | null>(null)
+  const leftAt = useRef<string | null>(null)
+  useFocusEffect(useCallback(() => {
+    if (leftAt.current != null && leftAt.current !== filterKey() && topY.current != null) list.current?.scrollToOffset({ offset: topY.current, animated: true })
+    return () => { leftAt.current = filterKey() }
+  }, []))
 
   // Newest first, the scheduled entries (recurring bills a month out) used to fill the top of the list before anything
   // that had happened. They fold into one row until you open it; a date filter or the Upcoming chip shows them as usual.
   const [showSched, setShowSched] = useState(false)
-  const fold = f.sort === 'date' && f.dir === 'desc' && !f.start && !f.end
-  const items = useMemo<Item[]>(() => {
-    if (f.sort === 'amount') return rows.map((r, i) => ({ kind: 'row', key: `r${r.id}`, t: r, first: i === 0, last: i === rows.length - 1 }))
-    const out: Item[] = []
-    const ahead = fold && t.b ? rows.filter((r) => r.date > t.b!.today) : []
-    if (ahead.length) {
-      out.push({ kind: 'sched', key: 'sched', count: ahead.length, cents: ahead.reduce((n, x) => n + (t.typeOf(x) === 'Spending' ? x.amount : 0), 0), open: showSched })
-    }
-    const list = ahead.length && !showSched ? rows.slice(ahead.length) : rows
-    const spent = new Map<string, number>() // one pass: filtering every row for each day header was quadratic
-    for (const x of list) if (t.typeOf(x) === 'Spending') spent.set(x.date, (spent.get(x.date) ?? 0) + x.amount)
-    for (let i = 0; i < list.length; i++) {
-      const r = list[i]
-      if (i === 0 || list[i - 1].date !== r.date) out.push({ kind: 'head', key: `h${r.date}`, date: r.date, spent: spent.get(r.date) ?? 0 })
-      out.push({ kind: 'row', key: `r${r.id}`, t: r, first: i === 0 || list[i - 1].date !== r.date, last: i === list.length - 1 || list[i + 1].date !== r.date })
-    }
-    return out
-  }, [rows, f.sort, t, fold, showSched])
+  const items = useMemo<Item[]>(() => feedItems(rows, {
+    byAmount: f.sort === 'amount', fold: f.sort === 'date' && f.dir === 'desc' && !f.start && !f.end, showSched,
+    exact: first?.exact ?? 0, today, typeOf: t.typeOf,
+  }), [rows, f.sort, f.dir, f.start, f.end, showSched, first?.exact, today, t.typeOf])
 
   const filtered = !!(f.q || f.type || extraCount(f))
   // Searching for a place: its page is one tap away (the name most of the matches share).
@@ -143,9 +150,26 @@ export default function Activity() {
   const endSelect = () => {
     setSelecting(false)
     setPicked(new Set())
+    setPool(new Map())
     sel.set(withTiming(0, { duration: 240, easing: Easing.bezier(0.23, 1, 0.32, 1) }))
   }
-  const chosen = rows.filter((r) => picked.has(r.id))
+  const matching = Math.min(first?.total ?? rows.length, MAX_PICK)
+  // Every match of the filters, including pages not loaded yet (fetched once, up to what one bulk action takes).
+  const selectAll = (on: boolean) => busy(async () => {
+    Haptics.selectionAsync().catch(() => {})
+    if (!on) { setPicked(new Set()); return }
+    if (rows.length >= matching) { setPicked(new Set(rows.slice(0, matching).map((r) => r.id))); return }
+    try {
+      const all = await api.transactions({ ...query, limit: matching, offset: 0 })
+      setPool(new Map(all.items.map((r) => [r.id, r])))
+      setPicked(new Set(all.items.map((r) => r.id)))
+    } catch { toast({ text: "Couldn't load every match. Tally is unreachable.", tone: 'error' }) }
+  })
+  const chosen = useMemo(() => {
+    const byId = new Map(pool)
+    for (const r of rows) byId.set(r.id, r)
+    return [...picked].map((id) => byId.get(id)).filter((r): r is Txn => !!r)
+  }, [picked, pool, rows])
 
   const header = (
     <View style={{ gap: space.m, paddingBottom: space.s }}>
@@ -154,9 +178,10 @@ export default function Activity() {
         <View style={{ height: 40, borderRadius: radius.input, backgroundColor: c.fill, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.m, gap: space.s, marginHorizontal: space.l }}>
           <Icon sf="magnifyingglass" md="search" size={16} color={c.label2} />
           <TextInput placeholder="Search entries, notes, tags, amounts" placeholderTextColor={c.label2} value={f.q} onChangeText={(q) => set({ q })}
-            style={{ flex: 1, fontSize: 17, color: c.label }} />
+            onFocus={() => setSearching(true)} onBlur={() => setSearching(false)} style={{ flex: 1, fontSize: 17, color: c.label }} />
         </View>
       )}
+      {searching && !f.q && <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l + space.xs }}>{HINT}</Txt>}
       <FilterBar />
       {queued.length > 0 && (
         // Each waiting entry, dimmed like a scheduled one, so a week caught up offline still reads as done.
@@ -195,8 +220,9 @@ export default function Activity() {
       )}
       {filtered && first && (
         <View style={{ flexDirection: 'row', gap: space.l, paddingHorizontal: space.l + space.xs }}>
-          {first.by_type.Spending != null && <Sum label="Spent" cents={first.by_type.Spending} />}
-          {first.by_type['Money in'] != null && <Sum label="Money in" cents={first.by_type['Money in']} pos />}
+          {/* Only scheduled entries: nothing is spent yet. */}
+          {first.by_type.Spending != null && <Sum label={ahead ? 'Scheduled' : 'Spent'} cents={first.by_type.Spending} />}
+          {first.by_type['Money in'] != null && <Sum label={ahead ? 'Coming in' : 'Money in'} cents={first.by_type['Money in']} pos />}
         </View>
       )}
     </View>
@@ -219,6 +245,7 @@ export default function Activity() {
     <>
       {process.env.EXPO_OS !== 'web' && (
         <Stack.SearchBar ref={searchBar} placeholder="Entries, notes, tags, amounts" onChangeText={(e) => { typed.current = e.nativeEvent.text; set({ q: e.nativeEvent.text }) }}
+          onFocus={() => setSearching(true)} onBlur={() => setSearching(false)}
           onCancelButtonPress={() => { typed.current = ''; set({ q: '' }) }} hideWhenScrolling={false} />
       )}
       {/* Buttons are direct children (arrays, not a fragment): the native toolbar silently drops a fragment. */}
@@ -241,6 +268,7 @@ export default function Activity() {
       {toolbar}
       <View style={{ flex: 1, backgroundColor: c.bg }} collapsable={false}>
         <FlashList
+          ref={list}
           data={t.b ? items : []}
           keyExtractor={(it) => it.key}
           getItemType={(it) => it.kind}
@@ -251,7 +279,7 @@ export default function Activity() {
           keyboardDismissMode="on-drag"
           contentContainerStyle={{ paddingBottom: selecting ? 200 : 120 }}
           extraData={picked}
-          onScrollBeginDrag={closeSwipes}
+          onScrollBeginDrag={(e) => { closeSwipes(); topY.current = Math.min(topY.current ?? Infinity, e.nativeEvent.contentOffset.y) }}
           ListHeaderComponent={header}
           refreshControl={<RefreshControl {...pull} />}
           onEndReached={() => { if (q.hasNextPage && !q.isFetchingNextPage) q.fetchNextPage() }}
@@ -275,11 +303,15 @@ export default function Activity() {
                 </Tap>
               )
             }
+            if (item.kind === 'label') {
+              return <Txt variant="sub" tone="label2" accessibilityRole="header" style={{ paddingHorizontal: space.l + space.xs, paddingTop: space.l, fontWeight: '600' }}>{item.text}</Txt>
+            }
             if (item.kind === 'head') {
               return (
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: space.l + space.xs, paddingTop: space.l, paddingBottom: space.s }}>
                   <Txt variant="headline">{dayLabel(item.date, t.b!.today)}</Txt>
-                  {item.spent > 0 && <Txt variant="sub" tone="label2" num>{formatCents(item.spent)} spent</Txt>}
+                  {/* A day still ahead has bills due, not spending. */}
+                  {item.spent > 0 && <Txt variant="sub" tone="label2" num>{formatCents(item.spent)} {item.date > t.b!.today ? 'due' : 'spent'}</Txt>}
                 </View>
               )
             }
@@ -299,7 +331,7 @@ export default function Activity() {
             )
           }}
         />
-        {selecting && <SelectionBar chosen={chosen} onDone={endSelect} />}
+        {selecting && <SelectionBar chosen={chosen} matching={matching} onAll={selectAll} onDone={endSelect} />}
       </View>
     </>
   )
@@ -328,39 +360,8 @@ function Empty({ filtered }: { filtered: boolean }) {
       <Icon sf={filtered ? 'magnifyingglass' : 'tray'} md={filtered ? 'search_off' : 'inbox'} size={32} color={c.label3} />
       <Txt variant="headline">{filtered ? 'No matches' : 'Nothing logged yet'}</Txt>
       <Txt variant="callout" tone="label2" style={{ textAlign: 'center' }}>
-        {filtered ? 'Try fewer filters, or search for part of a name, a note, a tag or an amount. Search also takes >50, <20, a month like aug, and #tags.' : 'Tap + to add your first entry.'}
+        {filtered ? 'Try fewer filters, or search for part of a name, a note, a tag or an amount. Search also takes >50, <20, yesterday, last week, a month like aug, and #tags.' : 'Tap + to add your first entry.'}
       </Txt>
     </View>
-  )
-}
-
-/** Bulk actions for selected rows: recategorize, tag, delete (with undo). */
-function SelectionBar({ chosen, onDone }: { chosen: Txn[]; onDone: () => void }) {
-  const { c } = useTheme()
-  const n = chosen.length
-  const act = (fn: () => void) => () => { if (n) fn() }
-  return (
-    <Animated.View entering={SlideInDown.duration(320).easing(Easing.bezier(0.23, 1, 0.32, 1))} exiting={SlideOutDown.duration(220)}
-      style={{ position: 'absolute', left: space.l, right: space.l, bottom: 100, borderRadius: radius.panel, borderCurve: 'continuous', backgroundColor: c.panelRaised, padding: space.m, gap: space.s, boxShadow: '0 8px 30px rgba(0,0,0,0.18)' }}>
-      <Txt variant="sub" tone="label2" style={{ textAlign: 'center' }}>{n ? `${n} selected` : 'Tap entries to select them'}</Txt>
-      <View style={{ flexDirection: 'row', gap: space.s }}>
-        <BarBtn label="Category" sf="square.grid.2x2" md="category" disabled={!n}
-          onPress={act(() => router.push({ pathname: '/pick', params: { kind: 'bulk-category', ids: chosen.map((x) => x.id).join(',') } }))} />
-        <BarBtn label="Tag" sf="number" md="tag" disabled={!n}
-          onPress={act(() => router.push({ pathname: '/pick', params: { kind: 'bulk-tag', ids: chosen.map((x) => x.id).join(',') } }))} />
-        <BarBtn label="Delete" sf="trash" md="delete" destructive disabled={!n} onPress={act(() => { deleteTxns(chosen); onDone() })} />
-      </View>
-    </Animated.View>
-  )
-}
-
-function BarBtn({ label, sf, md, onPress, destructive, disabled }: { label: string; sf: 'trash'; md: string; onPress: () => void; destructive?: boolean; disabled?: boolean } | { label: string; sf: 'square.grid.2x2' | 'number'; md: string; onPress: () => void; destructive?: boolean; disabled?: boolean }) {
-  const { c } = useTheme()
-  const color = destructive ? c.neg : c.label
-  return (
-    <Tap onPress={onPress} disabled={disabled} style={{ flex: 1, height: 52, borderRadius: radius.input, backgroundColor: c.fill, alignItems: 'center', justifyContent: 'center', gap: 2, opacity: disabled ? 0.4 : 1 }}>
-      <Icon sf={sf} md={md} size={17} color={color} />
-      <Txt variant="foot" style={{ color }}>{label}</Txt>
-    </Tap>
   )
 }

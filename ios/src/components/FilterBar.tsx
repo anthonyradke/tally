@@ -1,15 +1,20 @@
 // Activity's chip rows, as set up in Settings > Activity filters. Tapping a chip picks it; each row's first chip lets go.
 import { Children, useEffect, useRef, type ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated'
+import * as Haptics from 'expo-haptics'
 import { AccountMark } from '@/components/AccountMark'
 import { Chip } from '@/components/Chip'
+import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
+import { Tap } from '@/components/Tap'
+import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import type { CatType } from '@/lib/api'
-import { activeRange, bar, ranges, SORTS, type BarRow } from '@/lib/filterBar'
+import { activeRange, bar, pills, ranges, SORTS, type BarRow } from '@/lib/filterBar'
 import { useFilters, type Filters } from '@/lib/filters'
 import { useTally } from '@/lib/tally'
-import { space, useTheme } from '@/theme'
+import { radius, space, useTheme } from '@/theme'
 
 const ANY: Partial<Record<BarRow, string>> = { type: 'All', account: 'Any account', category: 'Any category', when: 'All time' }
 
@@ -35,7 +40,7 @@ export function FilterBar() {
       case 'type': return f.type || null
       case 'account': return f.account != null ? String(f.account) : null
       case 'category': return f.category != null ? String(f.category) : null
-      case 'when': { const r = activeRange(f, b.today); return r === 'all' ? null : r }
+      case 'when': { const r = activeRange(f, b.today); return r === 'all' ? null : r ?? 'custom' } // a custom range lights no chip, not All time
       case 'sort': return SORTS.find(([, , x]) => x.sort === f.sort && x.dir === f.dir)?.[0] ?? null // no "any" chip: Newest lights up
     }
   }
@@ -57,7 +62,31 @@ export function FilterBar() {
           </ChipRow>
         )
       })}
+      <Pills />
     </>
+  )
+}
+
+/** The filters on with no chip lit for them (a row switched off in Settings, a tag, a day from Insights), so none is
+ *  ever on out of sight. Tapping one takes it off. */
+function Pills() {
+  const t = useTally()
+  const { c } = useTheme()
+  const { f, set } = useFilters()
+  const list = t.b ? pills(t.b, f) : []
+  if (!list.length) return null
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s, paddingHorizontal: space.l }}>
+      {list.map((p) => (
+        <Animated.View key={p.key} entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)} layout={LinearTransition.duration(200)}>
+          <Tap onPress={() => { Haptics.selectionAsync().catch(() => {}); set(p.clear) }} accessibilityLabel={`${p.label}. Remove filter`}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs + 2, height: 30, paddingLeft: space.m, paddingRight: space.s + 2, borderRadius: radius.pill, backgroundColor: c.ink }}>
+            <Txt variant="sub" tone="onInk" style={{ fontWeight: '600' }} numberOfLines={1}>{p.label}</Txt>
+            <Icon sf="xmark" md="close" size={10} color={c.onInk} weight="bold" />
+          </Tap>
+        </Animated.View>
+      ))}
+    </View>
   )
 }
 

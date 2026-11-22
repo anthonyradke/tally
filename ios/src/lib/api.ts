@@ -23,8 +23,9 @@ export interface MonthRow { month: string; money_in: number; spent: number; loan
 export interface TagCount { tag: string; count: number }
 /** `tags`: most used first. Missing from a bootstrap kept on the phone from before the server sent it. */
 export interface Bootstrap { today: string; start: string; accounts: Account[]; categories: Category[]; favorites: Favorite[]; budgets: Budget[]; recurring: Recurring[]; saved_views: SavedView[]; tags?: TagCount[]; settings: Record<string, string>; months: MonthRow[]; ef: { goal: number; progress: number }; roth: { ytd: number; limit: number; category_id: number | null } }
-export interface BulkBefore { id: number; category_id: number; tags: string[] }
-export interface TxnPage { total: number; sum: number; by_type: Partial<Record<CatType, number>>; items: Txn[] }
+export interface BulkBefore { id: number; category_id: number; tags: string[]; from_id?: number | null; to_id?: number | null }
+/** `exact`: how many of the first rows have the very amount a search typed (they come first). */
+export interface TxnPage { total: number; sum: number; by_type: Partial<Record<CatType, number>>; exact: number; items: Txn[] }
 export interface TxnQuery { q?: string; category?: number; account?: number; type?: CatType | ''; start?: string; end?: string; amount_min?: number; amount_max?: number; tag?: string; group?: string; sort?: 'date' | 'amount'; dir?: 'asc' | 'desc'; limit?: number; offset?: number }
 export interface Diagnosis { expected: number; actual: number; gap: number; saved: boolean; doubled: Txn[]; single: Txn[]; future: Txn[] }
 /** `loans`: each loan's balance for the month as Tally works it out, and the statement balance typed over it, if any. */
@@ -106,8 +107,8 @@ export const api = {
   deleteTxn: (id: number) => call<Txn>('DELETE', `/transactions/${id}`),
   /** Undo for deletes: puts rows back exactly (same id, receipt, split and recurring links). */
   restore: (rows: Txn[]) => call<Txn[]>('POST', '/transactions/restore', { rows: rows.map((t) => ({ ...t, amount: t.amount / 100 })) }),
-  /** `before`: each row's category and tags before a recategorize or tag, for Undo via `revert`. */
-  bulk: (body: { ids: number[]; action: 'delete' | 'recategorize' | 'tag'; category_id?: number; tags?: string[] }) =>
+  /** `before`: each row's category and tags (and accounts, after an account change) as they were, for Undo via `revert`. */
+  bulk: (body: { ids: number[]; action: 'delete' | 'recategorize' | 'tag' | 'account'; category_id?: number; tags?: string[]; account_id?: number; side?: 'from' | 'to' }) =>
     call<{ ok: true; count: number; deleted?: Txn[]; before?: BulkBefore[] }>('POST', '/transactions/bulk', body),
   revert: (rows: BulkBefore[]) => call<{ ok: true; count: number }>('POST', '/transactions/bulk', { action: 'revert', rows }),
   uploadReceipt: (id: number, file: { uri: string; name: string; type: string }) => {
