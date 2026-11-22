@@ -126,14 +126,19 @@ export default function FiltersSheet() {
             {t.b.saved_views.map((v) => {
               // The view that's on is ticked; once the filters move on from it, it offers to take them.
               const on = isView(v.query, f, today)
+              const offer = !on && view === v.id
+              const row = <Row label={v.name} sf={on ? 'bookmark.fill' : 'bookmark'} md="bookmark" onPress={() => applyView(v)} chevron={!on && !offer} trailing={on ? check : undefined} />
+              if (!offer) return <View key={v.id}>{row}</View>
+              // Update sits beside the row, not inside its button: a button within a button can't be reached on
+              // its own with VoiceOver, and a tap on it could apply the view instead.
               return (
-                <Row key={v.id} label={v.name} sf={on ? 'bookmark.fill' : 'bookmark'} md="bookmark" onPress={() => applyView(v)} chevron={!on && view !== v.id}
-                  trailing={on ? check : view === v.id ? (
-                    <Tap feedback="opacity" onPress={() => updateView(v)} hitSlop={8} accessibilityLabel={`Update ${v.name} to these filters`}
-                      style={{ paddingHorizontal: space.m, height: 30, borderRadius: radius.pill, backgroundColor: c.fill, justifyContent: 'center' }}>
-                      <Txt variant="sub" style={{ fontWeight: '600' }}>Update</Txt>
-                    </Tap>
-                  ) : undefined} />
+                <View key={v.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>{row}</View>
+                  <Tap feedback="opacity" onPress={() => updateView(v)} hitSlop={8} accessibilityLabel={`Update ${v.name} to these filters`}
+                    style={{ marginRight: space.l, paddingHorizontal: space.m, height: 30, borderRadius: radius.pill, backgroundColor: c.fill, justifyContent: 'center' }}>
+                    <Txt variant="sub" style={{ fontWeight: '600' }}>Update</Txt>
+                  </Tap>
+                </View>
               )
             })}
           </Group>
