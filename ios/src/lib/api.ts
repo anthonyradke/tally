@@ -21,7 +21,8 @@ export interface SavedView { id: number; name: string; query: string; icon: stri
 export interface MonthRow { month: string; money_in: number; spent: number; loan: number; saving: number; left_over: number; by_category: Record<string, number>; balances: Record<string, number>; cash: number; invested: number; cards: number; loans: number; net_worth: number }
 export interface Bootstrap { today: string; start: string; accounts: Account[]; categories: Category[]; favorites: Favorite[]; budgets: Budget[]; recurring: Recurring[]; saved_views: SavedView[]; settings: Record<string, string>; months: MonthRow[]; ef: { goal: number; progress: number }; roth: { ytd: number; limit: number; category_id: number | null } }
 export interface BulkBefore { id: number; category_id: number; tags: string[] }
-export interface TxnPage { total: number; sum: number; by_type: Partial<Record<CatType, number>>; items: Txn[] }
+/** `exact`: how many of the first rows have the very amount a search typed (they come first). */
+export interface TxnPage { total: number; sum: number; by_type: Partial<Record<CatType, number>>; exact: number; items: Txn[] }
 export interface TxnQuery { q?: string; category?: number; account?: number; type?: CatType | ''; start?: string; end?: string; amount_min?: number; amount_max?: number; tag?: string; group?: string; sort?: 'date' | 'amount'; dir?: 'asc' | 'desc'; limit?: number; offset?: number }
 export interface Diagnosis { expected: number; actual: number; gap: number; saved: boolean; doubled: Txn[]; single: Txn[]; future: Txn[] }
 /** `loans`: each loan's balance for the month as Tally works it out, and the statement balance typed over it, if any. */

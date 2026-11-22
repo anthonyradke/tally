@@ -79,8 +79,8 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
                  amount_max: Optional[float] = None, tag: str = "", group: str = "",
                  sort: str = "date", dir: str = "desc", limit: int = 200, offset: int = 0):
     """Filtered list. Search matches description, note, tags, category, account names and the amount, and takes the
-    shortcuts in search.py (>100, aug, #trip). `by_type` sums the matches per category type, so the client can show a
-    real net across types."""
+    shortcuts in search.py (>100, aug, last week, #trip). `by_type` sums the matches per category type, so the client
+    can show a real net across types. `exact`: how many of the first rows have the very amount the search typed."""
     first, last = day(start, "Start") if start else None, day(end, "End") if end else None
     st = service.load(con)
     meta = _meta(st.con)
@@ -94,25 +94,20 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
         items = [t for t in items if s.first <= t.date <= s.last]
     for tg in s.tags:
         items = [t for t in items if tg in (meta.get(t.id, {}).get("tags") or "").split()]
+    exact: set[int] = set()
     if s.text:
         # Every word has to match somewhere, not necessarily in the same field: "trader groceries" finds Trader
-        # Joe's in Groceries. A number matches the amount; "-5" only refunds and other negative amounts.
-        needles = s.text.split()
-
-        def hit(t):
+        # Joe's in Groceries. Rows whose amount is the number typed come first.
+        ws, kept = search.words(s.text), []
+        for t in items:
             m = meta.get(t.id, {})
             names = [t.what, m.get("note") or "", m.get("tags") or "", st.cat[t.category_id].name]
             names += [st.acct[a].name for a in (t.from_id, t.to_id) if a in st.acct]
-            names = [x.lower() for x in names]
-            amount = f"{abs(t.amount) / 100:.2f}"
-
-            def one(w):
-                digits = w.replace("$", "").replace(",", "")
-                neg = digits.startswith("-") and len(digits) > 1
-                digits = digits.lstrip("-")
-                return any(w in x for x in names) or (bool(digits) and digits in amount and (not neg or t.amount < 0))
-            return all(one(w) for w in needles)
-        items = [t for t in items if hit(t)]
+            if level := search.match(ws, names, t.amount):
+                kept.append(t)
+                if level == search.EXACT:
+                    exact.add(t.id)
+        items = kept
     if category:
         items = [t for t in items if t.category_id == category]
     if account:
@@ -133,12 +128,14 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
         items = [t for t in items if meta.get(t.id, {}).get("split_group") == group]
     key = (lambda t: (abs(t.amount), t.id or 0)) if sort == "amount" else (lambda t: (t.date, t.id or 0))
     items.sort(key=key, reverse=(dir != "asc"))
+    items.sort(key=lambda t: t.id not in exact)  # stable: each part keeps its order
     by_type: dict[str, int] = {}
     for t in items:
         ty = st.cat[t.category_id].type
         by_type[ty] = by_type.get(ty, 0) + t.amount
     offset, limit = max(0, offset), max(0, limit)  # a negative one sliced from the end
     return {"total": len(items), "sum": sum(t.amount for t in items), "by_type": by_type,
+            "exact": sum(t.id in exact for t in items),
             "items": [_txn(t, meta.get(t.id)) for t in items[offset:offset + limit]]}
 
 
