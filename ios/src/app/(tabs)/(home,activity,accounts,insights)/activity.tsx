@@ -20,9 +20,10 @@ import { Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { api, type TxnQuery } from '@/lib/api'
+import { balanceWords, useAllTxns } from '@/lib/balances'
 import { dayLabel, lastOfMonth } from '@/lib/dates'
 import { queryClient } from '@/lib/data'
-import { feedItems, hidesAhead, pickedRows, selectable, type FeedOptions, type Item } from '@/lib/feed'
+import { closingBalances, feedItems, hidesAhead, isStatement, pickedRows, selectable, type FeedOptions, type Item } from '@/lib/feed'
 import { isAhead, next30 } from '@/lib/filterBar'
 import { EMPTY, extraCount, toId, toQuery, useFilters, type Filters } from '@/lib/filters'
 import { formatCents } from '@/lib/money'
@@ -125,11 +126,17 @@ export default function Activity() {
   // Newest first, the scheduled entries (recurring bills a month out) used to fill the top of the list before anything
   // that had happened. They fold into one row until you open it; a date filter or the Upcoming chip shows them as usual.
   const [showSched, setShowSched] = useState(false)
+  // One cash account or card on its own reads like its statement: each day header shows the balance that day ended on.
+  const stmt = isStatement(f) && f.account != null ? t.acct.get(f.account) : undefined
+  const stmtAcct = stmt && (stmt.kind === 'cash' || stmt.kind === 'card') ? stmt : undefined
+  const ledger = useAllTxns(!!stmtAcct)
+  const start = t.b?.start
+  const closing = useMemo(() => (stmtAcct && ledger.data && start ? closingBalances(stmtAcct, ledger.data.items, start) : undefined), [stmtAcct, ledger.data, start])
   const feed: FeedOptions = {
     byAmount: f.sort === 'amount', fold: f.sort === 'date' && f.dir === 'desc' && !f.start && !f.end, showSched,
-    exact: first?.exact ?? 0, total: first?.total, today, typeOf: t.typeOf,
+    exact: first?.exact ?? 0, total: first?.total, today, typeOf: t.typeOf, closing,
   }
-  const items = useMemo<Item[]>(() => feedItems(rows, feed), [rows, f.sort, f.dir, f.start, f.end, showSched, first?.exact, first?.total, today, t.typeOf]) // eslint-disable-line react-hooks/exhaustive-deps
+  const items = useMemo<Item[]>(() => feedItems(rows, feed), [rows, f.sort, f.dir, f.start, f.end, showSched, first?.exact, first?.total, today, t.typeOf, closing]) // eslint-disable-line react-hooks/exhaustive-deps
   const hide = hidesAhead(rows, feed) // the scheduled rows are folded out of sight
   const shown = useMemo(() => (hide ? rows.filter((r) => r.date <= today) : rows), [hide, rows, today])
 
@@ -347,8 +354,9 @@ export default function Activity() {
               return (
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: space.l + space.xs, paddingTop: space.l, paddingBottom: space.s }}>
                   <Txt variant="headline">{dayLabel(item.date, t.b!.today)}</Txt>
-                  {/* A day still ahead has bills due, not spending. */}
-                  {item.spent > 0 && <Txt variant="sub" tone="label2" num>{formatCents(item.spent)} {item.date > t.b!.today ? 'due' : 'spent'}</Txt>}
+                  {/* An account's statement: the balance the day ended on. Otherwise a day still ahead has bills due, not spending. */}
+                  {item.bal != null && stmtAcct ? <Txt variant="sub" tone={item.bal < 0 && stmtAcct.kind === 'cash' ? 'neg' : 'label2'} num>{stmtAcct.kind === 'cash' ? `Balance ${formatCents(item.bal)}` : balanceWords(item.bal, stmtAcct.kind)}</Txt>
+                    : item.spent > 0 && <Txt variant="sub" tone="label2" num>{formatCents(item.spent)} {item.date > t.b!.today ? 'due' : 'spent'}</Txt>}
                 </View>
               )
             }

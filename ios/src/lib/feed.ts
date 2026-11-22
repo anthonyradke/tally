@@ -1,12 +1,16 @@
 // Activity's list as the rows FlashList draws: day headers over panels of entries, the fold for scheduled entries,
 // and, when a search typed an amount, the entries with that very amount first under their own heading. Also what
 // select mode works on: only rows the list shows.
-import type { CatType, Txn } from './api'
+import type { Account, CatType, Txn } from './api'
+import { effect } from './balances'
+import type { Filters } from './filters'
+import type { Sign } from './money'
+import type { Tone } from './txn'
 
 export type Item =
   | { kind: 'sched'; key: string; count: number; cents: number; open: boolean }
   | { kind: 'label'; key: string; text: string }
-  | { kind: 'head'; key: string; date: string; spent: number }
+  | { kind: 'head'; key: string; date: string; spent: number; bal?: number }
   | { kind: 'row'; key: string; t: Txn; first: boolean; last: boolean }
 
 export interface FeedOptions {
@@ -17,6 +21,7 @@ export interface FeedOptions {
   total?: number // every match, loaded or not (the rows given are the loaded ones)
   today: string
   typeOf: (t: Txn) => CatType
+  closing?: Map<string, number> // one account's statement: its balance at the end of each day (`closingBalances`)
 }
 
 /** The exact matches get their own heading while some match isn't one, even when that one hasn't loaded yet. */
@@ -51,7 +56,7 @@ function part(list: Txn[], o: FeedOptions, pre: string): Item[] {
   for (let i = 0; i < list.length; i++) {
     const r = list[i]
     const first = i === 0 || list[i - 1].date !== r.date
-    if (first) out.push({ kind: 'head', key: `${pre}h${r.date}`, date: r.date, spent: spent.get(r.date) ?? 0 })
+    if (first) out.push({ kind: 'head', key: `${pre}h${r.date}`, date: r.date, spent: spent.get(r.date) ?? 0, bal: o.closing?.get(r.date) })
     out.push({ kind: 'row', key: `${pre}r${r.id}`, t: r, first, last: i === list.length - 1 || list[i + 1].date !== r.date })
   }
   return out
@@ -96,3 +101,29 @@ export function accountSide(rows: Txn[], typeOf: (t: Txn) => CatType): 'from' | 
 /** The side of one row an account change sets, for `accountSide`'s answer. */
 export const sideOf = (side: 'from' | 'to' | 'either', type: CatType): 'from' | 'to' =>
   side === 'either' ? (type === 'Money in' ? 'to' : 'from') : side
+
+/** Activity reads as one account's statement when that account is the only filter (a date range aside) and the list
+ *  is by date: each day header then carries the account's balance at the end of that day, to check against the bank. */
+export const isStatement = (f: Filters) =>
+  f.account != null && !f.q && !f.type && f.category == null && !f.tag && !f.group && f.sort === 'date'
+
+/** A cash account's or a card's balance at the end of each day it has entries, by the engine's rules (as
+ *  `balanceOn`: its starting balance plus every row from the ledger's start). `rows`: every entry, in any order. */
+export function closingBalances(a: Account, rows: Txn[], start: string): Map<string, number> {
+  const byDay = new Map<string, number>()
+  for (const t of rows) if (t.date >= start && (t.from_id === a.id || t.to_id === a.id)) byDay.set(t.date, (byDay.get(t.date) ?? 0) + effect(a, t))
+  const out = new Map<string, number>()
+  let bal = a.start_balance
+  for (const d of [...byDay.keys()].sort()) out.set(d, (bal += byDay.get(d)!))
+  return out
+}
+
+/** A row's amount from one account's side (`here`, the account whose rows a list shows): + for money into it, − for
+ *  money out, so a statement can be followed line by line. Green for money in and refunds, plain for spending, muted
+ *  for transfers, saving and loans, as everywhere else. Undefined when the row moves nothing in or out of it. */
+export function accountAmount(type: CatType, t: Pick<Txn, 'from_id' | 'to_id' | 'amount'>, here: number): { cents: number; sign: Sign; tone: Tone; muted: boolean } | undefined {
+  const v = (t.to_id === here ? t.amount : 0) - (t.from_id === here ? t.amount : 0)
+  if (!v) return undefined
+  const moved = type !== 'Spending' && type !== 'Money in'
+  return { cents: v, sign: 'always', tone: moved ? 'neutral' : v > 0 ? 'pos' : type === 'Money in' ? 'neg' : 'neutral', muted: moved }
+}
