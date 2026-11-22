@@ -1,6 +1,6 @@
 // Activity's filters live outside the screen so the Filters sheet can edit them.
 import { create } from 'zustand'
-import type { CatType, TxnQuery } from './api'
+import type { CatType, SavedView, TxnQuery } from './api'
 import { namedRange, rangeDates } from './filterBar'
 
 export interface Filters {
@@ -69,3 +69,13 @@ export function tagChoices(used: { tag: string }[], text: string, max = 8): stri
 
 /** Whether these filters are exactly what a saved view puts on (its query read the way it would be saved now). */
 export const isView = (query: string, f: Filters, today: string) => viewQuery(fromViewQuery(query, today), today) === viewQuery(f, today)
+
+/** The saved view Activity names above its list: the one these filters are (the one last put on first, if two
+ *  match), or, once they've moved on from the one last put on, that one, to go back to (`on` false). None while
+ *  nothing is filtered. */
+export function namedView(views: SavedView[], f: Filters, view: number | null, today: string): { v: SavedView; on: boolean } | undefined {
+  const last = views.find((v) => v.id === view)
+  if (!f.q && !f.type && !extraCount(f)) return undefined
+  const match = [...(last ? [last] : []), ...views].find((v) => isView(v.query, f, today))
+  return match ? { v: match, on: true } : last && { v: last, on: false }
+}

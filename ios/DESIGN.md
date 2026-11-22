@@ -89,7 +89,8 @@ Changes to anything below get written here first.
   actions, filters, reconcile) are form sheets with a grabber. Nothing uses a confirm dialog: deletes happen and
   offer Undo, and closing an editor with unsaved changes shows "Changes not saved" with Restore. Settings lists save
   as you change them and say Saved; money fields have a Done bar on the keypad. Activity's filters that have no lit
-  chip show as removable pills under the chip rows, so a filter is never on out of sight. Tapping a toast's message
+  chip show as removable pills under the chip rows, so a filter is never on out of sight; a saved view that's on
+  leads them with its name, and once the filters move on from it, stays as a plain pill that puts it back. Tapping a toast's message
   opens what it's about (the entry just added).
 
 ## Color

@@ -12,7 +12,7 @@ import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
 import type { CatType } from '@/lib/api'
 import { activeRange, bar, pills, ranges, SORTS, type BarRow } from '@/lib/filterBar'
-import { useFilters, type Filters } from '@/lib/filters'
+import { fromViewQuery, namedView, useFilters, type Filters } from '@/lib/filters'
 import { useTally } from '@/lib/tally'
 import { radius, space, useTheme } from '@/theme'
 
@@ -68,15 +68,33 @@ export function FilterBar() {
 }
 
 /** The filters on with no chip lit for them (a row switched off in Settings, a tag, a day from Insights), so none is
- *  ever on out of sight. Tapping one takes it off. */
+ *  ever on out of sight. Tapping one takes it off. A saved view that's on leads the row by name (tapping it takes the
+ *  whole view off); once the filters move on from it, it stays as a plain pill that puts it back on. */
 function Pills() {
   const t = useTally()
   const { c } = useTheme()
-  const { f, set } = useFilters()
+  const { f, set, view, reset } = useFilters()
   const list = t.b ? pills(t.b, f) : []
-  if (!list.length) return null
+  const named = t.b ? namedView(t.b.saved_views, f, view, t.b.today) : undefined
+  if (!list.length && !named) return null
+  const apply = () => {
+    Haptics.selectionAsync().catch(() => {})
+    if (!named || !t.b) return
+    if (named.on) reset()
+    else useFilters.getState().replace(fromViewQuery(named.v.query, t.b.today), named.v.id)
+  }
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s, paddingHorizontal: space.l }}>
+      {named && (
+        <Animated.View key={`view${named.v.id}`} entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)} layout={LinearTransition.duration(200)}>
+          <Tap onPress={apply} accessibilityLabel={named.on ? `${named.v.name}, saved view. Clear filters` : `Saved view ${named.v.name}. Put it back on`}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs + 2, height: 30, paddingLeft: space.s + 2, paddingRight: named.on ? space.s + 2 : space.m, borderRadius: radius.pill, backgroundColor: named.on ? c.ink : c.panel }}>
+            <Icon sf={named.on ? 'bookmark.fill' : 'bookmark'} md="bookmark" size={12} color={named.on ? c.onInk : c.label2} />
+            <Txt variant="sub" tone={named.on ? 'onInk' : 'label'} style={{ fontWeight: '600' }} numberOfLines={1}>{named.v.name}</Txt>
+            {named.on && <Icon sf="xmark" md="close" size={10} color={c.onInk} weight="bold" />}
+          </Tap>
+        </Animated.View>
+      )}
       {list.map((p) => (
         <Animated.View key={p.key} entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)} layout={LinearTransition.duration(200)}>
           <Tap onPress={() => { Haptics.selectionAsync().catch(() => {}); set(p.clear) }} accessibilityLabel={`${p.label}. Remove filter`}
