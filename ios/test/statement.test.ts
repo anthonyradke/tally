@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatType, Txn } from '@/lib/api'
 import { balanceOn } from '@/lib/balances'
-import { accountAmount, closingBalances, deletedMatches, feedItems, isStatement, type FeedOptions } from '@/lib/feed'
+import { deletedMatches } from '@/lib/deleted'
+import { accountAmount, closingBalances, feedItems, isStatement, type FeedOptions } from '@/lib/feed'
 import { EMPTY } from '@/lib/filters'
 import { acct, row } from './fixtures.ts'
 
@@ -59,9 +60,30 @@ test('statement: amounts signed from the account side, toned as everywhere else'
 
 test('recently deleted: a search that finds nothing points to deleted matches', () => {
   const gone = [row('2026-11-12', 1549, { what: 'Netflix' }), row('2026-11-11', 900, { what: "Trader Joe's", note: 'snacks', tags: ['trip'] })]
-  assert.deepEqual(deletedMatches(gone, 'netflix').map((r) => r.what), ['Netflix'])
-  assert.deepEqual(deletedMatches(gone, 'trader joes trip').map((r) => r.what), ["Trader Joe's"])
-  assert.deepEqual(deletedMatches(gone, 'groceries', () => ['Groceries']).length, 2)
-  assert.deepEqual(deletedMatches(gone, 'netflix snacks'), [])
-  assert.deepEqual(deletedMatches(gone, '  '), [])
+  const spend = (): CatType => 'Spending'
+  const find = (q: string, x = {}, names?: (r: Txn) => string[]) => deletedMatches(gone, { q, ...x }, spend, names).map((r) => r.what)
+  assert.deepEqual(find('netflix'), ['Netflix'])
+  assert.deepEqual(find('trader joes trip'), ["Trader Joe's"])
+  assert.deepEqual(find('groceries', {}, () => ['Groceries']).length, 2)
+  assert.deepEqual(find('netflix snacks'), [])
+  assert.deepEqual(find('  '), [])
+  // A number reads the amount as search does: whole dollars from the start, cents exactly.
+  assert.deepEqual(find('15'), ['Netflix'])
+  assert.deepEqual(find('9.00'), ["Trader Joe's"])
+  assert.deepEqual(find('5'), [])
+})
+
+test('recently deleted: the hint keeps to the other filters, and a shortcut offers none', () => {
+  const gone = [row('2026-11-12', 1549, { what: 'Netflix', from_id: 3 }), row('2026-10-02', 1549, { what: 'Netflix', from_id: 4, category_id: 7, tags: ['tv'] })]
+  const typeOf = (r: Txn): CatType => (r.category_id === 7 ? 'Transfer' : 'Spending')
+  const find = (q: string, x = {}) => deletedMatches(gone, { q, ...x }, typeOf).map((r) => r.date)
+  assert.deepEqual(find('netflix'), ['2026-11-12', '2026-10-02'])
+  assert.deepEqual(find('netflix', { account: 3 }), ['2026-11-12'])
+  assert.deepEqual(find('netflix', { type: 'Transfer' }), ['2026-10-02'])
+  assert.deepEqual(find('netflix', { category: 2 }), ['2026-11-12'])
+  assert.deepEqual(find('netflix', { start: '2026-11-01', end: '2026-11-30' }), ['2026-11-12'])
+  assert.deepEqual(find('netflix', { tag: 'TV' }), ['2026-10-02'])
+  assert.deepEqual(find('netflix', { group: 'g' }), [])
+  for (const q of ['netflix >10', 'netflix nov', 'netflix last month', 'netflix #tv', 'netflix today']) assert.deepEqual(find(q), [], q)
+  assert.deepEqual(find('last netflix'), [])  // "last" alone is a word, and no Netflix has it
 })

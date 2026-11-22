@@ -59,6 +59,7 @@ const refreshAll = () => Promise.all([
   queryClient.invalidateQueries({ queryKey: ['bootstrap'] }),
   queryClient.invalidateQueries({ queryKey: ['transactions'] }),
   queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  queryClient.invalidateQueries({ queryKey: ['deleted'] }), // Activity's "match in Recently deleted" and the list itself
 ])
 
 export interface Lookups { acct: Map<number, Account>; cat: Map<number, Category> }

@@ -23,7 +23,8 @@ import { api, type TxnQuery } from '@/lib/api'
 import { balanceWords, useAllTxns } from '@/lib/balances'
 import { dayLabel, lastOfMonth } from '@/lib/dates'
 import { queryClient } from '@/lib/data'
-import { closingBalances, deletedMatches, feedItems, hidesAhead, isStatement, pickedRows, selectable, type FeedOptions, type Item } from '@/lib/feed'
+import { deletedMatches } from '@/lib/deleted'
+import { closingBalances, feedItems, hidesAhead, isStatement, pickedRows, selectable, type FeedOptions, type Item } from '@/lib/feed'
 import { isAhead, next30 } from '@/lib/filterBar'
 import { EMPTY, extraCount, toId, toQuery, useFilters, type Filters } from '@/lib/filters'
 import { formatCents } from '@/lib/money'
@@ -154,16 +155,17 @@ export default function Activity() {
     return top ? { key: top[0], ...top[1] } : null
   }, [f.q, rows])
   const extra = extraCount(f)
-  // A search that finds nothing points to a match deleted lately, which it can't see.
+  const key = JSON.stringify(query)
+  // A search that finds nothing points to a match deleted lately (inside the other filters too), which it can't see.
   const nothing = !!qText && first?.total === 0 && !q.isPlaceholderData
   const del = useQuery({ queryKey: ['deleted'], queryFn: api.deleted, enabled: nothing, staleTime: 0 })
   const catOf = t.catOf
-  const gone = useMemo(() => (nothing && del.data ? deletedMatches(del.data, qText, (r) => [catOf(r).name]).length : 0), [nothing, del.data, qText, catOf])
+  const gone = useMemo(() => (nothing && del.data ? deletedMatches(del.data, query, (r) => catOf(r).type,
+    (r) => [catOf(r).name, ...[r.from_id, r.to_id].map((a) => (a != null && t.acct.get(a)?.name) || '')]).length : 0), [nothing, del.data, key, catOf, t.acct]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A selection belongs to the filters it was made under: under new ones (a search typed, a chip tapped) it's let go,
   // since rows picked before may be out of sight now. `all`: what Select all fetched past the loaded pages, as a live
   // query, so after a bulk move its rows come again with the list and one moved out of these filters drops out.
-  const key = JSON.stringify(query)
   const keyNow = useLatest(key)
   const mine = pick.key === key
   const picked = mine ? pick.ids : NO_PICK.ids

@@ -127,16 +127,3 @@ export function accountAmount(type: CatType, t: Pick<Txn, 'from_id' | 'to_id' | 
   const moved = type !== 'Spending' && type !== 'Money in'
   return { cents: v, sign: 'always', tone: moved ? 'neutral' : v > 0 ? 'pos' : type === 'Money in' ? 'neg' : 'neutral', muted: moved }
 }
-
-const plainText = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, '')
-/** Recently deleted entries a search's words all appear in (name, note, tags, `names`: the category), so a search
- *  that finds nothing can point to one deleted lately. Shortcuts (>50, aug, last week) aren't read here: a search
- *  using them just offers none. */
-export function deletedMatches<T extends Txn>(rows: T[], q: string, names: (r: T) => string[] = () => []): T[] {
-  const words = plainText(q).split(/\s+/).filter(Boolean)
-  if (!words.length) return []
-  return rows.filter((r) => {
-    const hay = plainText([r.what, r.note, ...r.tags, ...names(r)].join(' '))
-    return words.every((w) => hay.includes(w))
-  })
-}
