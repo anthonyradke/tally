@@ -14,22 +14,21 @@ import { categoryVisual } from '@/icons/categories'
 import { write } from '@/lib/admin'
 import { api, type AdminData } from '@/lib/api'
 import { suggestBudgets } from '@/lib/budgets'
-import { addDays, lastOfMonth, monthOf } from '@/lib/dates'
 import { fromCents, toCents } from '@/lib/draft'
-import { budgetAmount, budgetIn } from '@/lib/forms'
+import { budgetAmount, budgetIn, budgetMonths, type BudgetMode } from '@/lib/forms'
 import { formatCents } from '@/lib/money'
 import { useLatest } from '@/lib/nav'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
 
-type Mode = 'regular' | 'this' | 'next'
+type Mode = BudgetMode
 
 export function Budgets({ a }: { a: AdminData }) {
   const { c, tint } = useTheme()
   const { b, today } = useTally()
   const [mode, setMode] = useState<Mode>('regular')
-  const months = { this: monthOf(today), next: monthOf(addDays(lastOfMonth(today), 1)) }
+  const months = budgetMonths(today)
   const month = mode === 'regular' ? null : months[mode]
   const monthName = (m: string) => new Date(`${m}T12:00:00`).toLocaleDateString('en-US', { month: 'long' })
   const [vals, setVals] = useState<Record<number, string>>({})
@@ -96,9 +95,11 @@ export function Budgets({ a }: { a: AdminData }) {
           const v = categoryVisual(x)
           const sug = suggestions.find((s) => s.c.id === x.id)
           const { regular, over } = budgetIn(a, x.id, months.this)
+          const overNext = budgetIn(a, x.id, months.next).over // next month's one-off was set here but shown nowhere in Regular
           const sub = month
             ? regular != null ? `Regular ${formatCents(regular, { cents: false })}` : 'No regular budget'
-            : [over != null ? `${formatCents(over, { cents: false })} this month` : '', sug ? `Usually ${formatCents(sug.average, { cents: false })}` : ''].filter(Boolean).join(', ') || undefined
+            : [over != null ? `${formatCents(over, { cents: false })} this month` : '', overNext != null ? `${formatCents(overNext, { cents: false })} in ${monthName(months.next)}` : '',
+              sug ? `Usually ${formatCents(sug.average, { cents: false })}` : ''].filter(Boolean).join(', ') || undefined
           const placeholder = month && regular != null ? fromCents(regular) : 'None'
           return (
             <Row key={x.id} label={x.name} chevron={false} sub={sub}

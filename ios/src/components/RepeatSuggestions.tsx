@@ -8,9 +8,8 @@ import { categoryVisual } from '@/icons/categories'
 import type { Bootstrap } from '@/lib/api'
 import { useAllTxns } from '@/lib/balances'
 import { nextDue } from '@/lib/dates'
-import { dollarsText } from '@/lib/forms'
 import { formatCents } from '@/lib/money'
-import { findRepeats, type Repeat } from '@/lib/repeats'
+import { findRepeats, repeatPrefill, type Repeat } from '@/lib/repeats'
 import { FREQ_LABEL } from '@/lib/txn'
 import { useTheme } from '@/theme'
 import { Icon } from './Icon'
@@ -41,9 +40,11 @@ export function RepeatSuggestions({ b, folded }: { b: Bootstrap; folded?: boolea
     setHidden(next)
     AsyncStorage.setItem(HIDDEN, JSON.stringify(next.slice(-200))).catch(() => {})
   }
-  const setUp = (r: Repeat) => router.push({ pathname: '/edit', params: { kind: 'recurring', prefill: JSON.stringify({
-    label: r.what, what: r.what, category_id: r.category_id, from_account_id: r.from_id, to_account_id: r.to_id,
-    amount: dollarsText(r.amount), freq: r.freq, next_date: r.next }) } })
+  // A hidden account in the suggestion is swapped or left to pick, and the editor says so (lib/repeats.ts).
+  const setUp = (r: Repeat) => {
+    const { fields, note } = repeatPrefill(r, b.accounts)
+    router.push({ pathname: '/edit', params: { kind: 'recurring', prefill: JSON.stringify(fields), ...(note ? { note } : {}) } })
+  }
   if (!open) {
     return (
       <Group>

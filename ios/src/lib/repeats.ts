@@ -1,8 +1,9 @@
 // Entries that look like they repeat (a subscription, rent, a paycheck) but have no recurring template yet, for
 // Settings → Recurring to offer. Strict on purpose: same name, category and accounts, a steady gap and nearly the
 // same amount each time, so a weekly grocery run doesn't show up as "rent".
-import type { Freq, Recurring, Txn } from './api'
+import type { Account, Freq, Recurring, Txn } from './api'
 import { addDays, fromISO, toISO } from './dates'
+import { dollarsText, standIn, type Form } from './forms'
 import { merchantKey } from '@/icons/merchants'
 
 export interface Repeat { what: string; category_id: number; from_id: number | null; to_id: number | null; amount: number; freq: Freq; next: string; seen: number }
@@ -45,4 +46,23 @@ export function findRepeats(rows: Txn[], recurring: Recurring[], today: string):
     }
   }
   return out.sort((a, z) => (a.next < z.next ? -1 : 1))
+}
+
+/** A suggestion as the recurring editor's starting fields. An account hidden since those entries were made is swapped
+ *  for the only shown one of its kind, or left for you to pick, and `note` says which: saved as it was, the new
+ *  template posted to the account just hidden. */
+export function repeatPrefill(r: Repeat, accounts: Account[]): { fields: Form; note: string | null } {
+  const notes: string[] = []
+  const side = (id: number | null, name: string): number | null => {
+    const a = id == null ? undefined : accounts.find((x) => x.id === id)
+    if (!a || a.active) return id
+    const s = standIn(accounts, a.id)
+    notes.push(s ? `${a.name} is hidden, so ${name} is ${s.name} here.` : `${a.name} is hidden: pick the account for ${name}.`)
+    return s?.id ?? null
+  }
+  const fields: Form = {
+    label: r.what, what: r.what, category_id: r.category_id, from_account_id: side(r.from_id, 'From'), to_account_id: side(r.to_id, 'To'),
+    amount: dollarsText(r.amount), freq: r.freq, next_date: r.next,
+  }
+  return { fields, note: notes.length ? `${notes.join(' ')} Check it before saving.` : null }
 }
