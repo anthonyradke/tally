@@ -44,6 +44,14 @@ def test_parse_takes_days_weeks_and_months_by_name():
     assert parse("last call", today).text == "last call"  # not a shortcut on its own
 
 
+def test_this_week_on_a_sunday_is_the_past_seven_days():
+    sunday = date(2026, 11, 22)
+    span = lambda q, d: (parse(q, d).first, parse(q, d).last)
+    assert span("this week", sunday) == (date(2026, 11, 16), sunday)
+    assert span("last week", sunday) == (date(2026, 11, 15), date(2026, 11, 21))  # still Sunday to Saturday
+    assert span("this week", date(2026, 11, 23)) == (date(2026, 11, 22), date(2026, 11, 28))  # Monday: from Sunday
+
+
 def test_search_ignores_punctuation_and_matches_amounts_by_dollars(client, world):
     for what, amount in (("Trader Joe's", 59.01), ("Chipotle", 8.30), ("Chipotle", 30.12), ("Shell", 9.01),
                          ("Kiosk", 20.65), ("Diner", 65), ("Big rent", 650.50)):
