@@ -11,6 +11,7 @@ import { nextDue } from '@/lib/dates'
 import { dollarsText } from '@/lib/forms'
 import { formatCents } from '@/lib/money'
 import { findRepeats, type Repeat } from '@/lib/repeats'
+import { FREQ_LABEL } from '@/lib/txn'
 import { useTheme } from '@/theme'
 import { Icon } from './Icon'
 import { Mark } from './Mark'
@@ -18,7 +19,6 @@ import { Group, Row } from './Row'
 import { Tap } from './Tap'
 
 const HIDDEN = 'tally.repeats.hidden'
-const FREQ = { weekly: 'Weekly', biweekly: 'Every 2 weeks', monthly: 'Monthly', yearly: 'Yearly' }
 const keyOf = (r: Repeat) => `${r.category_id}|${r.what.toLowerCase()}`
 
 /** `folded`: one row ("3 more look like they repeat") that opens the list, for under the templates, where keeping them
@@ -58,7 +58,7 @@ export function RepeatSuggestions({ b, folded }: { b: Bootstrap; folded?: boolea
         const cat = b.categories.find((x) => x.id === r.category_id)
         const v = cat ? categoryVisual(cat) : null
         return (
-          <Row key={keyOf(r)} label={r.what} sub={`${FREQ[r.freq]}, ${formatCents(r.amount)}, ${nextDue(r.next, b.today)}`} onPress={() => setUp(r)}
+          <Row key={keyOf(r)} label={r.what} sub={`${FREQ_LABEL[r.freq]}, ${formatCents(r.amount)}, ${nextDue(r.next, b.today)}`} onPress={() => setUp(r)}
             leading={v ? <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={30} /> : undefined}
             trailing={
               <Tap feedback="opacity" onPress={() => hide(r)} hitSlop={10} accessibilityLabel={`Not recurring: ${r.what}`}>
