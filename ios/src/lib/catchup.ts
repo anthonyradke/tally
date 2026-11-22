@@ -89,6 +89,21 @@ export function usualCategories(history: Txn[], acct: number, n = 6, spending?: 
   return [...mine, ...rest].slice(0, total)
 }
 
+/** The chips for a name never seen before: the most used Spending categories anywhere first (a new place is nearly
+ *  always spending, a Venmo or an ATM on checking too), then the account's own. Not a new name: `usualCategories`. */
+export function newPlaceCategories(history: Txn[], acct: number, spending: (id: number) => boolean, total = 8): number[] {
+  const count = new Map<number, number>()
+  for (const x of history) if (spending(x.category_id)) count.set(x.category_id, (count.get(x.category_id) ?? 0) + 1)
+  const top = [...count.entries()].sort((a, z) => z[1] - a[1]).map(([id]) => id).slice(0, total - 3)
+  return [...top, ...usualCategories(history, acct, total).filter((id) => !top.includes(id))].slice(0, total)
+}
+
+/** A name no entry has had (by merchant): its chips lead with everyday spending. */
+export const isNewPlace = (history: Txn[], what: string): boolean => {
+  const want = merchantKey(what)
+  return !!want && !history.some((x) => merchantKey(x.what) === want)
+}
+
 /** The account's balance after each row, the way a bank's list shows a running balance: day by day, and in the order
  *  they were entered within a day. `rows` in any order; rows before `start` don't count, as in the engine. */
 export function runningBalances(acct: Account, rows: Txn[], start: string): Map<number, number> {
@@ -123,7 +138,8 @@ export function lookalikes(rows: Txn[], line: { date: string; amount: number }, 
   return rows.filter((x) => touches(x, acct) && x.amount === line.amount && daysApart(x.date, line.date) <= days)
 }
 
-/** The lookalike to point out for the line being added, if any (`skip`: rows this session added or took back).
+/** The lookalike to point out for the line being added, if any (`skip`: rows this session took back; the ones it
+ *  added count, since losing your place in the bank's list is the likeliest way to enter one twice).
  *  While the figure is only a suggestion copied from a past entry, a matching amount is no evidence (it was copied),
  *  so only that same place on the same day counts: a fixed-price coffee bought every other day isn't a duplicate. */
 export function duplicateOf(rows: Txn[], line: { date: string; amount: number; what: string }, acct: number,
@@ -131,6 +147,18 @@ export function duplicateOf(rows: Txn[], line: { date: string; amount: number; w
   const hits = lookalikes(rows, line, acct).filter((x) => !skip(x.id))
   const want = merchantKey(line.what)
   return (suggested ? hits.filter((x) => x.date === line.date && merchantKey(x.what) === want) : hits)[0] ?? null
+}
+
+/** The entry just added, as the line on "What was it?" shows it: none once it's deleted (from the session list or the
+ *  editor; there's no Undo for it), and the balance after it from the running balances (`running`, by row id), so a
+ *  fix to it or to an earlier row shows. It was a snapshot taken as it went in. */
+export function lastShown<L extends { row: Txn | null; after?: { cents: number; date: string } | null }>(
+  last: L | null, live: Txn[], running: Map<number, number> | null): L | null {
+  if (!last?.row) return last
+  const now = live.find((x) => x.id === last.row!.id)
+  if (!now) return null
+  const after = running?.get(now.id)
+  return after != null ? { ...last, after: { cents: after, date: now.date } } : last
 }
 
 /** A row a catch-up added, with the full list's `dataUpdateCount` after which that list must have it: a list already

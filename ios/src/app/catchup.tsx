@@ -14,7 +14,7 @@ import { Pages } from '@/components/Pages'
 import { useShake } from '@/components/Shake'
 import { merchantKey } from '@/icons/merchants'
 import { api, ApiError, type Txn } from '@/lib/api'
-import { balanceAfter, catchable, duplicateOf, exactPlace, flip, hintFor, otherSide, sides, touches } from '@/lib/catchup'
+import { balanceAfter, catchable, duplicateOf, exactPlace, flip, hintFor, lastShown, otherSide, sides, touches } from '@/lib/catchup'
 import { refreshCatchUp, useBankMatch, useCatchUpSession, useKeyboardBar } from '@/lib/catchupHooks'
 import { offerCatchUp } from '@/lib/caughtUp'
 import { useTransactions } from '@/lib/data'
@@ -76,6 +76,7 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
   const filledFor = useRef<string | null>(null)
   /** The amount came from Reconcile: picking a place keeps it. */
   const handed = useRef(!!amount)
+  const [missing, setMissing] = useState(amount ?? null) // said on "What was it?", so it's clear why it's there
   /** The day each account's entries are on, so switching accounts doesn't carry one's day to the other. */
   const days = useRef(new Map<number, string>())
 
@@ -95,8 +96,7 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
   const { mine, session, running, balance, gone } = ledger
   const count = mine.length
   const bank = useBankMatch(busy)
-  // The entry just added, while it's still in: deleted from the session list or the editor, there's no Undo for it.
-  const shown = last?.row && !session.has(last.row.id) ? null : last
+  const shown = lastShown(last, ledger.live, running)
 
   const recent = useTransactions({ account: acct?.id, end: today, limit: RECENT + count }, !!acct && !!today)
   // Only this account's own rows: a list still showing the last account's while the new one loads would mislead.
@@ -114,17 +114,13 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
     ? balanceAfter(acct, ledger.rows, t.b.start, { ...toInputs(d)[0], date: d.date }, d.category_id != null) : null, [t.b, acct, ledger.rows, d])
 
   const go = (p: Page, way: 1 | -1) => {
-    Haptics.selectionAsync().catch(() => {})
-    Keyboard.dismiss()
-    setErrors([])
-    setDir(way)
-    setPage(p)
+    Haptics.selectionAsync().catch(() => {}); Keyboard.dismiss(); setErrors([]); setDir(way); setPage(p)
   }
-  const clearLine = () => { filledFor.current = null; handed.current = false; setFresh(false); setSuggested(false) }
+  const clearLine = () => { filledFor.current = null; handed.current = false; setMissing(null); setFresh(false); setSuggested(false) }
   const refuse = () => { shake(); play('error', 0.6); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
   const lookalike = acct && cents && page === 'amount'
-    ? duplicateOf(history.data?.items ?? [], { date: d.date, amount: cents * (d.refund ? -1 : 1), what: d.what }, acct.id,
-      (id) => session.has(id) || gone.has(id), fresh && suggested)
+    ? duplicateOf(ledger.rows ?? [...ledger.live, ...(history.data?.items ?? [])], { date: d.date, amount: cents * (d.refund ? -1 : 1), what: d.what },
+      acct.id, (id) => gone.has(id), fresh && suggested)
     : null
 
   // A new line keeps the day of the last one on this account (a bank's list goes day by day); the first one starts on
@@ -182,8 +178,11 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
     set(otherSide(d, acct!.id).side === 'from' ? { from_id: id } : { to_id: id })
     go('amount', -1)
   }
-  // The lookalike was the one: nothing to add, on to the next line on the same day.
-  const skip = () => { reset({ ...blank(d.date), date: d.date }); clearLine(); go('what', 1) }
+  // The lookalike was the one: nothing to add, on to the next line on the same day. The top line says it was skipped.
+  const skip = () => {
+    setLast({ row: null, label: d.what || lookalike?.what || 'it', cents, skipped: true })
+    reset({ ...blank(d.date), date: d.date }); clearLine(); go('what', 1)
+  }
   const openSession = () => { setFrom(page); go('session', 1) }
 
   const add = () => busy(addNow) // a second tap while one is saving does nothing
@@ -263,6 +262,7 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
     setLast(null)
     clearLine()
     handed.current = true
+    setMissing(gap)
     reset({ ...blank(t.today), amount: fromCents(gap) })
     go('what', 1)
   })
@@ -278,7 +278,7 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
           p === 'list' ? <LeftOff accounts={list} acct={acct} onAcct={(id) => { setPicked(id); setLast(null) }} rows={rows} loading={recent.isLoading} added={count}
               session={session} running={running} balance={balance} matched={!!bank.matched[acct.id]} onMatch={() => { if (balance != null) bank.match(acct, balance) }}
               onCheck={() => { Haptics.selectionAsync().catch(() => {}); router.push(`/reconcile/${acct.id}`) }} />
-          : p === 'what' ? <What acct={acct} history={historyRows} count={count} last={shown} onUndo={undo} onPick={pickPast} onSubmit={next} onCount={openSession} />
+          : p === 'what' ? <What acct={acct} history={historyRows} count={count} last={shown} missing={missing} onUndo={undo} onPick={pickPast} onSubmit={next} onCount={openSession} />
           : p === 'amount' ? <Amount acct={acct} history={historyRows} count={count} lookalike={lookalike} errors={errors} shake={shakeStyle} after={after}
               fresh={fresh} suggested={suggested} onTyped={() => { setFresh(false); setSuggested(false) }}
               onWhat={toWhat} onCategory={(id) => pickCategory(id, false)} onMoreCategories={() => go('category', 1)}

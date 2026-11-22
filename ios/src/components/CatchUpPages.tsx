@@ -6,7 +6,7 @@ import Animated, { ZoomIn } from 'react-native-reanimated'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import type { Account, CatType, Kind, Txn } from '@/lib/api'
 import { balanceWords } from '@/lib/balances'
-import { otherSide, suggest, usualCategories } from '@/lib/catchup'
+import { isNewPlace, newPlaceCategories, otherSide, suggest, usualCategories } from '@/lib/catchup'
 import { dayLabel } from '@/lib/dates'
 import { press, toCents, useDraft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
@@ -64,18 +64,19 @@ export function AccountLine({ a, count, onCount }: { a: Account; count: number; 
   )
 }
 
-/** The entry just added, with a way to take it back. Queued offline, there's nothing to take back yet. */
+/** The entry just added, with a way to take it back. Queued offline, there's nothing to take back yet. `skipped`: the
+ *  last line was skipped as already in, which says so (nothing was added). */
 export interface Last {
-  row: Txn | null; label: string; cents: number; error?: string
+  row: Txn | null; label: string; cents: number; error?: string; skipped?: true
   /** The account's balance once it was in, on its day (cash and cards). */
   after?: { cents: number; date: string } | null
 }
 
 /** "What was it?": the day (it stays from one entry to the next) and the name, with this account's usual places under
  *  it. Picking one copies its category and accounts and moves on. */
-export function What({ acct, history, count, last, onUndo, onPick, onSubmit, onCount }: {
-  acct: Account; history: Txn[]; count: number; last: Last | null; onUndo: () => void; onPick: (x: Txn) => void; onSubmit: () => void
-  onCount: () => void
+export function What({ acct, history, count, last, missing, onUndo, onPick, onSubmit, onCount }: {
+  acct: Account; history: Txn[]; count: number; last: Last | null; missing: number | null; onUndo: () => void; onPick: (x: Txn) => void
+  onSubmit: () => void; onCount: () => void
 }) {
   const { c } = useTheme()
   const t = useTally()
@@ -90,12 +91,16 @@ export function What({ acct, history, count, last, onUndo, onPick, onSubmit, onC
   return (
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.l, paddingTop: space.s, gap: space.l }}>
       <AccountLine a={acct} count={count} onCount={onCount} />
+      {missing != null && (
+        <Txt variant="sub" tone="label2" num style={{ textAlign: 'center', marginTop: -space.s }}>{`Missing ${formatCents(missing)} from Reconcile`}</Txt>
+      )}
       {last && (
         <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingLeft: space.l, paddingRight: space.s, paddingVertical: space.xs, minHeight: 44, borderRadius: 22, borderCurve: 'continuous', backgroundColor: c.panel }}>
-          <Icon sf={last.row ? 'checkmark.circle.fill' : 'icloud.and.arrow.up'} md={last.row ? 'check_circle' : 'cloud_upload'} size={16} color={last.error ? c.neg : last.row ? c.pos : c.warn} />
+          {last.skipped ? <Icon sf="arrow.uturn.right.circle" md="redo" size={16} color={c.label2} />
+            : <Icon sf={last.row ? 'checkmark.circle.fill' : 'icloud.and.arrow.up'} md={last.row ? 'check_circle' : 'cloud_upload'} size={16} color={last.error ? c.neg : last.row ? c.pos : c.warn} />}
           <View style={{ flex: 1 }}>
-            <Txt variant="sub" numberOfLines={1} tone={last.error ? 'neg' : 'label'}>
-              {last.error ?? (last.row ? `Added ${last.label}, ${formatCents(last.cents)}` : `${last.label} is saved on your phone for now.`)}
+            <Txt variant="sub" numberOfLines={1} tone={last.error ? 'neg' : last.skipped ? 'label2' : 'label'}>
+              {last.error ?? (last.skipped ? `Skipped ${last.label}, already in` : last.row ? `Added ${last.label}, ${formatCents(last.cents)}` : `${last.label} is saved on your phone for now.`)}
             </Txt>
             {last.row && !last.error && last.after && (
               <Txt variant="foot" tone="label2" num numberOfLines={1}>
@@ -140,7 +145,10 @@ export function Amount({ acct, history, count, lookalike, errors, shake, after, 
   const t = useTally()
   const { d, set } = useDraft()
   const cents = toCents(d.amount)
-  const usual = useMemo(() => usualCategories(history, acct.id, 6, (id) => t.cat.get(id)?.type === 'Spending'), [history, acct.id, t.cat])
+  const usual = useMemo(() => {
+    const spending = (id: number) => t.cat.get(id)?.type === 'Spending'
+    return isNewPlace(history, d.what) ? newPlaceCategories(history, acct.id, spending) : usualCategories(history, acct.id, 6, spending)
+  }, [history, acct.id, t.cat, d.what])
   const chips = [...(d.category_id ? [d.category_id] : []), ...usual.filter((x) => x !== d.category_id)]
     .map((id) => t.cat.get(id)).filter((x) => x && (x.active || x.id === d.category_id))
   const two = SHAPES[d.kind].from !== 'blank' && SHAPES[d.kind].to !== 'blank'
