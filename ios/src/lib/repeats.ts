@@ -28,7 +28,9 @@ function groups(rows: Txn[], today: string): Txn[][] {
     const k = merchantKey(t.what)
     if (!k) continue
     const key = `${t.category_id}|${k}|${t.from_id ?? ''}|${t.to_id ?? ''}`
-    out.set(key, [...(out.get(key) ?? []), t])
+    const list = out.get(key)
+    if (list) list.push(t)
+    else out.set(key, [t])
   }
   return [...out.values()]
 }

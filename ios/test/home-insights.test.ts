@@ -117,6 +117,17 @@ test('billTest: a bill typed by hand each month counts, given the ledger', () =>
   assert.equal(bill(row('2026-10-12', 4000, { what: 'Market', category_id: 3 })), false)
 })
 
+test('billTest: one ledger is read once per day, in whatever order it comes, and left as it was', () => {
+  const history = [xcel('2026-10-12', 9350), xcel('2026-08-12', 7012), xcel('2026-09-12', 11578)]
+  const before = history.map((x) => x.id)
+  const b = boot({ today: '2026-11-22', categories: [cat(1, 'Money in'), cat(2, 'Spending'), cat(3, 'Spending')] })
+  assert.equal(billTest(b, history)(xcel('2026-11-12', 12000)), true)
+  assert.equal(billTest(b, history)(xcel('2026-11-12', 12000)), true) // the kept answer
+  assert.deepEqual(history.map((x) => x.id), before) // not sorted in place
+  // Another day is worked out again: on Sep 20 only two had come, too far apart in amount to tell.
+  assert.equal(billTest({ ...b, today: '2026-09-20' }, history)(xcel('2026-11-12', 12000)), false)
+})
+
 test('buildStory: the biggest day bills aside skips a bill typed by hand', () => {
   const b = boot({
     today: '2026-11-22',

@@ -111,8 +111,21 @@ export function paidBill(b: Bootstrap, id: number, spent: number, budget: number
  *  review and the day-by-day shading leave bills out. */
 export function billTest(b: Bootstrap, history?: Txn[]): (t: Pick<Txn, 'recurring_id' | 'category_id' | 'what'>) => boolean {
   const known = new Set(b.recurring.filter((r) => r.active).map((r) => `${r.category_id}|${merchantKey(r.what || r.label)}`))
-  if (history) for (const k of billKeys([...history].sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : x.id - y.id)), b.today)) known.add(k)
+  if (history) for (const k of billsIn(history, b.today)) known.add(k)
   return (t) => !!t.recurring_id || known.has(`${t.category_id}|${merchantKey(t.what)}`)
+}
+
+const byDate = (x: Txn, y: Txn) => (x.date < y.date ? -1 : x.date > y.date ? 1 : x.id - y.id)
+/** `billKeys` once per ledger (the array a query holds) and day: Home, the calendar (mounted again for each month in
+ *  Insights) and the story all ask about the same one. */
+const bills = new WeakMap<Txn[], { today: string; keys: Set<string> }>()
+function billsIn(history: Txn[], today: string): Set<string> {
+  const hit = bills.get(history)
+  if (hit?.today === today) return hit.keys
+  const sorted = history.every((x, i) => i === 0 || byDate(history[i - 1], x) <= 0) // the full list comes oldest first
+  const keys = billKeys(sorted ? history : [...history].sort(byDate), today)
+  bills.set(history, { today, keys })
+  return keys
 }
 
 export interface Suggestion { c: Category; average: number; suggested: number; months: number }
