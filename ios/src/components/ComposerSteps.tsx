@@ -25,6 +25,7 @@ import { useDraft } from '@/lib/draft'
 import { monthsNow } from '@/lib/months'
 import { SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
+import { rowAmount } from '@/lib/txn'
 import { radius, space, useTheme } from '@/theme'
 
 const KIND_ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
@@ -125,9 +126,10 @@ export function What({ ref, history, fixing, onPick, onSubmit }: { ref?: Ref<Wha
         <Group header={d.what ? 'Matches' : 'Recent'}>
           {list.map((x) => {
             const xc = t.catOf(x)
+            const a = rowAmount(xc.type, x.amount) // signed as Activity signs it: a refund is a green +
             return (
               <Row key={x.id} label={x.what} sub={xc.type === d.kind ? xc.name : `${xc.name}, in ${KIND_NAME[xc.type]}`} chevron={false} onPress={() => pick(x)}
-                leading={<CatMark id={x.category_id} />} value={<Money cents={x.amount} tone="neutral" muted variant="callout" />} />
+                leading={<CatMark id={x.category_id} />} value={<Money cents={a.cents} sign={a.sign} tone={a.tone} muted variant="callout" />} />
             )
           })}
         </Group>
