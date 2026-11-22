@@ -130,9 +130,11 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     start({ ...blank(today), from_id: from && t.acct.has(Number(from)) ? Number(from) : null })
   }, [t.b, one.data]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const leaving = useRef(false) // saved, saving or deleted: closing loses nothing
+  const leaving = useRef(false) // saved, queued or deleted: closing loses nothing
+  const pending = useRef<Promise<boolean> | null>(null) // a save under way: closing offers the draft back if it fails
   const reopen = useLatest({ id, mode: dup ? 'duplicate' : undefined, fav, from })
-  useUnsaved(!embedded, owner, () => ({ leaving: leaving.current, loaded: loaded.current, seed: seededDraft.current, from: seededFrom.current, params: reopen.current }))
+  useUnsaved(!embedded, owner, () => ({ leaving: leaving.current, pending: pending.current, loaded: loaded.current, seed: seededDraft.current,
+    from: seededFrom.current, params: reopen.current }))
 
   // The form fills on its first frame from a copy already in a list, which can be old (a bulk recategorize changed
   // it since). When the fresh copy arrives and differs, and nothing has been typed yet, the form takes it: saving
@@ -218,7 +220,8 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     setErrors(errs)
     if (errs.length) { if (!cents) shake(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}); return }
     setSaving(true)
-    leaving.current = true // swiped down while it saves: nothing is lost
+    let settle = (_saved: boolean) => {}
+    pending.current = new Promise<boolean>((r) => { settle = r })
     try {
       let saved: Txn[] = []
       if (editing) {
@@ -227,6 +230,8 @@ export function Entry({ embedded }: { embedded?: boolean }) {
       } else {
         const r = await sendOrQueue(lines, d.what || (cat?.name ?? 'Entry'))
         if (!r) {
+          leaving.current = true
+          settle(true) // queued: it'll be sent, nothing to offer back
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {})
           toast({ text: QUEUED })
           close()
@@ -234,6 +239,8 @@ export function Entry({ embedded }: { embedded?: boolean }) {
         }
         saved = r
       }
+      leaving.current = true
+      settle(true)
       // A failed upload is said in the last toast: one of its own was replaced by "Saved" before it could be read.
       const lost = d.photo && saved[0] ? await api.uploadReceipt(saved[0].id, d.photo).then(() => false, () => true) : false
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
@@ -247,11 +254,12 @@ export function Entry({ embedded }: { embedded?: boolean }) {
       toast(lost ? { text: `${editing ? 'Saved' : `Added ${formatCents(cents)}`}, but the receipt photo didn't upload. Try adding it again.`, tone: 'error' }
         : { text: editing ? 'Saved' : `Added ${formatCents(cents)}${cat && !d.split ? ` to ${cat.name}` : ''}` })
     } catch (e) {
-      leaving.current = false
+      settle(false) // closed meanwhile: the toast offers the draft back
       setErrors(e instanceof ApiError ? e.errors : ['Tally is unreachable. Check Tailscale and try again.'])
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
       play('error')
     } finally {
+      pending.current = null
       setSaving(false)
     }
   }
