@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { AdminData, CatType, Txn } from '@/lib/api'
-import { blank, fromCents, fromTxn, press, toCents, toInputs } from '@/lib/draft'
+import { blank, fromCents, fromTxn, press, pressOver, toCents, toInputs } from '@/lib/draft'
 import { amountsById, budgetAmount, initial } from '@/lib/forms'
 import { rand } from './util.ts'
 import { row } from './fixtures.ts'
@@ -24,6 +24,15 @@ test('keypad: digits shift in from the right, no leading zeros, capped at $9,999
   assert.equal(type('99999999D'), '999999.99') // 00 that would pass the cap is ignored whole
   assert.equal(press('15', '0'), '150.00') // an amount loaded from an entry keeps its value and keeps shifting
   assert.equal(press('12.5', 'del'), '1.25')
+})
+
+test('keypad over an amount already there: the first digit replaces it, delete trims it', () => {
+  assert.equal(pressOver('5.40', '4', true), '0.04')
+  assert.equal([...'50'].reduce((s, k) => press(s, k), pressOver('5.40', '4', true)), '4.50')
+  assert.equal(pressOver('5.40', 'del', true), '0.54')
+  assert.equal(pressOver('5.40', '00', true), '')
+  assert.equal(pressOver('', '7', true), '0.07')
+  assert.equal(pressOver('5.40', '4', false), '54.04') // once typing has started, digits shift in as usual
 })
 
 test('toCents and fromCents', () => {

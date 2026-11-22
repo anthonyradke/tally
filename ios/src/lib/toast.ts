@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { play } from './sound'
 
-export interface ToastMsg { id: number; text: string; action?: { label: string; run: () => void | Promise<void> }; tone?: 'error' }
+/** `onPress`: what tapping the message itself does (the saved entry opens from "Added…"), apart from its button. */
+export interface ToastMsg { id: number; text: string; action?: { label: string; run: () => void | Promise<void> }; onPress?: () => void; tone?: 'error' }
 interface State { toast: ToastMsg | null; show: (t: Omit<ToastMsg, 'id'>) => void; hide: () => void }
 
 let n = 0

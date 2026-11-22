@@ -1,6 +1,7 @@
-// The new-entry flow's steps. Which ones a kind has comes from its From/To rules. Next always goes one page on, even
-// past a step that's already answered; only a shortcut (opening with an amount, a quick action, a past entry) jumps
-// to the first step still missing something.
+// The new-entry flow's steps. Which ones a kind has comes from its From/To rules. Next goes one page on, or straight to
+// the review once every step after this one is answered (never to a page in the middle: a leap from the amount to the
+// accounts felt like skipping). A shortcut (opening with an amount, a quick action, a past entry) and Done after
+// changing one answer from the review go to the first step still missing something.
 import type { CatType } from './api'
 import type { Draft } from './draft'
 import { SHAPES } from './shapes'
@@ -32,10 +33,12 @@ export function filled(step: Step, d: Draft, seen: ReadonlySet<Step>): boolean {
   return false
 }
 
-/** The page after `from`, for Next: never more than one on. */
-export function stepAfter(from: Step, d: Draft): Step {
+/** The page after `from`, for Next: one on, or the review when nothing after `from` is still to answer (a Coffee chip
+ *  with no saved amount, once the amount is typed). */
+export function stepAfter(from: Step, d: Draft, seen: ReadonlySet<Step> = new Set()): Step {
   const steps = stepsFor(d.kind)
-  return steps[steps.indexOf(from) + 1] ?? 'review'
+  const rest = steps.slice(steps.indexOf(from) + 1)
+  return rest.every((s) => s === 'review' || filled(s, d, seen)) ? 'review' : rest[0] ?? 'review'
 }
 
 /** The first step after `from` still missing something, for a shortcut that fills several at once. */
