@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { repeatFields } from '@/lib/actions'
 import { todayISO } from '@/lib/dates'
 import { blank } from '@/lib/draft'
-import { addTag, balanceFirst, nextMonthly, parseTags, putLine, tagSuggestions } from '@/lib/txn'
+import { addTag, balanceFirst, nextMonthly, offersTags, parseTags, putLine, tagSuggestions } from '@/lib/txn'
 import { snap } from '@/lib/unsaved'
 import { row } from './fixtures.ts'
 
@@ -60,6 +60,12 @@ test('tags parse loosely and suggestions follow the tag being typed', () => {
   assert.deepEqual(tagSuggestions(used, 'trip '), ['work', 'reimburse', 'tripod'])
   assert.deepEqual(tagSuggestions(used, 'work re'), ['reimburse'])
   assert.deepEqual(tagSuggestions(used, '', 2), ['trip', 'work'])
+})
+
+test('tag chips show only while the field is in use or the entry has a tag', () => {
+  assert.equal(offersTags(false, []), false) // a coffee's review stays clear
+  assert.equal(offersTags(true, []), true)
+  assert.equal(offersTags(false, ['work']), true)
 })
 
 test('a picked tag replaces the one being typed, or goes on the end', () => {

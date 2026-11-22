@@ -13,7 +13,8 @@ Changes to anything below get written here first.
   Past the finger the line dims. Releasing goes back to now.
 - **Merchants, not rows.** Every entry leads with a round mark: the brand's own glyph where one exists, a
   brand-colored monogram otherwise, the category symbol as a fallback. Category symbols sit white on a solid tint. A tagged entry shows its tag after the
-  category; tapping it lists that tag's entries.
+  category, as a label (a second tap target inside the row caught taps meant for the entry); the row's long-press
+  menu lists that tag's entries.
 - **Grouped by day, inset panels.** Activity reads like a statement: day headers with the day's spending, entries on
   rounded panels, the account under each amount.
 - **What's coming, drawn ahead.** Scheduled entries carry a cash account's line past today as a dashed path (red
@@ -27,12 +28,12 @@ Changes to anything below get written here first.
   never the system number pad. Digits shift in from the right like a till (1 5 0 reads $1.50); 00 replaces the
   decimal point. Small + − keys above it add amounts up, with the sum written under the figure. In a new entry the keypad is the whole first screen; editing an entry, it springs up as its own
   raised panel with Done and slides back down over the save button. An amount already there opens selected, like
-  text: the first digit types over it. − on an empty Spending keypad marks a refund, shown as a green +amount with
+  text: the first digit types over it and the first delete clears it. − on an empty Spending keypad marks a refund, shown as a green +amount with
   "Refund" under it.
 - **A new entry is a few questions, one at a time.** Amount and type, what it was, category, the accounts the type
   uses, then a review with the date and Add. Tapping an answer moves on; Back and Next are always there, and dots at
   the top show where you are. Picking a past entry under "What was it?" (of any type; picking one switches the
-  type), a quick action chip, or typing a past place in full and pressing Return fills in what it knows, including
+  type), a quick action chip, or typing a past place in full and pressing Return or Next fills in what it knows, including
   the category and accounts it answers. Next goes one page on, or to the review once nothing after it is left to
   answer; a page opened from the review says Done, and Done or Back goes back there. A chip tapped after typing an
   amount keeps the amount; a chip that only names a category leaves the place to "What was it?", with that

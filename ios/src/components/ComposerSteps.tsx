@@ -1,6 +1,6 @@
 // The new-entry composer's pages and small parts (app/new.tsx holds the flow): "What was it?", the category and
 // account pages, the extras on the review, the progress dots and the keys and pill around the keypad.
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react'
 import { ScrollView, Switch, TextInput, View } from 'react-native'
 import Animated, { interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
@@ -25,6 +25,7 @@ import { useDraft } from '@/lib/draft'
 import { monthsNow } from '@/lib/months'
 import { SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
+import { rowAmount } from '@/lib/txn'
 import { radius, space, useTheme } from '@/theme'
 
 const KIND_ORDER: Kind[] = ['cash', 'card', 'investment', 'loan']
@@ -89,11 +90,15 @@ export function CatMark({ id, size = 30 }: { id: number; size?: number }) {
   return <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={size} />
 }
 
+/** What the composer's Next button calls on "What was it?", so it does what Return does. */
+export interface WhatHandle { submit: () => void }
+
 /** "What was it?": a name, with past places under it. Typing matches every kind; picking one copies its category and
  *  accounts (and its kind, said under the row). A name typed in full that is one past place of this kind counts as
- *  picking it, except on a page opened from the review (`fixing`): there Return only keeps the new name, and the
- *  category and accounts already set stay as they are. */
-export function What({ history, fixing, onPick, onSubmit }: { history: Txn[]; fixing: boolean; onPick: (x: Txn) => void; onSubmit: () => void }) {
+ *  picking it, whether it's left with Return or the bar's Next (`ref`), except on a page opened from the review
+ *  (`fixing`): there it only keeps the new name, and the category and accounts already set stay as they are.
+ *  `onSubmit` moves on without a pick. */
+export function What({ ref, history, fixing, onPick, onSubmit }: { ref?: Ref<WhatHandle>; history: Txn[]; fixing: boolean; onPick: (x: Txn) => void; onSubmit: () => void }) {
   const { c } = useTheme()
   const t = useTally()
   const { d, set } = useDraft()
@@ -109,6 +114,7 @@ export function What({ history, fixing, onPick, onSubmit }: { history: Txn[]; fi
     if (x) pick(x)
     else onSubmit()
   }
+  useImperativeHandle(ref, () => ({ submit }))
   const list = useMemo(() => places(history, t.catOf, { text: d.what, kind: d.kind, category: d.category_id }),
     [d.what, d.kind, d.category_id, history]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
@@ -120,9 +126,10 @@ export function What({ history, fixing, onPick, onSubmit }: { history: Txn[]; fi
         <Group header={d.what ? 'Matches' : 'Recent'}>
           {list.map((x) => {
             const xc = t.catOf(x)
+            const a = rowAmount(xc.type, x.amount) // signed as Activity signs it: a refund is a green +
             return (
               <Row key={x.id} label={x.what} sub={xc.type === d.kind ? xc.name : `${xc.name}, in ${KIND_NAME[xc.type]}`} chevron={false} onPress={() => pick(x)}
-                leading={<CatMark id={x.category_id} />} value={<Money cents={x.amount} tone="neutral" muted variant="callout" />} />
+                leading={<CatMark id={x.category_id} />} value={<Money cents={a.cents} sign={a.sign} tone={a.tone} muted variant="callout" />} />
             )
           })}
         </Group>

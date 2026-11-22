@@ -71,6 +71,10 @@ export function tagSuggestions(used: { tag: string; count: number }[], text: str
   return used.map((x) => x.tag).filter((x) => x.startsWith(word) && !have.has(x)).slice(0, max)
 }
 
+/** Whether the tag field shows its chips of tags in use: only while it's being used (focused) or once the entry has a
+ *  tag. On every review they cluttered the quick path of a coffee or a paycheck. */
+export const offersTags = (focused: boolean, tags: readonly string[]): boolean => focused || tags.length > 0
+
 /** The tags after tapping a suggestion: it takes the place of the tag being typed, or goes on the end. */
 export function addTag(text: string, tag: string): string[] {
   const tags = parseTags(text)

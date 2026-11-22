@@ -58,9 +58,9 @@ export function press(cur: string, key: string): string {
   return digits ? (Number(digits) / 100).toFixed(2) : ''
 }
 
-/** `press` on an amount that was already there when the keypad opened (`over`: it's showing as selected). The first
- *  digit replaces it, like typing over selected text; delete still trims it. Any press ends the selection. */
-export const pressOver = (cur: string, key: string, over: boolean): string => press(over && key !== 'del' ? '' : cur, key)
+/** `press` on an amount that was already there when the keypad opened (`over`: it's showing as selected). Like
+ *  selected text, the first digit replaces it and the first delete clears it. Any press ends the selection. */
+export const pressOver = (cur: string, key: string, over: boolean): string => press(over ? '' : cur, key)
 
 export const fromTxn = (t: Txn, type: CatType): Draft => ({
   ...blank(t.date), id: t.id, date: t.date, what: t.what, category_id: t.category_id, from_id: t.from_id, to_id: t.to_id,

@@ -57,6 +57,12 @@ export function openEntry(id?: number, mode?: 'duplicate') {
   else router.push({ pathname: '/entry', params: { id: String(id), ...(mode ? { mode } : {}) } })
 }
 
+/** "Add another" in the toast after Add: the next entry starts on the same day, and from the account the last one was
+ *  opened from (an account's page, or Activity filtered to one). */
+export const addAnother = (date: string, from?: string) => ({
+  label: 'Add another', run: () => { router.push({ pathname: '/new', params: { date, ...(from ? { from } : {}) } }) },
+})
+
 /** A monthly template's fields from an entry, from the same day next time round. `anchor_day` is the entry's day:
  *  one from Jan 31 starts on Feb 28 and still comes back to the 31st. `today` is never taken as earlier than the
  *  phone's date (a list's bootstrap can be from yesterday). */

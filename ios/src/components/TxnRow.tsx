@@ -68,6 +68,7 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
   const visit = () => router.push({ pathname: '/merchant/[key]', params: { key: place } })
   const tag = t.tags[0]
   const showTag = () => openTag(tag)
+  const tagLabel = tag ? <Txt variant="sub" tone="label2" numberOfLines={1} style={{ fontWeight: '600' }}>{`#${tag}${t.tags.length > 1 ? ` +${t.tags.length - 1}` : ''}`}</Txt> : null
   // A template or quick action is one line: a split line or a row that already repeats doesn't offer them.
   const single = !t.split_group
   const repeat = () => repeatEntry(t, today, t.what || c.name)
@@ -100,11 +101,13 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
             <Txt variant="sub" tone="label2" numberOfLines={1} style={{ flexShrink: 1 }}>
               {future ? `Scheduled, ${sub}` : sub}
             </Txt>
-            {tag && (
+            {/* On the phone the tag is only a label: a tap a little off the name opened the tag's list instead of the
+                entry. The long-press menu has "All tagged #…". The web preview has no menu, so there it's a link. */}
+            {tag && (web ? (
               <Tap feedback="opacity" onPress={showTag} disabled={selecting} accessibilityRole="link" hitSlop={{ top: 12, bottom: 12, left: 6, right: 6 }} style={{ flexShrink: 2 }}>
-                <Txt variant="sub" tone="label2" numberOfLines={1} style={{ fontWeight: '600' }}>{`#${tag}${t.tags.length > 1 ? ` +${t.tags.length - 1}` : ''}`}</Txt>
+                {tagLabel}
               </Tap>
-            )}
+            ) : <View style={{ flexShrink: 2 }}>{tagLabel}</View>)}
             {t.split_group && <Icon sf="square.split.2x1" md="call_split" size={11} color={theme.c.label2} />}
             {t.receipt && <Icon sf="paperclip" md="attach_file" size={11} color={theme.c.label2} />}
             {t.recurring_id && <Icon sf="repeat" md="repeat" size={11} color={theme.c.label2} />}
