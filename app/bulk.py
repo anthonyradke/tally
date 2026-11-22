@@ -8,22 +8,33 @@ from .inputs import opt_id, tag_set, whole
 
 
 def move(con, ids: list[int], b: dict) -> None:
-    """Every row gets `account_id` as its From (`side` "from") or its To. Checked like a recategorize: a Money in row
-    can't take a From, and a transfer can't go to the account it came from. Doesn't commit."""
+    """Every row gets `account_id` as its From (`side` "from"), its To ("to"), or the side its type uses ("each": To
+    for money in, From for the rest, so a mix of spending and money in can move together). Checked like a
+    recategorize: a Money in row can't take a From, and a transfer can't go to the account it came from. Doesn't
+    commit."""
     side = b.get("side")
-    if side not in ("from", "to"):
+    if side not in ("from", "to", "each"):
         raise HTTPException(422, {"errors": ["Pick From or To."]})
     st = service.load(con)
     a = st.acct.get(opt_id(b.get("account_id"), "Account") or 0)
     if not a:
         raise HTTPException(422, {"errors": ["Pick an account."]})
-    rows = [replace(t, **{f"{side}_id": a.id}) for t in st.txns if t.id in set(ids)]
+    want = set(ids)  # once: building it per row took seconds over thousands of ids
+    sides: dict[str, list[int]] = {"from": [], "to": []}
+    rows = []
+    for t in st.txns:
+        if t.id in want:
+            s = side if side != "each" else "to" if st.cat[t.category_id].type == "Money in" else "from"
+            sides[s].append(t.id)
+            rows.append(replace(t, **{f"{s}_id": a.id}))
     errs = sorted({e for t in rows for e in validate(t, st.cat[t.category_id].type, st.acct)})
     if errs:
         raise HTTPException(422, {"errors": [f"Can't move {'that entry' if len(rows) == 1 else 'these'} to {a.name}.",
                                              *errs]})
-    col = "from_account_id" if side == "from" else "to_account_id"  # a constant, never input
-    con.execute(f"UPDATE transactions SET {col}=? WHERE id IN ({','.join('?' * len(ids))})", [a.id, *ids])
+    for s, some in sides.items():
+        if some:
+            col = "from_account_id" if s == "from" else "to_account_id"  # a constant, never input
+            con.execute(f"UPDATE transactions SET {col}=? WHERE id IN ({','.join('?' * len(some))})", [a.id, *some])
 
 
 def revert(con, raw) -> dict:

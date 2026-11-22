@@ -9,7 +9,7 @@ from dataclasses import replace
 from datetime import date
 from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
-from . import db, recurring, search, service
+from . import bulk as bulk_edit, db, recurring, search, service
 from .engine import validate
 from .entries import META_COLS, _client_id, _full, _in_range, _landed, _parse, _remove, _sent, _txn, _write
 from .inputs import body, day, ids as id_list, money, opt_id, tag_set, whole
@@ -269,12 +269,11 @@ async def restore(request: Request, con: Con):
 @router.post("/transactions/bulk")
 async def bulk(request: Request, con: Con):
     """Body: {"ids": [...], "action": "delete" | "recategorize" | "tag" | "account", "category_id"?: int,
-    "tags"?: [..], "account_id"?: int, "side"?: "from" | "to"}, or {"action": "revert", "rows": before} to undo a
-    recategorize, tag or account change. Delete returns the removed rows for Undo; the others return `before` (each
+    "tags"?: [..], "account_id"?: int, "side"?: "from" | "to" | "each" (see bulk.move)}, or {"action": "revert",
+    "rows": before} to undo a recategorize, tag or account change. Delete returns the removed rows for Undo; the others return `before` (each
     row's category and tags as they were, and its accounts after an account change) for revert. Recategorize and
     account changes check every row against its category's From/To rules first: moving spending into an income
     category would count it as income. `count` is the rows that exist."""
-    from . import bulk as bulk_edit
     b = await body(request)
     if b.get("action") == "revert":
         return bulk_edit.revert(con, b.get("rows"))
@@ -299,7 +298,8 @@ async def bulk(request: Request, con: Con):
         c = st.cat.get(opt_id(b.get("category_id"), "Category") or 0)
         if not c:
             raise HTTPException(422, {"errors": ["Pick a category."]})
-        rows = [t for t in st.txns if t.id in set(ids)]
+        want = set(ids)  # once, not per row
+        rows = [t for t in st.txns if t.id in want]
         errs = sorted({e for t in rows for e in validate(replace(t, category_id=c.id), c.type, st.acct)})
         if errs:
             raise HTTPException(422, {"errors": [f"Can't move {'that entry' if len(rows) == 1 else 'these'} to "

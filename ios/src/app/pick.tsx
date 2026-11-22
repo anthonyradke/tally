@@ -1,11 +1,10 @@
 // One form sheet for every short choice: a category, an account, a date, and the bulk actions from Activity.
 // It edits the draft store directly and dismisses; the screen underneath re-renders.
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ScrollView, TextInput, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { AccountMark } from '@/components/AccountMark'
-import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
@@ -14,10 +13,11 @@ import { Group, Row } from '@/components/Row'
 import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
-import { api, ApiError, type BulkBefore, type CatType, type Kind } from '@/lib/api'
+import { api, ApiError, type BulkBefore, type CatType, type Kind, type Txn } from '@/lib/api'
 import { close, useBusy, useCloseHere } from '@/lib/nav'
-import { cachedTxn, invalidateAll } from '@/lib/data'
+import { cachedTxns, invalidateAll } from '@/lib/data'
 import { useDraft } from '@/lib/draft'
+import { sideOf } from '@/lib/feed'
 import { monthsNow } from '@/lib/months'
 import { fits, SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
@@ -54,13 +54,14 @@ function Categories({ line, ids, checked }: { line?: string; ids?: string; check
   const { d, set, setLine } = useDraft()
   const busy = useBusy()
   const closeHere = useCloseHere()
+  const found = useMemo(() => (ids ? cachedTxns(ids.split(',').map(Number)) : new Map<number, Txn>()), [ids])
   if (!t.b) return null
   const bulk = !!ids
   // In the composer, the kind chosen up top goes first; a split line only takes spending.
   const order = bulk ? TYPE_ORDER : [d.kind, ...TYPE_ORDER.filter((x) => x !== d.kind)]
   // Bulk moves only offer categories every chosen row fits (a spending row can't move to Money in: the server
   // refuses it). Rows not in any cached list can't be checked, so then every type shows and the server decides.
-  const rows = bulk ? ids!.split(',').map((x) => cachedTxn(Number(x))) : []
+  const rows = bulk ? ids!.split(',').map((x) => found.get(Number(x))) : []
   const known = rows.every(Boolean)
   const fitsAll = (ty: CatType) => !bulk || !known || rows.every((r) => fits(r!, ty))
   const types = line ? ['Spending' as CatType] : order.filter(fitsAll)
@@ -148,19 +149,23 @@ function AccountGroups({ current, onPick }: { current?: number | null; onPick: (
 }
 
 /** Bulk account change: a new From for spending (or To for money in) on every selected entry, with Undo. A mix of
- *  both asks which side first. */
+ *  both changes each entry's own side: no one side fits them all, so either choice was refused whole. */
 function BulkAccount({ ids, side: given }: { ids: string; side?: string }) {
   const t = useTally()
-  const [side, setSide] = useState<'from' | 'to'>(given === 'to' ? 'to' : 'from')
+  const side = given === 'to' ? 'to' : given === 'either' ? 'either' : 'from'
   const busy = useBusy()
   const closeHere = useCloseHere()
-  const list = ids.split(',').map(Number)
-  // The one account they all share on that side is ticked.
-  const now = new Set(list.map((id) => cachedTxn(id)).map((r) => (r ? (side === 'from' ? r.from_id : r.to_id) : undefined)))
+  const list = useMemo(() => ids.split(',').map(Number), [ids])
+  const found = useMemo(() => cachedTxns(list), [list])
+  // The one account they all share on the side that changes is ticked.
+  const now = new Set(list.map((id) => {
+    const r = found.get(id)
+    return r ? (sideOf(side, t.typeOf(r)) === 'from' ? r.from_id : r.to_id) : undefined
+  }))
   const current = now.size === 1 ? [...now][0] : undefined
   const choose = (id: number) => busy(async () => {
     try {
-      const r = await api.bulk({ ids: list, action: 'account', side, account_id: id })
+      const r = await api.bulk({ ids: list, action: 'account', side: side === 'either' ? 'each' : side, account_id: id })
       invalidateAll().catch(() => {})
       const name = t.acct.get(id)?.name ?? 'the account'
       toast({ text: `Moved ${r.count === 1 ? '1 entry' : `${r.count} entries`} to ${name}`, action: r.before ? undo(r.before) : undefined })
@@ -170,16 +175,10 @@ function BulkAccount({ ids, side: given }: { ids: string; side?: string }) {
   })
   return (
     <>
-      {given === 'either' ? (
-        <View style={{ flexDirection: 'row', gap: space.s, paddingHorizontal: space.xs }}>
-          <Chip label="From" selected={side === 'from'} onPress={() => setSide('from')} />
-          <Chip label="To" selected={side === 'to'} onPress={() => setSide('to')} />
-        </View>
-      ) : (
-        <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.xs }}>
-          {side === 'from' ? 'The account the money came out of.' : 'The account the money went into.'}
-        </Txt>
-      )}
+      <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.xs }}>
+        {side === 'either' ? 'Where spending came out of and money in went into.'
+          : side === 'from' ? 'The account the money came out of.' : 'The account the money went into.'}
+      </Txt>
       <AccountGroups current={current} onPick={choose} />
     </>
   )

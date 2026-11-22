@@ -111,7 +111,7 @@ export const api = {
   /** Undo for deletes: puts rows back exactly (same id, receipt, split and recurring links). */
   restore: (rows: Txn[]) => call<Txn[]>('POST', '/transactions/restore', { rows: rows.map((t) => ({ ...t, amount: t.amount / 100 })) }),
   /** `before`: each row's category and tags (and accounts, after an account change) as they were, for Undo via `revert`. */
-  bulk: (body: { ids: number[]; action: 'delete' | 'recategorize' | 'tag' | 'account'; category_id?: number; tags?: string[]; account_id?: number; side?: 'from' | 'to' }) =>
+  bulk: (body: { ids: number[]; action: 'delete' | 'recategorize' | 'tag' | 'account'; category_id?: number; tags?: string[]; account_id?: number; side?: 'from' | 'to' | 'each' }) =>
     call<{ ok: true; count: number; deleted?: Txn[]; before?: BulkBefore[] }>('POST', '/transactions/bulk', body),
   revert: (rows: BulkBefore[]) => call<{ ok: true; count: number }>('POST', '/transactions/bulk', { action: 'revert', rows }),
   uploadReceipt: (id: number, file: { uri: string; name: string; type: string }) => {

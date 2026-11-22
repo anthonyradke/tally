@@ -82,6 +82,20 @@ def test_bulk_account_change_is_checked_and_can_be_undone(client, world):
     assert ok(client.get(f"/api/transactions/{spend[0]}"))["from_id"] == world["chk"]
 
 
+
+def test_bulk_account_change_each_side_moves_a_mix_with_one_undo(client, world):
+    spend = ok(client.post("/api/transactions", json=txn(world)), 201)["id"]
+    pay = ok(client.post("/api/transactions", json=txn(world, "in")), 201)["id"]
+    bulk = lambda **b: client.post("/api/transactions/bulk", json=b)
+    # Neither side fits both, so a mix of spending and money in takes each row's own side.
+    assert bulk(ids=[spend, pay], action="account", side="to", account_id=world["sav"]).status_code == 422
+    r = ok(bulk(ids=[spend, pay], action="account", side="each", account_id=world["sav"]))
+    got = lambda i: ok(client.get(f"/api/transactions/{i}"))
+    assert (got(spend)["from_id"], got(spend)["to_id"]) == (world["sav"], None)
+    assert (got(pay)["from_id"], got(pay)["to_id"]) == (None, world["sav"])
+    ok(bulk(action="revert", rows=r["before"]))
+    assert got(spend)["from_id"] == world["card"] and got(pay)["to_id"] == world["chk"]
+
 def test_filters(client, world):
     ok(client.post("/api/transactions", json=txn(world, date="2026-08-31", amount=5, what="Early")), 201)
     ok(client.post("/api/transactions", json=txn(world, date="2026-09-01", amount=50, what="Late", note="receipt")), 201)
