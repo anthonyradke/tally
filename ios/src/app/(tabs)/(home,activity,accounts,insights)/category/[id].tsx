@@ -12,10 +12,11 @@ import { StateView } from '@/components/StateView'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
-import { budgetFor, elapsed, paceOver, paidBill, usualFor } from '@/lib/budgets'
+import { budgetFor, elapsed, paceOver, paidBill, USUAL_MONTHS, usualBefore, usualFor, vsUsual } from '@/lib/budgets'
 import { useTransactions } from '@/lib/data'
 import { dayLabel, fromISO, lastOfMonth, monthLabel, monthOf } from '@/lib/dates'
 import { formatCents, pct } from '@/lib/money'
+import { ledgerMonth } from '@/lib/months'
 import { useTally } from '@/lib/tally'
 import { useAllTxns } from '@/lib/balances'
 import { placesIn } from '@/lib/merchant'
@@ -35,10 +36,11 @@ export default function CategoryDetail() {
   const scrub = useSharedValue(-1)
   const x = t.cat.get(Number(id))
   const b = t.b
-  const scoped = asked && /^\d{4}-\d{2}$/.test(asked) ? `${asked}-01` : null
+  // Only a month the ledger has: anything else opens on this month, as if none was passed.
+  const scoped = b ? ledgerMonth(b, asked) : null
   const rows = useTransactions({ category: Number(id), limit: 40, ...(scoped ? { start: scoped, end: lastOfMonth(scoped) } : {}) }, !!x)
   const all = useAllTxns(!!x)
-  const typical = useTypical(b, 3, x?.type === 'Spending')
+  const typical = useTypical(b, USUAL_MONTHS, x?.type === 'Spending')
   // Kept between renders: the full list arriving right after the page opens re-rendered it, and a new toolbar
   // rebuilt "Set budget" under a tap (lib/nav).
   const header = useMemo(() => x && (
@@ -63,8 +65,9 @@ export default function CategoryDetail() {
   const values = months.map((m) => Math.abs(m.by_category[String(x.id)] ?? 0))
   const spent = at ? at.by_category[String(x.id)] ?? 0 : 0
   const budget = at && x.type === 'Spending' ? budgetFor(b, x, at.month) : null
-  const before = values.slice(0, k)
-  const avg = before.length ? Math.round(before.reduce((n, v2) => n + v2, 0) / before.length) : null
+  // The same months Trends averages, so its card and this page agree on the change.
+  const usual = usualBefore(values, k)
+  const avg = usual != null ? Math.round(usual) : null
   const partial = !!at && elapsed(at.month, b.today) < 1
   const usualNow = typical && x.type === 'Spending' ? Math.round(typical.by.get(x.id) ?? 0) : null
   const warn = budget && at ? paceOver(spent, budget, at.month, b.today, usualFor(typical, x.id)) : null
@@ -106,7 +109,7 @@ export default function CategoryDetail() {
               {/* The last point is a month still going, so it nearly always sits low: its dot breathes, and the line
                   under the chart says what's usual by now. */}
               <ScrubChart scrub={scrub} slots={values.length} zero series={[{ values, color }]} height={110} guide={budget} live={elapsed(months.at(-1)!.month, b.today) < 1} />
-              {avg != null && <Txt variant="foot" tone="label2" num>{usualLine(name, avg, Math.abs(spent), partial, usualNow)}</Txt>}
+              {avg != null && <Txt variant="foot" tone="label2" num>{usualLine(name, k > USUAL_MONTHS, avg, vsUsual(Math.abs(spent), usual), partial, usualNow)}</Txt>}
             </Panel>
           )}
         </View>
@@ -154,10 +157,10 @@ export default function CategoryDetail() {
 
 /** The line under the chart: the month on show against the average of the months before it. A month still going
  *  also says what's usual by this day; a finished one says how it compared. */
-function usualLine(name: string, avg: number, spent: number, partial: boolean, usualNow: number | null): string {
-  const base = `Average before ${name}: ${formatCents(avg, { cents: false })} a month`
+function usualLine(name: string, windowed: boolean, avg: number, change: number | null, partial: boolean, usualNow: number | null): string {
+  const base = `${windowed ? `Average of the ${USUAL_MONTHS} months before ${name}` : `Average before ${name}`}: ${formatCents(avg, { cents: false })} a month`
   if (partial) return usualNow != null ? `${base}, ${formatCents(usualNow, { cents: false })} by this day` : base
-  if (!avg) return base
-  const change = Math.round(((spent - avg) / avg) * 100)
-  return `${base}. ${name} came in ${change === 0 ? 'about the same' : `${Math.abs(change).toLocaleString('en-US')}% ${change > 0 ? 'higher' : 'lower'}`}.`
+  if (change == null) return base
+  const p = Math.round(Math.abs(change) * 100)
+  return `${base}. ${name} came in ${change === 0 ? 'about the same' : `${p.toLocaleString('en-US')}% ${change > 0 ? 'higher' : 'lower'}`}.`
 }

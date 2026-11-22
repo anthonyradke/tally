@@ -26,6 +26,24 @@ export function paceOver(spent: number, budget: number, month: string, today: st
   return projected > budget * 1.05 ? projected - budget : null
 }
 
+/** How many months before a month its usual averages over. Trends and the category page use the same ones, so a card
+ *  reading +40% doesn't open a page saying "18% higher". */
+export const USUAL_MONTHS = 5
+
+/** The average of the (up to `USUAL_MONTHS`) values before index `k`, or null with none before it. */
+export function usualBefore(values: number[], k: number): number | null {
+  const before = values.slice(Math.max(0, k - USUAL_MONTHS), k)
+  return before.length ? before.reduce((n, v) => n + v, 0) / before.length : null
+}
+
+/** A month against its usual as a share (0.4 = 40% higher), or null with nothing usual to go by. Within 5% either way
+ *  is "about the same": Trends shows no figure and the category page says so. */
+export function vsUsual(now: number, usual: number | null): number | null {
+  if (usual == null || usual <= 0) return null
+  const change = (now - usual) / usual
+  return Math.abs(change) < 0.05 ? 0 : change
+}
+
 /** A category's entry in a `Typical`, as `paceOver` takes it. */
 export const usualFor = (t: { by: Map<number, number>; full: Map<number, number> } | null, id: number) =>
   t && t.full.has(id) ? { by: t.by.get(id) ?? 0, full: t.full.get(id)! } : null
