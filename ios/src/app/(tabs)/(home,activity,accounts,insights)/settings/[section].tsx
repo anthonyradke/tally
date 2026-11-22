@@ -186,7 +186,7 @@ function Empty({ sf, md, title, body }: { sf: 'bolt' | 'repeat' | 'bookmark'; md
 function widgetNames(today: string): Record<string, [string, string?]> {
   const month = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'long' })
   return {
-    networth: [`Up in ${month(today)}`, 'The big figure: money in less spending. A tap on Home swaps it for net worth.'],
+    networth: [`Up in ${month(today)}`, 'Money in, less spending and loan payments. A tap on Home swaps it for net worth.'],
     review: [`${month(monthBefore(today))} in review`, 'Shows during the first week of a month'],
     stats: [month(today), 'Spent so far, against the months before'], quick: ['Quick add'], budgets: ['Budgets'], spending: ['Where it went'],
     ef: ['Emergency fund'], forecast: ['Next 30 days'], upcoming: ['Coming up'], recent: ['Recent'], roth: ['Roth IRA'],

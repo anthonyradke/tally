@@ -80,7 +80,9 @@ export default function Edit() {
         case 'quick': return api.saveFavorite(f, n)
         case 'recurring': {
           const r = a.recurring.find((x) => x.id === n)
-          if (!r || f.next_date === dueOf(r)) return api.saveRecurring(f, n)
+          // Unchanged by hand, it goes back as the date due now: a skip from this screen moves that on meanwhile, and
+          // the date it opened with would then read as a move.
+          if (!r || f.next_date === start?.next_date) return api.saveRecurring(r ? { ...f, next_date: dueOf(r) } : f, n)
           // A new date: its entries ahead are posted again from it. Undo puts the old schedule back.
           await api.saveRecurring({ ...f, move: true }, n)
           note = { text: movedText(String(f.label), f.freq as Freq, String(f.next_date), t.today), action: { label: 'Undo', run: async () => {

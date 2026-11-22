@@ -51,7 +51,7 @@ function RecurringRow({ r, a }: { r: AdminRecurring; a: AdminData }) {
     { label: 'Delete', sf: 'trash', md: 'delete', color: '#FF3B30', run: remove, destructive: true },
   ]
   return (
-    <View accessible accessibilityRole="button" accessibilityLabel={`${r.label}, ${formatCents(r.amount)}, ${r.active ? `${FREQ[r.freq]}, ${nextDue(dueOf(r), today)}` : 'paused'}`}
+    <View accessible accessibilityRole={process.env.EXPO_OS === 'web' ? undefined : 'button'} accessibilityLabel={`${r.label}, ${formatCents(r.amount)}, ${r.active ? `${FREQ[r.freq]}, ${nextDue(dueOf(r), today)}` : 'paused'}`}
       accessibilityActions={[{ name: 'activate' }, { name: 'pause', label: r.active ? 'Pause' : 'Resume' }, ...(r.active ? [{ name: 'skip', label: skipLabel(r, today) }] : []), { name: 'delete', label: 'Delete' }]}
       onAccessibilityAction={(e) => {
         const n = e.nativeEvent.actionName
