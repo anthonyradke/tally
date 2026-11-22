@@ -3,10 +3,10 @@
 // against the bank's in one tap.
 import { ScrollView, View } from 'react-native'
 import type { Account, Txn } from '@/lib/api'
-import { balanceWords, midSentence } from '@/lib/catchup'
+import { balanceWords } from '@/lib/balances'
+import { midSentence } from '@/lib/catchup'
 import { daysSince, useCaughtUp } from '@/lib/caughtUp'
 import { dayLabel, fromISO } from '@/lib/dates'
-import { formatCents } from '@/lib/money'
 import { useTally } from '@/lib/tally'
 import { radius, space, useTheme } from '@/theme'
 import { AccountMark } from './AccountMark'
@@ -49,7 +49,7 @@ export function Ledger({ acct, rows, running, session, boundary }: {
             ) : i > 0 && <Hairline inset={space.l + 40 + space.m} />}
             <View>
               <TxnRow t={r} c={t.catOf(r)} acct={t.acct} mark={t.markFor(r.what)} today={today} here={acct.id}
-                showDate={bal != null && r.date <= today ? `${day}, balance ${balanceWords(acct.kind, bal, formatCents)}` : day}
+                showDate={bal != null && r.date <= today ? `${day}, balance ${balanceWords(bal, acct.kind)}` : day}
                 padTop={i === 0 ? space.xs : 0} padBottom={i === rows.length - 1 ? space.xs : 0} />
               {session.has(r.id) && (
                 <View pointerEvents="none" style={{ position: 'absolute', left: 6, top: '50%', marginTop: -3, width: 6, height: 6, borderRadius: 3, backgroundColor: c.ink }} />
@@ -98,7 +98,7 @@ export function LeftOff({ accounts, acct, onAcct, rows, loading, added, session,
         <View style={{ marginHorizontal: space.l, padding: space.l, gap: space.m, backgroundColor: c.panel, borderRadius: radius.panel, borderCurve: 'continuous' }}>
           <View style={{ gap: 2 }}>
             <Txt variant="sub" tone="label2">{`${acct.name} in Tally today`}</Txt>
-            <Txt num style={{ fontSize: 34, fontWeight: '700', letterSpacing: -0.8, color: c.label }}>{balanceWords(acct.kind, balance, formatCents)}</Txt>
+            <Txt num style={{ fontSize: 34, fontWeight: '700', letterSpacing: -0.8, color: c.label }}>{balanceWords(balance, acct.kind)}</Txt>
           </View>
           {matched ? (
             <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 44 }}>
@@ -120,7 +120,7 @@ export function LeftOff({ accounts, acct, onAcct, rows, loading, added, session,
       {!(caught && balance != null) && (
         <View style={{ marginHorizontal: space.l }}>
           <Row label="Check the balance against the bank" sf="checkmark.seal" md="verified" onPress={onCheck}
-            sub={balance != null ? `Tally has ${balanceWords(acct.kind, balance, formatCents)} today. Or match a statement file, line by line.` : 'Or match a statement file, line by line'} />
+            sub={balance != null ? `Tally has ${balanceWords(balance, acct.kind)} today. Or match a statement file, line by line.` : 'Or match a statement file, line by line'} />
         </View>
       )}
     </ScrollView>

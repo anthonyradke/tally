@@ -5,7 +5,8 @@ import { ScrollView, TextInput, View } from 'react-native'
 import Animated, { ZoomIn } from 'react-native-reanimated'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import type { Account, CatType, Kind, Txn } from '@/lib/api'
-import { balanceWords, otherSide, suggest, usualCategories } from '@/lib/catchup'
+import { balanceWords } from '@/lib/balances'
+import { otherSide, suggest, usualCategories } from '@/lib/catchup'
 import { dayLabel } from '@/lib/dates'
 import { press, toCents, useDraft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
@@ -98,7 +99,7 @@ export function What({ acct, history, count, last, onUndo, onPick, onSubmit, onC
             </Txt>
             {last.row && !last.error && last.after && (
               <Txt variant="foot" tone="label2" num numberOfLines={1}>
-                {`${acct.name} after it: ${balanceWords(acct.kind, last.after.cents, formatCents)}, ${dayLabel(last.after.date, t.today)}`}
+                {`${acct.name} after it: ${balanceWords(last.after.cents, acct.kind)}, ${dayLabel(last.after.date, t.today)}`}
               </Txt>
             )}
           </View>
@@ -158,7 +159,7 @@ export function Amount({ acct, history, count, lookalike, errors, shake, after, 
         </Tap>
         {after != null && cents > 0 && (
           <Txt variant="foot" tone="label2" num numberOfLines={1}>
-            {`${acct.name} after this: ${balanceWords(acct.kind, after, formatCents)}, ${dayLabel(d.date, t.today)}`}
+            {`${acct.name} after this: ${balanceWords(after, acct.kind)}, ${dayLabel(d.date, t.today)}`}
           </Txt>
         )}
         {lookalike && (

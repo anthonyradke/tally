@@ -13,7 +13,7 @@ import { Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { KIND_LABEL } from '@/icons/categories'
 import type { Account, Bootstrap, Kind } from '@/lib/api'
-import { groupTotal, split, useBalancesToday } from '@/lib/balances'
+import { balanceWords, split, useBalancesToday } from '@/lib/balances'
 import { fromISO, lastOfMonth } from '@/lib/dates'
 import { formatCents } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
@@ -90,7 +90,7 @@ function Body({ b, bal }: { b: Bootstrap; bal: Map<number, number> }) {
           <View key={k} style={{ gap: space.s }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: space.xs }}>
               <Txt variant="title2" accessibilityRole="header">{KIND_LABEL[k]}</Txt>
-              <Txt variant="callout" tone="label2" num>{groupTotal(sum, k)}</Txt>
+              <Txt variant="callout" tone="label2" num>{balanceWords(sum, k)}</Txt>
             </View>
             <Panel pad={false}>
               {list.map((a, i) => (

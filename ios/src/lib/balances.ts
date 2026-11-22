@@ -74,8 +74,9 @@ export function split(b: Bootstrap, bal: Map<number, number>) {
   return { assets, debts, net: assets - debts }
 }
 
-/** A group's total on Accounts. Cards and loans read "owed"; one paid past zero is a credit, not "−$6.88 owed". */
-export function groupTotal(cents: number, kind: Account['kind']): string {
+/** A balance in words, as the account's own app would put it (Accounts' group totals, Catch up): a card or loan
+ *  owes, and one paid past zero is in credit, not "−$6.88 owed". */
+export function balanceWords(cents: number, kind: Account['kind']): string {
   if (kind !== 'card' && kind !== 'loan') return formatCents(cents)
-  return cents < 0 ? `${formatCents(-cents)} credit` : `${formatCents(cents)} owed`
+  return cents < 0 ? `${formatCents(-cents)} in credit` : `${formatCents(cents)} owed`
 }
