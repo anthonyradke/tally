@@ -118,7 +118,9 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
   }
   const clearLine = () => { filledFor.current = null; handed.current = false; setMissing(null); setFresh(false); setSuggested(false) }
   const refuse = () => { shake(); play('error', 0.6); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}) }
-  const lookalike = acct && cents && page === 'amount'
+  // Not while it saves or draws its check: the row just added is in the ledger by then, and would be its own lookalike
+  // (with a Skip that dropped its Undo).
+  const lookalike = acct && cents && page === 'amount' && !saving && !done
     ? duplicateOf(ledger.rows ?? [...ledger.live, ...(history.data?.items ?? [])], { date: d.date, amount: cents * (d.refund ? -1 : 1), what: d.what },
       acct.id, (id) => gone.has(id), fresh && suggested)
     : null
