@@ -3,9 +3,10 @@
 import { merchantKey } from '@/icons/merchants'
 import type { CatType, Favorite, Txn } from './api'
 import { dayLabel } from './dates'
-import { blank, fromCents, type Draft } from './draft'
+import { blank, fromCents, toCents, type Draft } from './draft'
 import { formatCents } from './money'
 import { SHAPES } from './shapes'
+import type { ToastMsg } from './toast'
 import { rowAmount, type Tone } from './txn'
 
 /** The kind's name on the amount page's switch and under the figure on the review. */
@@ -127,4 +128,22 @@ export function addedText(o: { cents: number; kind: CatType; refund: boolean; wh
     s = `${o.refund ? 'Refunded' : 'Added'} ${amount}${o.category ? ` to ${o.category}` : ''}`
   }
   return day ? `${s} ${day}` : s
+}
+
+/** `addedText` for a draft just saved, from the composer or the form. A split names its categories ("to Groceries and
+ *  Household"), or how many when there are more than two. */
+export function draftAdded(d: Draft, name: { cat: (id: number) => string | undefined; acct: (id: number) => string | undefined }, today: string): string {
+  const ids = [...new Set(d.split ? d.split.map((l) => l.category_id) : [d.category_id])].filter((x): x is number => !!x)
+  const names = ids.map(name.cat).filter((x): x is string => !!x)
+  const category = names.length > 2 ? `${names.length} categories` : names.length ? names.join(' and ') : undefined
+  return addedText({ cents: toCents(d.amount), kind: d.kind, refund: d.refund, what: d.what, category,
+    account: d.to_id ? name.acct(d.to_id) : undefined, date: d.date, today })
+}
+
+/** The toast after Add, the same from the composer and the form: what was added, "Add another", and tapping the message
+ *  opens the entry (`open`) to fix a typo straight away. `lost`: the receipt photo didn't upload. */
+export function addedToast(text: string, o: { lost: boolean; again: ToastMsg['action']; open?: () => void }): Omit<ToastMsg, 'id'> {
+  return o.lost
+    ? { text: `${text}, but the receipt photo didn't upload. Add it from the entry.`, tone: 'error', action: o.again, onPress: o.open }
+    : { text, action: o.again, onPress: o.open }
 }

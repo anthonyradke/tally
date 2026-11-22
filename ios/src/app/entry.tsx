@@ -30,7 +30,8 @@ import { merchantKey } from '@/icons/merchants'
 import { api, ApiError, type CatType, type Txn } from '@/lib/api'
 import { close, useBusy, useCloseHere, useLatest } from '@/lib/nav'
 import { useDraftOwner } from '@/lib/draftOwner'
-import { deleteTxns, quickFromEntry, repeatEntry } from '@/lib/actions'
+import { addAnother, deleteTxns, openEntry, quickFromEntry, repeatEntry } from '@/lib/actions'
+import { addedToast, draftAdded } from '@/lib/compose'
 import { cachedTxn, invalidateAll, useTransactions } from '@/lib/data'
 import { blank, fromCents, fromTxn, pressOver, toCents, toInputs, useDraft, type Draft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
@@ -220,6 +221,9 @@ export function Entry({ embedded }: { embedded?: boolean }) {
     setErrors(errs)
     if (errs.length) { if (!cents) shake(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}); return }
     setSaving(true)
+    // A new entry's toast is the composer's: Add another (same day, same account it was opened from; embedded in the
+    // composer, the composer's), and tapping it opens what was just added. Splits are the ones likeliest to need a fix.
+    const again = editing ? undefined : addAnother(d.date, params.from)
     let settle = (_saved: boolean) => {}
     pending.current = new Promise<boolean>((r) => { settle = r })
     try {
@@ -233,7 +237,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
           leaving.current = true
           settle(true) // queued: it'll be sent, nothing to offer back
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {})
-          toast({ text: QUEUED })
+          toast({ text: QUEUED, action: again })
           close()
           return
         }
@@ -251,8 +255,11 @@ export function Entry({ embedded }: { embedded?: boolean }) {
       setDone(true) // the button draws a check before the sheet goes
       await new Promise((r) => setTimeout(r, 560))
       closeHere()
-      toast(lost ? { text: `${editing ? 'Saved' : `Added ${formatCents(cents)}`}, but the receipt photo didn't upload. Try adding it again.`, tone: 'error' }
-        : { text: editing ? 'Saved' : `Added ${formatCents(cents)}${cat && !d.split ? ` to ${cat.name}` : ''}` })
+      if (editing) toast(lost ? { text: "Saved, but the receipt photo didn't upload. Try adding it again.", tone: 'error' } : { text: 'Saved' })
+      else {
+        const open = saved[0] ? () => openEntry(saved[0].id) : undefined
+        toast(addedToast(draftAdded(d, { cat: (x) => t.cat.get(x)?.name, acct: (x) => t.acct.get(x)?.name }, t.today), { lost, again, open }))
+      }
     } catch (e) {
       settle(false) // closed meanwhile: the toast offers the draft back
       setErrors(e instanceof ApiError ? e.errors : ['Tally is unreachable. Check Tailscale and try again.'])

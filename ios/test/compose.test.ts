@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatType, Favorite, Txn } from '@/lib/api'
-import { addedText, addLabel, chipIn, chipOut, exactPlace, namesPlace, places, quickFill, signed, toKind, withKind } from '@/lib/compose'
+import { addedText, addedToast, addLabel, chipIn, chipOut, draftAdded, exactPlace, namesPlace, places, quickFill, signed, toKind, withKind } from '@/lib/compose'
 import { blank, type Draft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
 import { rowAmount } from '@/lib/txn'
@@ -161,4 +161,26 @@ test('the kind switch keeps the account it was opened from on the side that fits
   const d = draft({ from_id: 4, category_id: 3 })
   assert.deepEqual(toKind(d, 'Money in', 'Spending', 4), { kind: 'Money in', category_id: null, from_id: null, to_id: 4, refund: false })
   assert.deepEqual(toKind(d, 'Spending', 'Spending', 4), { kind: 'Spending', category_id: 3, from_id: 4, to_id: null, refund: false })
+})
+
+test('the form and the composer say the same after Add, a split naming its categories', () => {
+  const name = { cat: (id: number) => CATS[id]?.name, acct: (id: number) => (id === 9 ? 'Checking' : undefined) }
+  const d = draft({ amount: '120', category_id: 3, what: 'Target' })
+  assert.equal(draftAdded(d, name, '2026-11-22'), 'Added $120.00 to Groceries')
+  const two = { ...d, split: [{ key: 'a', category_id: 3, amount: '80' }, { key: 'b', category_id: 2, amount: '40' }] }
+  assert.equal(draftAdded(two, name, '2026-11-22'), 'Added $120.00 to Groceries and Gas')
+  const same = { ...d, split: [{ key: 'a', category_id: 3, amount: '80' }, { key: 'b', category_id: 3, amount: '40' }] }
+  assert.equal(draftAdded(same, name, '2026-11-22'), 'Added $120.00 to Groceries')
+  const three = { ...two, split: [...two.split, { key: 'c', category_id: 4, amount: '0' }] }
+  assert.equal(draftAdded({ ...three, date: '2026-11-21' }, name, '2026-11-22'), 'Added $120.00 to 3 categories yesterday')
+  assert.equal(draftAdded(draft({ amount: '2185.40', kind: 'Money in', category_id: 1, to_id: 9, what: 'Acme Corp' }), name, '2026-11-22'), 'Acme Corp, +$2,185.40 to Checking')
+
+  const again = { label: 'Add another', run: () => {} }
+  const open = () => {}
+  assert.deepEqual(addedToast('Added $5.40', { lost: false, again, open }), { text: 'Added $5.40', action: again, onPress: open })
+  const lost = addedToast('Added $5.40', { lost: true, again, open })
+  assert.equal(lost.tone, 'error')
+  assert.equal(lost.action, again)
+  assert.equal(lost.onPress, open)
+  assert.match(lost.text, /^Added \$5\.40, but the receipt photo didn't upload/)
 })

@@ -7,7 +7,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, View } from 'react-native'
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, ZoomIn } from 'react-native-reanimated'
-import { router, Stack, useLocalSearchParams } from 'expo-router'
+import { Stack, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { CheckDraw } from '@/components/CheckDraw'
@@ -21,9 +21,9 @@ import { RollingText } from '@/components/Rolling'
 import { useShake } from '@/components/Shake'
 import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
-import { openEntry } from '@/lib/actions'
+import { addAnother, openEntry } from '@/lib/actions'
 import { api, ApiError, type CatType, type Txn } from '@/lib/api'
-import { addedText, addLabel, chipIn, chipOut, KIND_NAME, quickFill, signed, toKind, withKind } from '@/lib/compose'
+import { addedToast, addLabel, chipIn, chipOut, draftAdded, KIND_NAME, quickFill, signed, toKind, withKind } from '@/lib/compose'
 import { close, useBusy, useCloseHere } from '@/lib/nav'
 import { useDraftOwner } from '@/lib/draftOwner'
 import { invalidateAll, useTransactions } from '@/lib/data'
@@ -245,7 +245,7 @@ function Composer() {
     if (errs.length) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}); return }
     setSaving(true)
     // Add another keeps the day and the account it was opened from (an account's page, or Activity filtered to one).
-    const again = { label: 'Add another', run: () => { router.push({ pathname: '/new', params: { date: d.date, ...(from ? { from } : {}) } }) } }
+    const again = addAnother(d.date, from)
     try {
       const saved = await sendOrQueue(lines, d.what || (cat?.name ?? 'Entry'))
       if (!saved) {
@@ -268,10 +268,7 @@ function Composer() {
       // Catching up on a week at once: Add another starts the next entry on the same day. Tapping the message opens
       // the entry just added, to fix a typo straight away.
       const open = saved[0] ? () => openEntry(saved[0].id) : undefined
-      const text = addedText({ cents, kind: d.kind, refund: d.refund, what: d.what, category: cat?.name,
-        account: d.to_id ? t.acct.get(d.to_id)?.name : undefined, date: d.date, today: t.today })
-      toast(lost ? { text: `${text}, but the receipt photo didn't upload. Add it from the entry.`, tone: 'error', action: again, onPress: open }
-        : { text, action: again, onPress: open })
+      toast(addedToast(draftAdded(d, { cat: (x) => t.cat.get(x)?.name, acct: (x) => t.acct.get(x)?.name }, t.today), { lost, again, open }))
     } catch (e) {
       setErrors(e instanceof ApiError ? e.errors : ['Tally is unreachable. Check Tailscale and try again.'])
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
