@@ -8,13 +8,13 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## Unreleased
+## 3.7.0 (2026-11-22)
 A pass over how the app feels in daily use, from reviewers using it the way it gets used: logging single purchases,
 the weekly catch-up, finding and fixing old entries, checking where money stands, and keeping settings up.
 
 Added
-- Tags show on entries; tapping one lists every entry with it, and the editor and new entries suggest tags already
-  in use.
+- Tags show on entries, the long-press menu lists every entry with one, and the editor, new entries, Filters and
+  bulk tagging suggest tags already in use.
 - Select mode has Select all (including entries not loaded yet), shows the selection's total, and can move entries
   to another account, with Undo.
 - Catch up: "Bank says the same" reconciles the account in one tap once its entries are in, with Undo. "N added"
@@ -28,6 +28,11 @@ Added
 - Settings has Export (CSV) and Month end; account and category pages have an Edit button; Accounts and Insights
   have the settings gear; Quick add has Edit and New; Coming up links to Recurring; Home ends with Customize Home.
 - A place's logo picker opens from its mark and has a brand search.
+- Activity filtered to one cash account or card shows each day's closing balance, and signs rows the way the
+  bank's statement does, so it can be checked line by line.
+- A search with no matches says when Recently deleted has some. The saved view that's on is named in the pill row,
+  and tapping it brings the view back after a change.
+- Catch up's Home suggestion can be turned off per account, with Undo.
 
 Changed
 - New entries: a quick action tapped after typing an amount keeps the amount; Next goes straight to the review once
@@ -46,8 +51,8 @@ Changed
   a Done key; budgets save when you go Back.
 - Catch up starts each account on the day of its newest entry, fills in a past place's last amount as a
   suggestion, offers "Skip, it's already in" for a lookalike, picks the right direction for a card payment, shows
-  running balances, and marks this session's entries. Home suggests catching up an account whose newest entry is a
-  week old.
+  running balances, and marks this session's entries. Home also suggests catching up an account that has never
+  been caught up.
 - Search ignores punctuation ("trader joes" finds Trader Joe's), takes today, yesterday, this or last week and this
   or last month, and matches amounts properly (9.01 finds only $9.01; exact amounts come first).
 - Saved views keep "Last month" or "This year" by name so they move with the calendar; the view that's on is ticked,
@@ -68,6 +73,20 @@ Changed
   a hidden account as "Name (hidden)", and a hidden account that still holds money stays on Accounts.
 - The account form puts name, type and balances first, with the look under one Appearance row; the starting
   balance names the day it applies to. Recently deleted names what it put back and can put back a whole bulk delete.
+- The Home suggestion to catch up follows each account's own pace and leaves alone accounts that see only a few
+  entries a month.
+- Catch up names a skipped lookalike, shows "Missing $10.00 from Reconcile" when it came from a gap, keeps the
+  "after it" balance current, puts the most used spending first for a new name, and counts this session's and
+  waiting entries as lookalikes.
+- Delete on a selected amount clears it. Tag suggestions show while the tag field is in use. The row's tag is a
+  label on the phone; the long-press menu lists that tag's entries.
+- A split saved from the form gets the same "Added" message, and tapping it shows the split's lines.
+- Hand-typed monthly bills (a utility typed each month) count as bills in the story, the calendar and the month in
+  review. Home's scheduled total matches the upcoming list.
+- A category page opened on a past month rests its chart on that month.
+- Recently deleted labels a skipped recurring date ("Skipped from Rent") with Unskip. Hiding an account only offers
+  accounts that fit as the new home for its quick actions and bills, and a suggestion on a hidden account picks a
+  shown one. The category page's budget editor has this month and next.
 
 Fixed
 - Moving a recurring bill's next date could delete bills already scheduled.
@@ -75,6 +94,10 @@ Fixed
 - A card payment entered on the card counted as money leaving it.
 - Home's Recent "See all" could open Activity with an old search still on.
 - Saved views kept fixed dates and a hidden search.
+- Putting back a skipped recurring date from Recently deleted after unskipping it posted the bill twice; a date
+  that's already posted is now refused.
+- Opening an entry from a screen with a draft in progress (Catch up, a new entry) could replace that draft when
+  the editor closed.
 
 ## 3.6.2 (2026-11-20)
 Fixed
