@@ -43,7 +43,7 @@ Changes to anything below get written here first.
   category's usual places first. The figure is signed as Activity signs the row. A day other than today shows as a
   pill above the figure. The date is the past week as a row of days (entries often get caught up at the end of the
   week) plus the calendar, and "Add another" in the toast starts the next entry on the same day; tapping the toast's
-  message opens the entry just added. A new entry starts empty (no guessed category or account); tapping a quick
+  message opens the entry just added (a split, its lines together in Activity). A new entry starts empty (no guessed category or account); tapping a quick
   action again takes it back out, keeping the type and any amount you typed. Splitting hands the draft to the full
   form. The editor uses the same row of days. Splitting hides the type and quick actions; line 1 takes whatever the
   other lines leave until it's typed into. The steps move like pages in a stack: the next one slides in from the right over

@@ -21,7 +21,7 @@ import { RollingText } from '@/components/Rolling'
 import { useShake } from '@/components/Shake'
 import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
-import { addAnother, openEntry } from '@/lib/actions'
+import { addAnother, openAdded } from '@/lib/actions'
 import { api, ApiError, type CatType, type Txn } from '@/lib/api'
 import { addedToast, addLabel, chipIn, chipOut, draftAdded, KIND_NAME, quickFill, signed, toKind, withKind } from '@/lib/compose'
 import { close, useBusy, useCloseHere } from '@/lib/nav'
@@ -267,7 +267,7 @@ function Composer() {
       closeHere()
       // Catching up on a week at once: Add another starts the next entry on the same day. Tapping the message opens
       // the entry just added, to fix a typo straight away.
-      const open = saved[0] ? () => openEntry(saved[0].id) : undefined
+      const open = openAdded(saved)
       toast(addedToast(draftAdded(d, { cat: (x) => t.cat.get(x)?.name, acct: (x) => t.acct.get(x)?.name }, t.today), { lost, again, open }))
     } catch (e) {
       setErrors(e instanceof ApiError ? e.errors : ['Tally is unreachable. Check Tailscale and try again.'])

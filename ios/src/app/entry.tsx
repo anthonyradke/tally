@@ -30,7 +30,7 @@ import { merchantKey } from '@/icons/merchants'
 import { api, ApiError, type CatType, type Txn } from '@/lib/api'
 import { close, useBusy, useCloseHere, useLatest } from '@/lib/nav'
 import { useDraftOwner } from '@/lib/draftOwner'
-import { addAnother, deleteTxns, openEntry, quickFromEntry, repeatEntry } from '@/lib/actions'
+import { addAnother, deleteTxns, openAdded, quickFromEntry, repeatEntry } from '@/lib/actions'
 import { addedToast, draftAdded } from '@/lib/compose'
 import { cachedTxn, invalidateAll, useTransactions } from '@/lib/data'
 import { blank, fromCents, fromTxn, pressOver, toCents, toInputs, useDraft, type Draft } from '@/lib/draft'
@@ -257,7 +257,7 @@ export function Entry({ embedded }: { embedded?: boolean }) {
       closeHere()
       if (editing) toast(lost ? { text: "Saved, but the receipt photo didn't upload. Try adding it again.", tone: 'error' } : { text: 'Saved' })
       else {
-        const open = saved[0] ? () => openEntry(saved[0].id) : undefined
+        const open = openAdded(saved)
         toast(addedToast(draftAdded(d, { cat: (x) => t.cat.get(x)?.name, acct: (x) => t.acct.get(x)?.name }, t.today), { lost, again, open }))
       }
     } catch (e) {

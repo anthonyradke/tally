@@ -57,6 +57,14 @@ export function openEntry(id?: number, mode?: 'duplicate') {
   else router.push({ pathname: '/entry', params: { id: String(id), ...(mode ? { mode } : {}) } })
 }
 
+/** What tapping an Added toast opens: the entry, or for a split its lines together in Activity, since the editor holds
+ *  one line and changing it there alone would unbalance the rest. */
+export function openAdded(saved: Txn[]): (() => void) | undefined {
+  const group = saved.length > 1 ? saved[0].split_group : null
+  if (group) return () => { router.push({ pathname: '/activity', params: { group } }) }
+  return saved[0] ? () => openEntry(saved[0].id) : undefined
+}
+
 /** "Add another" in the toast after Add: the next entry starts on the same day, and from the account the last one was
  *  opened from (an account's page, or Activity filtered to one). */
 export const addAnother = (date: string, from?: string) => ({
