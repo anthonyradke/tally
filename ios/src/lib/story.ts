@@ -12,7 +12,10 @@ export interface Story {
   /** Share of money in that was left over, 0..1, or null with nothing in. */
   kept: number | null
   top: { c: Category; cents: number; share: number }[]
-  biggestDay: { date: string; cents: number; rows: Txn[] } | null
+  /** The top list leaves out bill categories (mostly recurring rows, like rent), so it says "besides your bills". */
+  besidesBills: boolean
+  /** The costliest day, counting everyday spending only: recurring bills left out. */
+  biggestDay: { date: string; cents: number; rows: Txn[]; billsAside: boolean } | null
   biggest: Txn | null
   /** Days with no spending, out of the days in the month. */
   quiet: { days: number; of: number; streak: number }
@@ -22,7 +25,7 @@ export interface Story {
   /** Category with the largest rise and the largest fall against the month before. */
   movers: { up?: { c: Category; by: number }; down?: { c: Category; by: number } }
   worth: { change: number; values: number[] } | null
-  budgets: { kept: number; of: number } | null
+  budgets: { kept: number; of: number; missed: { c: Category; over: number }[] } | null
   /** Spending against the month before: whole months, or for a month still going, both up to the same day. */
   vs: { now: number; before: number } | null
 }
@@ -44,17 +47,24 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
   const spending = inMonth.filter(spendRow)
   const cats = new Map(b.categories.map((c) => [c.id, c]))
 
+  // Bills: categories whose month is mostly recurring rows. "Most of it went to Rent, 60%" said nothing new.
+  const recurring = new Map<number, number>()
+  for (const t of spending) if (t.recurring_id) recurring.set(t.category_id, (recurring.get(t.category_id) ?? 0) + t.amount)
   const byCat = Object.entries(m.by_category)
     .map(([id, cents]) => ({ c: cats.get(Number(id))!, cents }))
     .filter((x) => x.c?.type === 'Spending' && x.cents > 0).sort((a, z) => z.cents - a.cents)
-  const top = byCat.slice(0, 3).map((x) => ({ ...x, share: m.spent > 0 ? x.cents / m.spent : 0 }))
+  const everyday = byCat.filter((x) => (recurring.get(x.c.id) ?? 0) * 2 < x.cents)
+  const besidesBills = everyday.length > 0 && everyday.length < byCat.length && everyday[0] !== byCat[0]
+  const top = (besidesBills ? everyday : byCat).slice(0, 3).map((x) => ({ ...x, share: m.spent > 0 ? x.cents / m.spent : 0 }))
 
   const days = new Map<string, Txn[]>()
   for (const t of spending) days.set(t.date, [...(days.get(t.date) ?? []), t])
+  const daily = new Map<string, Txn[]>()
+  for (const t of spending) if (!t.recurring_id) daily.set(t.date, [...(daily.get(t.date) ?? []), t])
   let biggestDay: Story['biggestDay'] = null
-  for (const [date, list] of days) {
+  for (const [date, list] of daily) {
     const cents = list.reduce((n, t) => n + t.amount, 0)
-    if (!biggestDay || cents > biggestDay.cents) biggestDay = { date, cents, rows: [...list].sort((a, z) => z.amount - a.amount).slice(0, 3) }
+    if (!biggestDay || cents > biggestDay.cents) biggestDay = { date, cents, rows: [...list].sort((a, z) => z.amount - a.amount).slice(0, 3), billsAside: recurring.size > 0 }
   }
   const biggest = spending.reduce<Txn | null>((x, t) => (!x || t.amount > x.amount ? t : x), null)
 
@@ -107,19 +117,23 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
   }
 
   let kept = 0, of2 = 0
+  const missed: { c: Category; over: number }[] = []
   for (const c of b.categories) {
     if (c.type !== 'Spending' || !c.active) continue
     const cap = budgetFor(b, c, month)
     if (!cap) continue
     of2++
-    if ((m.by_category[String(c.id)] ?? 0) <= cap) kept++
+    const spent = m.by_category[String(c.id)] ?? 0
+    if (spent <= cap) kept++
+    else missed.push({ c, over: spent - cap })
   }
+  missed.sort((a, z) => z.over - a.over)
 
   return {
     m, prev, entries: inMonth.length,
     kept: m.money_in > 0 ? m.left_over / m.money_in : null,
-    top, biggestDay, biggest, quiet: { days: quietDays, of, streak }, spentDays, favorite, movers, worth,
-    budgets: of2 ? { kept, of: of2 } : null, vs,
+    top, besidesBills, biggestDay, biggest, quiet: { days: quietDays, of, streak }, spentDays, favorite, movers, worth,
+    budgets: of2 ? { kept, of: of2, missed } : null, vs,
   }
 }
 

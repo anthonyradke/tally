@@ -38,7 +38,9 @@ test('buildStory: totals, top categories, biggest day and favorite place', () =>
   assert.equal(s.movers.up?.by, 20000)
   assert.equal(s.movers.down?.c.id, 3)
   assert.deepEqual(s.worth, { change: 150000, values: [100000, 250000] })
-  assert.deepEqual(s.budgets, { kept: 1, of: 2 })
+  assert.deepEqual(s.budgets?.kept, 1)
+  assert.deepEqual(s.budgets?.missed.map((x) => [x.c.id, x.over]), [[3, 5000]])
+  assert.equal(s.besidesBills, false)
 })
 
 test('buildStory: a month still going counts quiet days only up to today', () => {
@@ -61,4 +63,19 @@ test('buildStory: a month still going leaves out what is scheduled and compares 
   assert.equal(s.entries, 1)
   assert.equal(s.biggestDay?.date, '2026-10-02')
   assert.deepEqual(s.vs, { now: 2000, before: 30000 + 1500 + 500 }) // Sep 1-3
+})
+
+test('buildStory: recurring bills stay out of the biggest day and the lead category', () => {
+  const b2 = boot({
+    today: '2026-10-03', categories: [cat(1, 'Money in'), cat(2, 'Spending'), cat(3, 'Spending')],
+    months: [month('2026-09-01', { spent: 160000, by_category: { 2: 140000, 3: 20000 } }), month('2026-10-01')],
+  })
+  const rows3 = [row('2026-09-01', 140000, { what: 'Rent', category_id: 2, recurring_id: 7 }),
+    row('2026-09-12', 12000, { what: 'Market', category_id: 3 }), row('2026-09-20', 8000, { what: 'Market', category_id: 3 })]
+  const s = buildStory(b2, '2026-09-01', rows3)!
+  assert.equal(s.besidesBills, true)
+  assert.deepEqual(s.top.map((x) => x.c.id), [3])
+  assert.equal(s.top[0].share, 0.125) // still a share of all spending
+  assert.equal(s.biggestDay?.date, '2026-09-12')
+  assert.equal(s.biggestDay?.billsAside, true)
 })
