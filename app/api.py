@@ -45,6 +45,15 @@ def _by_id(con, table: str) -> dict[int, dict]:
     return {r["id"]: dict(r) for r in con.execute(f"SELECT * FROM {table}")}
 
 
+def _tags(con) -> list[dict]:
+    """Every tag in use with how many entries carry it, most used first, for the app to suggest."""
+    counts: dict[str, int] = {}
+    for r in con.execute("SELECT tags FROM transactions WHERE tags IS NOT NULL AND tags != ''"):
+        for tg in set(r["tags"].split()):
+            counts[tg] = counts.get(tg, 0) + 1
+    return [{"tag": k, "count": n} for k, n in sorted(counts.items(), key=lambda x: (-x[1], x[0]))]
+
+
 # ---------- read ----------
 @router.get("/bootstrap")
 def bootstrap(con: Con):
@@ -67,7 +76,7 @@ def bootstrap(con: Con):
             "budgets": rows("SELECT * FROM budgets"),
             "recurring": rows("SELECT * FROM recurring WHERE active=1 ORDER BY next_date"),
             "saved_views": rows("SELECT * FROM saved_views ORDER BY sort, id"),
-            "settings": settings, "months": [_row(r) for r in st.rows],
+            "tags": _tags(con), "settings": settings, "months": [_row(r) for r in st.rows],
             "ef": {"goal": goal, "progress": progress},
             "roth": {"ytd": st.roth_ytd(), "limit": int(settings.get("roth_limit", 0)),
                      "category_id": st.category_for("roth_category", "Roth IRA")}}
