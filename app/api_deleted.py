@@ -24,16 +24,18 @@ def purge(con, days: int = KEEP_DAYS) -> int:
 
 @router.get("/deleted")
 def recently_deleted(con: Con):
-    """Newest first: each entry as it was, with `deleted_at` (UTC). Rows whose id is in use again (put back by an
-    Undo that didn't reach this list, say) are left out."""
+    """Newest first: each entry as it was, with `deleted_at` (UTC) and `batch`, shared by the rows one delete removed
+    (a bulk delete, a split; null for rows deleted before it was kept), which come next to each other. Rows whose id
+    is in use again (put back by an Undo that didn't reach this list, say) are left out."""
     live = {r[0] for r in con.execute("SELECT id FROM transactions")}
-    rows = con.execute("SELECT * FROM deleted ORDER BY deleted_at DESC, txn_id DESC").fetchall()
+    rows = con.execute("SELECT * FROM deleted ORDER BY deleted_at DESC, json_extract(row, '$.batch') DESC, "
+                       "txn_id DESC").fetchall()
     out = []
     for r in rows:
         if r["txn_id"] not in live:
             row = json.loads(r["row"])
             row.pop("slot", None)  # server-side only: restore reads it from here
-            out.append({**row, "deleted_at": r["deleted_at"]})
+            out.append({**row, "batch": row.get("batch"), "deleted_at": r["deleted_at"]})
     return out
 
 

@@ -1,8 +1,9 @@
 // Settings editors after review: Undo bodies that put a recurring schedule back exactly, hiding an account with
-// everything that would post to it, and the one "Changes not saved" toast.
+// everything that would post to it, the one "Changes not saved" toast, and Recently deleted's groups.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { AdminAccount, AdminData, AdminRecurring, Favorite } from '@/lib/api'
+import type { AdminAccount, AdminData, AdminRecurring, DeletedTxn, Favorite } from '@/lib/api'
+import { asEntry, byDelete } from '@/lib/deleted'
 import { initial, movable, moveTargets, movedText, recurringBody, unmoveBody, usersText } from '@/lib/forms'
 import { useToast } from '@/lib/toast'
 import { offerBack } from '@/lib/unsaved'
@@ -68,4 +69,13 @@ test('every editor says the same when closed with changes', () => {
   t.action!.run()
   assert.equal(reopened, true)
   useToast.getState().hide()
+})
+
+test('recently deleted groups the rows of one delete, not every delete in the same second', () => {
+  const at = '2026-11-22T17:00:00+00:00'
+  const row = (id: number, batch?: number | null) => ({ id, deleted_at: at, batch }) as unknown as DeletedTxn
+  assert.deepEqual(byDelete([row(4, 4), row(3, 3), row(2, 1), row(1, 1)]).map((g) => g.map((x) => x.id)), [[4], [3], [2, 1]])
+  // Rows kept before batches were: the second they went is all there is.
+  assert.deepEqual(byDelete([row(2), row(1, null)]).map((g) => g.length), [2])
+  assert.deepEqual(asEntry(row(5, 5)), { id: 5 })
 })

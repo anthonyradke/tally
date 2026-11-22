@@ -108,8 +108,12 @@ def _remove(con, ids: list[int]) -> list[dict]:
                      if t["recurring_id"] and t["date"] > date.today().isoformat()])
     con.execute(f"DELETE FROM transactions WHERE id IN ({marks})", ids)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # `batch` marks the rows of one delete (a bulk delete, a split, a template's rows ahead): Recently deleted groups
+    # by it, since two separate deletes in the same second share `deleted_at`.
+    batch = min(ids)
     con.executemany("INSERT OR REPLACE INTO deleted(txn_id,row,deleted_at) VALUES(?,?,?)",
-                    [(t["id"], json.dumps({**t, "slot": slots.get(t["id"])}), now) for t in gone])  # for 30 days
+                    [(t["id"], json.dumps({**t, "slot": slots.get(t["id"]), "batch": batch}), now)
+                     for t in gone])  # for 30 days
     con.commit()
     orphaned([t["receipt"] for t in gone if t["receipt"]])
     return gone
