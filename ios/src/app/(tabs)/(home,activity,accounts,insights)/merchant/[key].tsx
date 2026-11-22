@@ -1,9 +1,10 @@
 // One place: everything you've spent there (or received from it), how often, the usual category and account, month by
 // month, and its entries. Its logo can be changed here: a brand, a colored letter, or the category's symbol.
-import { useMemo } from 'react'
-import { ScrollView, View } from 'react-native'
+import { useMemo, useRef } from 'react'
+import { ScrollView, TextInput, View } from 'react-native'
 import { Stack, useLocalSearchParams } from 'expo-router'
 import { useSharedValue } from 'react-native-reanimated'
+import { Icon } from '@/components/Icon'
 import { closeSwipes } from '@/components/SwipeRow'
 import { MarkPicker } from '@/components/MarkPicker'
 import { Mark } from '@/components/Mark'
@@ -11,6 +12,7 @@ import { Hairline, Panel, Section } from '@/components/Panel'
 import { ScrubChart } from '@/components/ScrubChart'
 import { ScrubFigure } from '@/components/ScrubFigure'
 import { StateView } from '@/components/StateView'
+import { Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { categoryVisual } from '@/icons/categories'
@@ -30,6 +32,14 @@ export default function Merchant() {
   const all = useAllTxns(!!t.b)
   const scrub = useSharedValue(-1)
   const p = useMemo(() => (t.b && all.data ? place(t.b, key, all.data.items) : null), [t.b, all.data, key])
+  // Tapping the mark at the top goes down to its logo picker (under the entries) and opens the brand search.
+  const scroll = useRef<ScrollView>(null)
+  const search = useRef<TextInput>(null)
+  const logoY = useRef(0)
+  const toLogo = () => {
+    scroll.current?.scrollTo({ y: Math.max(0, logoY.current - space.l), animated: true })
+    setTimeout(() => search.current?.focus(), 350)
+  }
   const b = t.b
   if (!b || !p) {
     return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }}>
@@ -45,10 +55,15 @@ export default function Merchant() {
   return (
     <>
       <Stack.Screen options={{ title: p.name, headerLargeTitle: false }} />
-      <ScrollView onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
+      <ScrollView ref={scroll} onScrollBeginDrag={closeSwipes} contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingBottom: 120 }}>
         <View style={{ gap: space.m, marginBottom: space.section - 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.xs }}>
-            {mark ? <Mark kind="spec" spec={mark} size={56} /> : v ? <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={56} /> : null}
+            <Tap feedback="scale" onPress={toLogo} accessibilityLabel="Change logo" hitSlop={6}>
+              {mark ? <Mark kind="spec" spec={mark} size={56} /> : v ? <Mark kind="glyph" sf={v.sf} md={v.md} tint={tint(v.tint)} size={56} /> : null}
+              <View style={{ position: 'absolute', right: -2, bottom: -2, width: 22, height: 22, borderRadius: 11, backgroundColor: c.panelRaised, borderWidth: 2, borderColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon sf="pencil" md="edit" size={10} color={c.label} weight="bold" />
+              </View>
+            </Tap>
             <View style={{ flex: 1 }}>
               <Txt variant="sub" tone="label2" style={{ fontSize: 15 }}>{VERB[p.type] ?? 'At'} {p.name}</Txt>
               <ScrubFigure cents={p.total} values={values} labels={p.months.map((m) => `In ${monthLabel(m.month, 'long')}`)} scrub={scrub}
@@ -78,7 +93,9 @@ export default function Merchant() {
             ))}
           </Panel>
         </Section>
-        <MarkPicker what={p.name} merchant={p.key} />
+        <View onLayout={(e) => { logoY.current = e.nativeEvent.layout.y }}>
+          <MarkPicker what={p.name} merchant={p.key} searchRef={search} />
+        </View>
       </ScrollView>
     </>
   )
