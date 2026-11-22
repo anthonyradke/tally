@@ -13,6 +13,7 @@ import { formatCents } from '@/lib/money'
 import { monthsNow } from '@/lib/months'
 import { SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
+import { rowAmount } from '@/lib/txn'
 import { radius, space, useTheme } from '@/theme'
 import { AccountMark } from './AccountMark'
 import { CheckDraw } from './CheckDraw'
@@ -121,10 +122,11 @@ export function What({ acct, history, count, last, missing, onUndo, onPick, onSu
         maxFontSizeMultiplier={1.4} style={{ fontSize: 22, fontWeight: '600', color: c.label, paddingVertical: space.s, paddingHorizontal: space.xs }} />
       {list.length > 0 && (
         <Group header={d.what ? 'Matches' : `Usual on ${acct.name}`}>
-          {list.map((x) => (
-            <Row key={x.id} label={x.what} sub={t.catOf(x).name} chevron={false} onPress={() => pick(x)} leading={<CatMark id={x.category_id} />}
-              value={<Money cents={x.amount} tone="neutral" muted variant="callout" />} />
-          ))}
+          {list.map((x) => {
+            const a = rowAmount(t.catOf(x).type, x.amount) // signed as Activity signs it: a refund is a green +
+            return <Row key={x.id} label={x.what} sub={t.catOf(x).name} chevron={false} onPress={() => pick(x)} leading={<CatMark id={x.category_id} />}
+              value={<Money cents={a.cents} sign={a.sign} tone={a.tone} muted variant="callout" />} />
+          })}
         </Group>
       )}
     </ScrollView>
