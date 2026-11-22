@@ -8,6 +8,74 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## Unreleased
+A pass over how the app feels in daily use, from reviewers using it the way it gets used: logging single purchases,
+the weekly catch-up, finding and fixing old entries, checking where money stands, and keeping settings up.
+
+Added
+- Tags show on entries; tapping one lists every entry with it, and the editor and new entries suggest tags already
+  in use.
+- Select mode has Select all (including entries not loaded yet), shows the selection's total, and can move entries
+  to another account, with Undo.
+- Catch up: "Bank says the same" reconciles the account in one tap once its entries are in, with Undo. "N added"
+  opens the session's entries to fix or delete one, and Undo on the last entry reopens it filled in.
+- Reconcile: a gap offers to add the missing entry and lists the entries since the last match to tick off.
+- Home and Insights say in one line whether the month is on track against its budgets.
+- Any entry can start a recurring entry or a quick action from its menu; a scheduled bill shows which recurring
+  entry it came from.
+- Pause, resume and skip a recurring bill in one tap, from its page or by swiping it in Settings; Skip names the date.
+- Budgets can be set for this month or next as a one-off.
+- Settings has Export (CSV) and Month end; account and category pages have an Edit button; Accounts and Insights
+  have the settings gear; Quick add has Edit and New; Coming up links to Recurring; Home ends with Customize Home.
+- A place's logo picker opens from its mark and has a brand search.
+
+Changed
+- New entries: a quick action tapped after typing an amount keeps the amount; Next goes straight to the review once
+  everything after it is filled in, and a page opened from the review says Done; a past place typed in full and
+  Return fills in its category and account; "What was it?" finds past entries of every type and switches the type.
+- A quick action that only names a category (Gas, Groceries) leaves the place for you and lists that category's
+  usual places first.
+- An amount already on the keypad shows selected, and the first digit replaces it, in new entries, the editor and
+  Catch up.
+- Refunds read as refunds (a green +amount, "Add refund", "Refunded … to Shopping"); income shows green with a +.
+- Tap the "Added…" message to open the entry just saved. It names the day when that isn't today; the delete
+  message names the amount.
+- The editor picks dates from the same row of days as a new entry. Splitting fills line 1 with what's left, and a
+  new line goes on to its category after its amount.
+- Closing an editor with unsaved changes offers them back with Restore (never a confirm dialog). Money fields have
+  a Done key; budgets save when you go Back.
+- Catch up starts each account on the day of its newest entry, fills in a past place's last amount as a
+  suggestion, offers "Skip, it's already in" for a lookalike, picks the right direction for a card payment, shows
+  running balances, and marks this session's entries. Home suggests catching up an account whose newest entry is a
+  week old.
+- Search ignores punctuation ("trader joes" finds Trader Joe's), takes today, yesterday, this or last week and this
+  or last month, and matches amounts properly (9.01 finds only $9.01; exact amounts come first).
+- Saved views keep "Last month" or "This year" by name so they move with the calendar; the view that's on is ticked,
+  with Update. The Filters sheet shows the search and type, Reset clears everything, and Recently deleted is linked.
+- Filters with no lit chip show as removable pills above the list. Activity opened from another screen starts from
+  cleared filters, and scrolls to the top after a filter change.
+- A category opened from a past month in Insights shows that month, its places and entries.
+- Net worth shows its change since last month everywhere it appears. The emergency fund says how many months of
+  spending it covers and opens its account.
+- Next 30 days and Coming up are one section; scheduled lists say "Scheduled" and "due"; card lines say what's owed.
+- The month story leaves bills out of its highlights and names the budgets that were missed; left over is described
+  correctly (money in less spending).
+- The day-by-day calendar shades everyday spending and marks bill days with a dot; Trends always use percentages;
+  the Every month table shows whole dollars and picks a month when tapped. Paid bills say "Paid".
+- Recurring bills show and edit the next date that will actually happen; moving it posts them from the new day and
+  says so, with Undo.
+- Hiding an account says what still posts to it and can move those quick actions and recurring bills; pickers show
+  a hidden account as "Name (hidden)", and a hidden account that still holds money stays on Accounts.
+- The account form puts name, type and balances first, with the look under one Appearance row; the starting
+  balance names the day it applies to. Recently deleted names what it put back and can put back a whole bulk delete.
+
+Fixed
+- Moving a recurring bill's next date could delete bills already scheduled.
+- Catch up kept the last entry's amount and category after going Back, which could turn $60 into $9,000,060.00.
+- A card payment entered on the card counted as money leaving it.
+- Home's Recent "See all" could open Activity with an old search still on.
+- Saved views kept fixed dates and a hidden search.
+
 ## 3.6.2 (2026-11-20)
 Fixed
 - A refund can be typed on the new entry keypad again: − and then the amount (or a sum that comes out below zero)

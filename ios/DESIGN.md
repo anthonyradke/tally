@@ -16,21 +16,30 @@ Changes to anything below get written here first.
 - **Grouped by day, inset panels.** Activity reads like a statement: day headers with the day's spending, entries on
   rounded panels, the account under each amount.
 - **What's coming, drawn ahead.** Scheduled entries carry a cash account's line past today as a dashed path (red
-  if it dips below zero); Home's Next 30 days shows each account's path as a small line. Only what's on the books
+  if it dips below zero); Home's Next 30 days shows each account's path as a small line, all on one scale so a small charge stays a small
+  step; with Coming up also on Home they form one section. Only what's on the books
   counts, never a guess at everyday spending.
 - **Budgets as bars with a pace notch.** The notch marks how much of the month has gone by; a bar past its notch is
-  on pace to go over, and says by how much.
+  on pace to go over, and says by how much. Home's month panel and Insights say in one line how the whole month
+  stands against its budgets, by the same pace rule. A fixed bill that has used its budget reads "Paid".
 - **A keypad for money.** Entering an amount is a full-width keypad with the figure rolling as you type (Cash App),
   never the system number pad. Digits shift in from the right like a till (1 5 0 reads $1.50); 00 replaces the
   decimal point. Small + − keys above it add amounts up, with the sum written under the figure. In a new entry the keypad is the whole first screen; editing an entry, it springs up as its own
-  raised panel with Done and slides back down over the save button.
+  raised panel with Done and slides back down over the save button. An amount already there opens selected, like
+  text: the first digit types over it. − on an empty Spending keypad marks a refund, shown as a green +amount with
+  "Refund" under it.
 - **A new entry is a few questions, one at a time.** Amount and type, what it was, category, the accounts the type
   uses, then a review with the date and Add. Tapping an answer moves on; Back and Next are always there, and dots at
-  the top show where you are. Picking a past entry under "What was it?" or a quick action chip fills in what it
-  knows, and Next skips those steps. The date is the past week as a row of days (entries often get caught up at the
+  the top show where you are. Picking a past entry under "What was it?" (of any type; picking one switches the type), a quick
+  action chip, or typing a past place in full and pressing Return fills in what it knows. Next goes one page on, or
+  to the review once nothing after it is left to answer; a page opened from the review says Done and goes back
+  there. A chip tapped after typing an amount keeps the amount; a chip that only names a category leaves the place
+  to "What was it?", with that category's usual places first. A day other than today shows as a pill above the
+  figure. The date is the past week as a row of days (entries often get caught up at the
   end of the week) plus the calendar, and "Add another" in the toast starts the next entry on the same day. A new
   entry starts empty (no guessed category or account); tapping a quick action again takes it back out. Splitting
-  hands the draft to the full form. The steps move like pages in a stack: the next one slides in from the right over
+  hands the draft to the full form. The editor uses the same row of days. Splitting hides the type and quick actions; line 1 takes whatever the
+  other lines leave until it's typed into. The steps move like pages in a stack: the next one slides in from the right over
   the last, Back slides it away again, each question sits at the top of its page, and the header stays "New entry".
   The dots stretch and fill as you go, Back grows in beside Next, and the full form for a split slides in as one
   more page.
@@ -40,11 +49,17 @@ Changes to anything below get written here first.
   day strip and "What was it?" with this account's usual places, then the keypad with the account's usual categories
   as chips (and the other account for a transfer, with a button to turn it around). The account and day carry over,
   Add saves at once and slides the next entry in, and a line at the top says what was added, with Undo. A same-amount
-  entry on the account within three days shows as a gentle "Already in Tally?" under the figure, never a refusal.
+  entry on the account within three days shows as a gentle "Already in Tally?" under the figure, never a refusal,
+  with "Skip, it's already in". The first entry on an account starts on the day of its newest entry (the day strip
+  stretches back to it); a past place fills in its last amount as a lighter suggestion the first key replaces. The
+  Added line shows the balance after it, and "N added" opens the session's entries. Once entries are in, the first
+  page says "Caught up through …" with Tally's balance and "Bank says the same", which reconciles in one tap with
+  Undo. In Reconcile a match saves at once with Undo; a gap offers the missing entry and a list to tick off.
 - **Swipe rows like Mail (iOS 26).** Right: Duplicate. Left: Category, Edit, Delete. The actions come up as circles
   that grow with the swipe; keep going and the edge one (Duplicate, Delete) stretches into a capsule with a tick, and
   letting go runs it (Delete slides the row away, then it folds shut). A half swipe rests open; tapping the row,
-  swiping another or scrolling closes it. Long press has the same actions in a menu, lifted as a rounded rectangle.
+  swiping another or scrolling closes it. Long press has the same actions in a menu, lifted as a rounded rectangle. Recurring rows in Settings swipe left for
+  Pause (or Resume), Skip and Delete, each with Undo.
 
 - **Drag to reorder.** Accounts, categories, quick actions and Activity's filter rows and chips in Settings reorder
   the way Reminders does: hold a row and it lifts with a shadow, the rows it passes slide aside with a tick, and
@@ -60,13 +75,16 @@ Changes to anything below get written here first.
 ## Structure
 - Native tab bar (Liquid Glass on iOS 26): Home, Activity, +, Accounts, Insights. It stays full size (never
   minimizes on scroll). The + in the middle opens the composer from anywhere; it's the only way in, so tab headers carry
-  no + of their own. Tabs are peers; re-tapping one pops to its root. Settings is a gear on Home.
+  no + of their own. Tabs are peers; re-tapping one pops to its root. Settings is a gear on Home, Accounts and Insights.
 - Each tab is a native stack with a large title. Detail screens (account, category, month end, settings) push.
 - Hide amounts (the eye on Home, or Settings) masks every figure as "$•••" where text is drawn (`Txt`, the rolling
   figures, the scrub figure), keeping its sign. Screens where you type an amount wrap themselves in `Reveal`.
 - Adding an entry is a modal of short steps; editing one is a modal form with its own close and save. Short choices (category, account, date, bulk
   actions, filters, reconcile) are form sheets with a grabber. Nothing uses a confirm dialog: deletes happen and
-  offer Undo.
+  offer Undo, and closing an editor with unsaved changes shows "Changes not saved" with Restore. Settings lists save
+  as you change them and say Saved; money fields have a Done bar on the keypad. Activity's filters that have no lit
+  chip show as removable pills under the chip rows, so a filter is never on out of sight. Tapping a toast's message
+  opens what it's about (the entry just added).
 
 ## Color
 - Themes (Settings → Theme, stored on the phone; palettes in `src/theme/themes.ts`). **Classic** is the original:
