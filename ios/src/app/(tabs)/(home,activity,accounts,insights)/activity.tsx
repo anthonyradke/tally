@@ -23,7 +23,7 @@ import { api, type TxnQuery } from '@/lib/api'
 import { balanceWords, useAllTxns } from '@/lib/balances'
 import { dayLabel, lastOfMonth } from '@/lib/dates'
 import { queryClient } from '@/lib/data'
-import { closingBalances, feedItems, hidesAhead, isStatement, pickedRows, selectable, type FeedOptions, type Item } from '@/lib/feed'
+import { closingBalances, deletedMatches, feedItems, hidesAhead, isStatement, pickedRows, selectable, type FeedOptions, type Item } from '@/lib/feed'
 import { isAhead, next30 } from '@/lib/filterBar'
 import { EMPTY, extraCount, toId, toQuery, useFilters, type Filters } from '@/lib/filters'
 import { formatCents } from '@/lib/money'
@@ -154,6 +154,11 @@ export default function Activity() {
     return top ? { key: top[0], ...top[1] } : null
   }, [f.q, rows])
   const extra = extraCount(f)
+  // A search that finds nothing points to a match deleted lately, which it can't see.
+  const nothing = !!qText && first?.total === 0 && !q.isPlaceholderData
+  const del = useQuery({ queryKey: ['deleted'], queryFn: api.deleted, enabled: nothing, staleTime: 0 })
+  const catOf = t.catOf
+  const gone = useMemo(() => (nothing && del.data ? deletedMatches(del.data, qText, (r) => [catOf(r).name]).length : 0), [nothing, del.data, qText, catOf])
 
   // A selection belongs to the filters it was made under: under new ones (a search typed, a chip tapped) it's let go,
   // since rows picked before may be out of sight now. `all`: what Select all fetched past the loaded pages, as a live
@@ -331,7 +336,7 @@ export default function Activity() {
           ListEmptyComponent={
             q.isError || t.q.isError ? <StateView q={q.isError ? (q as never) : t.q} /> :
             q.isLoading || !t.b ? <View style={{ paddingHorizontal: space.l }}><StateView q={t.q} shape="list" /></View> :
-            <Empty filtered={filtered} />
+            <Empty filtered={filtered} gone={gone} />
           }
           renderItem={({ item }) => {
             if (item.kind === 'sched') {
@@ -398,7 +403,7 @@ function Sum({ label, cents, pos }: { label: string; cents: number; pos?: boolea
   )
 }
 
-function Empty({ filtered }: { filtered: boolean }) {
+function Empty({ filtered, gone }: { filtered: boolean; gone: number }) {
   const { c } = useTheme()
   return (
     <View style={{ alignItems: 'center', paddingTop: 64, paddingHorizontal: space.xxl, gap: space.s }}>
@@ -407,6 +412,14 @@ function Empty({ filtered }: { filtered: boolean }) {
       <Txt variant="callout" tone="label2" style={{ textAlign: 'center' }}>
         {filtered ? 'Try fewer filters, or search for part of a name, a note, a tag or an amount. Search also takes >50, <20, yesterday, last week, a month like aug, and #tags.' : 'Tap + to add your first entry.'}
       </Txt>
+      {gone > 0 && (
+        <Tap feedback="opacity" onPress={() => router.push('/settings/deleted')} accessibilityHint="Opens Recently deleted"
+          style={{ marginTop: space.m, flexDirection: 'row', alignItems: 'center', gap: space.s, height: 40, paddingHorizontal: space.l, borderRadius: radius.pill, backgroundColor: c.panel }}>
+          <Icon sf="trash" md="delete" size={15} color={c.label2} />
+          <Txt variant="sub" style={{ fontWeight: '600' }}>{gone === 1 ? '1 match in Recently deleted' : `${gone} matches in Recently deleted`}</Txt>
+          <Icon sf="chevron.right" md="chevron_right" size={12} color={c.label3} weight="bold" />
+        </Tap>
+      )}
     </View>
   )
 }

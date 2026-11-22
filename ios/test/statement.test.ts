@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatType, Txn } from '@/lib/api'
 import { balanceOn } from '@/lib/balances'
-import { accountAmount, closingBalances, feedItems, isStatement, type FeedOptions } from '@/lib/feed'
+import { accountAmount, closingBalances, deletedMatches, feedItems, isStatement, type FeedOptions } from '@/lib/feed'
 import { EMPTY } from '@/lib/filters'
 import { acct, row } from './fixtures.ts'
 
@@ -55,4 +55,13 @@ test('statement: amounts signed from the account side, toned as everywhere else'
   assert.deepEqual(accountAmount('Transfer', move, 1), { cents: -40000, sign: 'always', tone: 'neutral', muted: true })
   assert.deepEqual(accountAmount('Transfer', move, 2), { cents: 40000, sign: 'always', tone: 'neutral', muted: true })
   assert.equal(accountAmount('Spending', spend, 9), undefined) // not this account's: the usual look
+})
+
+test('recently deleted: a search that finds nothing points to deleted matches', () => {
+  const gone = [row('2026-11-12', 1549, { what: 'Netflix' }), row('2026-11-11', 900, { what: "Trader Joe's", note: 'snacks', tags: ['trip'] })]
+  assert.deepEqual(deletedMatches(gone, 'netflix').map((r) => r.what), ['Netflix'])
+  assert.deepEqual(deletedMatches(gone, 'trader joes trip').map((r) => r.what), ["Trader Joe's"])
+  assert.deepEqual(deletedMatches(gone, 'groceries', () => ['Groceries']).length, 2)
+  assert.deepEqual(deletedMatches(gone, 'netflix snacks'), [])
+  assert.deepEqual(deletedMatches(gone, '  '), [])
 })
