@@ -61,16 +61,24 @@ export function findRepeats(rows: Txn[], recurring: Recurring[], today: string):
   return out.sort((a, z) => (a.next < z.next ? -1 : 1))
 }
 
+/** A month between two payments of a bill typed by hand: a little wider than `findRepeats`' monthly gap, since one
+ *  paid on the 28th and then the 21st is still the next month's. */
+const BILL_GAP = [23, 38] as const
+/** How far back from a place's latest entry its rhythm is judged: what it was years ago doesn't decide what it is. */
+const BILL_SPAN = 183
+
 /** Places that are bills by their rhythm though no template posts them, as `category|place` keys (budgets'
- *  `billTest`). The place never comes twice within a month, and somewhere in its history it has the monthly rhythm
- *  `findRepeats` offers ("Looks like it repeats": two a month apart at nearly the same amount) or three a month apart
- *  at amounts within 2x of each other, since a utility bill typed by hand changes with the season. A place visited
- *  now and then (a salad place twice a month, once a month for a while) is everyday spending; a bill that has since
- *  stopped was still a bill in its months. */
+ *  `billTest`). Over the place's last six months or so of entries: it never comes twice within `BILL_GAP`, and it
+ *  has the monthly rhythm `findRepeats` offers ("Looks like it repeats": two a month apart at nearly the same amount)
+ *  or three a month apart at amounts within 2x of each other, since a utility bill typed by hand changes with the
+ *  season. A place visited now and then (a salad place twice a month, once a month for a while) is everyday
+ *  spending; a bill that has since stopped was still a bill in its months. */
 export function billKeys(rows: Txn[], today: string): Set<string> {
-  const [, lo, hi] = GAPS.find(([f]) => f === 'monthly')!
+  const [lo, hi] = BILL_GAP
   const out = new Set<string>()
-  for (const list of groups(rows, today)) {
+  for (const all of groups(rows, today)) {
+    const since = addDays(all[all.length - 1].date, -BILL_SPAN)
+    const list = all.filter((t) => t.date >= since)
     if (list.some((t, i) => i > 0 && daysBetween(list[i - 1].date, t.date) < lo)) continue
     for (let i = 1; i < list.length; i++) {
       const pair = list.slice(i - 1, i + 1), three = i >= 2 ? list.slice(i - 2, i + 1) : null

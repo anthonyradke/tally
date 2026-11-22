@@ -49,3 +49,18 @@ test('billKeys: monthly rhythms, from the same groups findRepeats reads', () => 
   ]
   assert.deepEqual([...billKeys(rows, today)].sort(), ['2|hulu', '2|netflix', '3|xcel energy'])
 })
+
+test('billKeys: a bill paid early one month still counts, and only the last six months or so decide', () => {
+  const at = (what: string, dates: string[], amounts: number[]) => dates.map((d, i) => row(d, amounts[i], { what, category_id: 3 }))
+  const rows = [
+    ...at('Water', ['2026-07-28', '2026-08-28', '2026-09-21'], [4100, 6200, 5300]),                       // the 28th, then the 21st: 24 days
+    ...at('Phone', ['2026-08-28', '2026-09-21'], [6500, 6500]),                                          // two alike, 24 days apart
+    // Twice in a December long ago, monthly since: a bill now.
+    ...at('Comcast', ['2025-12-01', '2025-12-10', '2026-06-05', '2026-07-05', '2026-08-05', '2026-09-05'], [8000, 8000, 8000, 8000, 8000, 8000]),
+    // A month apart at the same amount long ago, once lately: nothing to go on.
+    ...at('Salad place', ['2025-01-05', '2025-02-05', '2026-09-01'], [1200, 1200, 1200]),
+    ...at('Barber', ['2026-07-01', '2026-07-21', '2026-08-20'], [3000, 3000, 3000]),                     // 20 days: too soon for a bill
+    ...at('Dentist', ['2026-03-02', '2026-09-08'], [15000, 15000]),                                       // half a year apart
+  ]
+  assert.deepEqual([...billKeys(rows, today)].sort(), ['3|comcast', '3|phone', '3|water'])
+})
