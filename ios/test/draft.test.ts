@@ -26,13 +26,19 @@ test('keypad: digits shift in from the right, no leading zeros, capped at $9,999
   assert.equal(press('12.5', 'del'), '1.25')
 })
 
-test('keypad over an amount already there: the first digit replaces it, delete trims it', () => {
+test('keypad over an amount already there: the first digit replaces it, delete clears it', () => {
   assert.equal(pressOver('5.40', '4', true), '0.04')
   assert.equal([...'50'].reduce((s, k) => press(s, k), pressOver('5.40', '4', true)), '4.50')
-  assert.equal(pressOver('5.40', 'del', true), '0.54')
+  assert.equal(pressOver('5.40', 'del', true), '') // like deleting selected text
   assert.equal(pressOver('5.40', '00', true), '')
   assert.equal(pressOver('', '7', true), '0.07')
   assert.equal(pressOver('5.40', '4', false), '54.04') // once typing has started, digits shift in as usual
+})
+
+test('keypad over an amount: after the first delete clears it, typing starts fresh', () => {
+  assert.equal(pressOver('30', 'del', true), '')
+  assert.equal(pressOver('30', 'del', false), '3.00') // not selected: delete trims one digit
+  assert.equal([...'45'].reduce((s, k) => press(s, k), pressOver('30', 'del', true)), '0.45')
 })
 
 test('toCents and fromCents', () => {
