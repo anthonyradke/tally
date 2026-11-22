@@ -33,6 +33,18 @@ export const activeRange = (f: Pick<Filters, 'start' | 'end'>, today: string): R
 /** Home's Coming up and Next 30 days: what a link from there shows, so the totals agree. */
 export const next30 = (today: string): Partial<Filters> => ({ start: addDays(today, 1), end: addDays(today, 30), sort: 'date', dir: 'asc' })
 
+/** A date range a saved view keeps by name and works out again from the day it goes on: a chip's range, or Home's
+ *  Next 30 days (which has no chip). */
+export function namedRange(f: Pick<Filters, 'start' | 'end'>, today: string): string | null {
+  const n = next30(today)
+  return activeRange(f, today) ?? (f.start === n.start && f.end === n.end ? 'next30' : null)
+}
+/** The dates a range's name stands for today, or undefined for a name it doesn't know. */
+export function rangeDates(name: string | null, today: string): Pick<Filters, 'start' | 'end'> | undefined {
+  const p = name === 'next30' ? next30(today) : ranges(today).find(([k]) => k === name)?.[2]
+  return p && { start: p.start, end: p.end }
+}
+
 /** Only scheduled entries: the list says "Scheduled" and "due", not "Spent". */
 export const isAhead = (f: Pick<Filters, 'start'>, today: string) => !!f.start && f.start > today
 

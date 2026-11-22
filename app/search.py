@@ -8,9 +8,10 @@
     #trip                    that tag
 
 What's left are words, and every one has to match the entry somewhere. Punctuation doesn't count ("trader joes"
-finds Trader Joe's). A number matches the amount: with cents (9.01) only that amount, whole (65) amounts of $65 and
-up whose dollars start with it ($65.40, $650), never the cents ($20.65). "-5" only refunds and other negative amounts.
-"coffee >5 aug" is coffee entries over $5 in August."""
+finds Trader Joe's); a word of punctuation alone ("&") matches where it's written. A number matches the amount: with
+cents (9.01) only that amount, whole (65) amounts of $65 and up whose dollars start with it ($65.40, $650), never the
+cents ($20.65). Only the amount to the cent is an exact match: 65 is exactly $65.00. "-5" only refunds and other
+negative amounts. "coffee >5 aug" is coffee entries over $5 in August."""
 from __future__ import annotations
 import re
 from dataclasses import dataclass, field
@@ -99,7 +100,7 @@ def plain(s: str) -> str:
 @dataclass
 class Word:
     raw: str  # as typed, lowercase
-    text: str  # without punctuation
+    text: str  # without punctuation; empty for a word of punctuation alone, which then matches as typed
     dollars: Optional[str] = None  # a whole number
     cents: Optional[int] = None  # a number with cents
     neg: bool = False
@@ -109,10 +110,11 @@ def words(text: str) -> list[Word]:
     out = []
     for w in text.lower().split():
         if n := NUMBER.fullmatch(w):
-            num = n[2].replace(",", "")
+            num = n[2].replace(",", "").removesuffix(".")  # "5." is still the 5 being typed, not exactly $5.00
             out.append(Word(w, plain(w), dollars=None if "." in num else str(int(num)),
                             cents=cents(num) if "." in num else None, neg=bool(n[1])))
-        elif plain(w):
+        else:
+            # "$" or "&" alone used to drop out and leave no words, and no words matched every entry.
             out.append(Word(w, plain(w)))
     return out
 
@@ -130,10 +132,11 @@ def match(ws: list[Word], names: list[str], amount: int) -> int:
                     level = EXACT if abs(amount) == w.cents else 0
                 else:
                     d = str(abs(amount) // 100)
-                    level = EXACT if d == w.dollars else LOOSE if d.startswith(w.dollars) else 0
+                    exact = d == w.dollars and abs(amount) % 100 == 0  # 6 is exactly $6.00, not $6.99
+                    level = EXACT if exact else LOOSE if d.startswith(w.dollars) else 0
             if not level and any(w.raw in x for x in raw):
                 level = LOOSE
-        elif any(w.text in x for x in flat):
+        elif any(w.text in x for x in flat) if w.text else any(w.raw in x for x in raw):  # "&" in "A&W"
             level = LOOSE
         if not level:
             return 0

@@ -1,7 +1,7 @@
 // Activity's filters live outside the screen so the Filters sheet can edit them.
 import { create } from 'zustand'
 import type { CatType, TxnQuery } from './api'
-import { activeRange, ranges } from './filterBar'
+import { namedRange, rangeDates } from './filterBar'
 
 export interface Filters {
   q: string; type: CatType | ''; category?: number; account?: number; start?: string; end?: string
@@ -35,16 +35,19 @@ export const toId = (v?: string | null) => (v && Number.isInteger(Number(v)) ? N
  *  name and worked out again when the view goes on, so "Dining last month" still means last month in December.
  *  Other dates (a day from Insights, a month) stay as they are. */
 export function viewQuery(f: Filters, today: string): string {
-  const when = activeRange(f, today)
-  const kept = when && when !== 'all' ? { ...f, start: undefined, end: undefined, when } : f
-  return new URLSearchParams(Object.entries(kept).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])).toString()
+  const when = namedRange(f, today)
+  const kept: Record<string, unknown> = when && when !== 'all' ? { ...f, start: undefined, end: undefined, when } : { ...f }
+  // In one fixed order: filters built chip by chip hold their keys in the order they were set, and the same filters
+  // must give the same string, or the view that's on isn't ticked.
+  return new URLSearchParams(VIEW_KEYS.filter((k) => kept[k] !== undefined && kept[k] !== '').map((k) => [k, String(kept[k])])).toString()
 }
+const VIEW_KEYS = ['q', 'type', 'category', 'account', 'start', 'end', 'when', 'tag', 'group', 'sort', 'dir']
 
 /** The filters a saved view's query string stands for. */
 export function fromViewQuery(query: string, today: string): Filters {
   const p = new URLSearchParams(query)
   const n = (k: string) => toId(p.get(k))
-  const when = ranges(today).find(([k]) => k === p.get('when'))?.[2]
+  const when = rangeDates(p.get('when'), today)
   return { q: p.get('q') ?? '', type: (p.get('type') ?? '') as CatType | '', category: n('category'), account: n('account'),
     start: when ? when.start : p.get('start') ?? undefined, end: when ? when.end : p.get('end') ?? undefined,
     tag: p.get('tag') ?? undefined, group: p.get('group') ?? undefined, sort: (p.get('sort') as Filters['sort']) ?? 'date', dir: (p.get('dir') as Filters['dir']) ?? 'desc' }

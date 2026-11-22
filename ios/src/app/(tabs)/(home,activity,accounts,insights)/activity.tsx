@@ -3,7 +3,7 @@ import { RefreshControl, TextInput, View } from 'react-native'
 import { router, Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRoute } from 'expo-router'
 import { FlashList, type FlashListRef } from '@shopify/flash-list'
 import type { SearchBarCommands } from 'react-native-screens'
-import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import * as Haptics from 'expo-haptics'
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
 import { FilterBar } from '@/components/FilterBar'
@@ -19,9 +19,10 @@ import { closeSwipes } from '@/components/SwipeRow'
 import { Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
-import { api, type Txn } from '@/lib/api'
+import { api, type TxnQuery } from '@/lib/api'
 import { dayLabel, lastOfMonth } from '@/lib/dates'
-import { feedItems, type Item } from '@/lib/feed'
+import { queryClient } from '@/lib/data'
+import { feedItems, hidesAhead, pickedRows, selectable, type FeedOptions, type Item } from '@/lib/feed'
 import { isAhead, next30 } from '@/lib/filterBar'
 import { EMPTY, extraCount, toId, toQuery, useFilters, type Filters } from '@/lib/filters'
 import { formatCents } from '@/lib/money'
@@ -35,6 +36,9 @@ import { radius, space, useTheme } from '@/theme'
 const PAGE = 100
 const MAX_PICK = 5000 // what one bulk action takes (inputs.MAX_IDS)
 const filterKey = () => JSON.stringify(toQuery(useFilters.getState().f))
+/** Select mode's picks, under the filters (`key`) they were made with; `all`: the query Select all fetched. */
+interface Picks { key: string; ids: Set<number>; all: TxnQuery | null }
+const NO_PICK: Picks = { key: '', ids: new Set(), all: null }
 const HINT ='Search names, notes, tags and amounts. Try 12.50, >50, yesterday, last week, last month, aug or #trip.'
 
 export default function Activity() {
@@ -43,8 +47,7 @@ export default function Activity() {
   const { f, set } = useFilters()
   const params = useLocalSearchParams<{ q?: string; when?: string; day?: string; month?: string; category?: string; account?: string; tag?: string; group?: string }>()
   const [selecting, setSelecting] = useState(false)
-  const [picked, setPicked] = useState<Set<number>>(new Set())
-  const [pool, setPool] = useState<Map<number, Txn>>(new Map()) // rows Select all fetched past the loaded pages
+  const [pick, setPick] = useState<Picks>(NO_PICK)
   const [searching, setSearching] = useState(false)
   const queued = useOutbox((s) => s.items)
   const busy = useBusy()
@@ -57,7 +60,14 @@ export default function Activity() {
   const [pushed] = useState(() => nav.getState()?.routes[0]?.key !== route.key)
   const before = useRef<{ f: Filters; view: number | null } | null>(null)
   useEffect(() => () => { if (before.current) useFilters.getState().replace(before.current.f, before.current.view) }, [])
+  // Once per set of params: the day rolling over (Tally's today) used to put them on again over filters changed since.
+  const applied = useRef<string | null>(null)
+  const ready = !!t.b
   useEffect(() => {
+    if (params.when === 'upcoming' && !t.b) return // its 30 days count from Tally's today
+    const sig = JSON.stringify([params.q, params.when, params.day, params.month, params.category, params.account, params.tag, params.group])
+    if (applied.current === sig) return
+    applied.current = sig
     const p: Partial<Filters> = {}
     if (params.when === 'upcoming' && t.b) Object.assign(p, next30(t.b.today)) // Home's Coming up: the same 30 days
     if (params.day) { p.start = params.day; p.end = params.day; p.sort = 'date'; p.dir = 'desc' } // a day from Insights' calendar
@@ -70,7 +80,7 @@ export default function Activity() {
     if (!Object.keys(p).length && !pushed) return
     before.current ??= { f: useFilters.getState().f, view: useFilters.getState().view }
     useFilters.getState().replace({ ...EMPTY, ...p })
-  }, [params.q, params.when, params.day, params.month, params.category, params.account, params.tag, params.group, t.b?.today]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [params.q, params.when, params.day, params.month, params.category, params.account, params.tag, params.group, ready]) // eslint-disable-line react-hooks/exhaustive-deps
   // An account that's gone (deleted since a saved view, or a stale link) would filter to nothing with no chip lit.
   useEffect(() => {
     if (t.b && f.account != null && !t.b.accounts.some((a) => a.id === f.account)) set({ account: undefined })
@@ -115,10 +125,13 @@ export default function Activity() {
   // Newest first, the scheduled entries (recurring bills a month out) used to fill the top of the list before anything
   // that had happened. They fold into one row until you open it; a date filter or the Upcoming chip shows them as usual.
   const [showSched, setShowSched] = useState(false)
-  const items = useMemo<Item[]>(() => feedItems(rows, {
+  const feed: FeedOptions = {
     byAmount: f.sort === 'amount', fold: f.sort === 'date' && f.dir === 'desc' && !f.start && !f.end, showSched,
-    exact: first?.exact ?? 0, today, typeOf: t.typeOf,
-  }), [rows, f.sort, f.dir, f.start, f.end, showSched, first?.exact, today, t.typeOf])
+    exact: first?.exact ?? 0, total: first?.total, today, typeOf: t.typeOf,
+  }
+  const items = useMemo<Item[]>(() => feedItems(rows, feed), [rows, f.sort, f.dir, f.start, f.end, showSched, first?.exact, first?.total, today, t.typeOf]) // eslint-disable-line react-hooks/exhaustive-deps
+  const hide = hidesAhead(rows, feed) // the scheduled rows are folded out of sight
+  const shown = useMemo(() => (hide ? rows.filter((r) => r.date <= today) : rows), [hide, rows, today])
 
   const filtered = !!(f.q || f.type || extraCount(f))
   // Searching for a place: its page is one tap away (the name most of the matches share).
@@ -134,42 +147,66 @@ export default function Activity() {
     return top ? { key: top[0], ...top[1] } : null
   }, [f.q, rows])
   const extra = extraCount(f)
+
+  // A selection belongs to the filters it was made under: under new ones (a search typed, a chip tapped) it's let go,
+  // since rows picked before may be out of sight now. `all`: what Select all fetched past the loaded pages, as a live
+  // query, so after a bulk move its rows come again with the list and one moved out of these filters drops out.
+  const key = JSON.stringify(query)
+  const keyNow = useLatest(key)
+  const mine = pick.key === key
+  const picked = mine ? pick.ids : NO_PICK.ids
+  const allWant = mine ? pick.all : null
+  const allQ = useQuery({ queryKey: ['transactions', 'all', allWant], queryFn: () => api.transactions(allWant!), enabled: !!allWant, gcTime: 5 * 60_000 })
   const toggle = useCallback((id: number) => {
     Haptics.selectionAsync().catch(() => {})
-    setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
-  }, [])
+    setPick((s) => {
+      const k = keyNow.current
+      const n = new Set(s.key === k ? s.ids : [])
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return { key: k, ids: n, all: s.key === k ? s.all : null }
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   // Select mode: one shared value slides every row's check circle in together on the UI thread, so entering and
   // leaving it doesn't rebuild the list.
   const sel = useSharedValue(0)
+  // Entering and leaving select mode bump `run`: a Select all still loading then is dropped when it lands, instead of
+  // filling the selection again (so is one whose filters changed meanwhile).
+  const run = useRef(0)
+  const clearPicks = () => { run.current++; setPick(NO_PICK) }
   const startSelect = () => {
     closeSwipes()
     Haptics.selectionAsync().catch(() => {})
+    clearPicks()
     setSelecting(true)
     sel.set(withTiming(1, { duration: 280, easing: Easing.bezier(0.23, 1, 0.32, 1) }))
   }
   const endSelect = () => {
     setSelecting(false)
-    setPicked(new Set())
-    setPool(new Map())
+    clearPicks()
     sel.set(withTiming(0, { duration: 240, easing: Easing.bezier(0.23, 1, 0.32, 1) }))
   }
-  const matching = Math.min(first?.total ?? rows.length, MAX_PICK)
-  // Every match of the filters, including pages not loaded yet (fetched once, up to what one bulk action takes).
+  // Not while the last filters' list stands in for the new one: its count is theirs.
+  const every = first && !q.isPlaceholderData ? selectable(first.total, rows.length, shown.length, q.hasNextPage) : null
+  const matching = every == null ? null : Math.min(every, MAX_PICK)
+  // Every match the list shows, including pages not loaded yet (fetched once, up to what one bulk action takes).
+  // With the fold closed that's up to today: the scheduled rows under it aren't in sight.
   const selectAll = (on: boolean) => busy(async () => {
     Haptics.selectionAsync().catch(() => {})
-    if (!on) { setPicked(new Set()); return }
-    if (rows.length >= matching) { setPicked(new Set(rows.slice(0, matching).map((r) => r.id))); return }
+    if (!on) { setPick(NO_PICK); return }
+    if (matching == null) return
+    if (shown.length >= matching) { setPick({ key, ids: new Set(shown.slice(0, matching).map((r) => r.id)), all: null }); return }
+    const ran = run.current
+    const want: TxnQuery = { ...query, ...(hide ? { end: today } : {}), limit: matching, offset: 0 }
+    const stale = () => run.current !== ran || keyNow.current !== key
     try {
-      const all = await api.transactions({ ...query, limit: matching, offset: 0 })
-      setPool(new Map(all.items.map((r) => [r.id, r])))
-      setPicked(new Set(all.items.map((r) => r.id)))
-    } catch { toast({ text: "Couldn't load every match. Tally is unreachable.", tone: 'error' }) }
+      // Through the cache, so the bulk sheets can read these rows' types and accounts like any loaded row.
+      const all = await queryClient.fetchQuery({ queryKey: ['transactions', 'all', want], queryFn: () => api.transactions(want), staleTime: 0, gcTime: 5 * 60_000 })
+      if (stale()) return
+      setPick({ key, ids: new Set(all.items.map((r) => r.id)), all: want })
+    } catch { if (!stale()) toast({ text: "Couldn't load every match. Tally is unreachable.", tone: 'error' }) }
   })
-  const chosen = useMemo(() => {
-    const byId = new Map(pool)
-    for (const r of rows) byId.set(r.id, r)
-    return [...picked].map((id) => byId.get(id)).filter((r): r is Txn => !!r)
-  }, [picked, pool, rows])
+  const fetched = allWant ? allQ.data?.items : undefined
+  const chosen = useMemo(() => pickedRows(picked, shown, fetched ?? [], hide, today), [picked, shown, fetched, hide, today])
 
   const header = (
     <View style={{ gap: space.m, paddingBottom: space.s }}>
@@ -331,7 +368,7 @@ export default function Activity() {
             )
           }}
         />
-        {selecting && <SelectionBar chosen={chosen} matching={matching} onAll={selectAll} onDone={endSelect} />}
+        {selecting && <SelectionBar chosen={chosen} matching={matching} over={every != null && matching != null ? every - matching : 0} onAll={selectAll} onDone={endSelect} />}
       </View>
     </>
   )
