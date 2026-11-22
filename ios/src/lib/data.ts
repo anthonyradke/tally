@@ -19,7 +19,7 @@ export const useTransactions = (q: TxnQuery, enabled = true) =>
  *  search). Searches, single entries and month-end answers are fetched again. */
 export const keepOnPhone = (key: readonly unknown[]): boolean => {
   if (key[0] === 'bootstrap' || key[0] === 'admin') return true
-  if (key[0] !== 'transactions' || key[1] === 'one') return false
+  if (key[0] !== 'transactions' || key[1] === 'one' || key[1] === 'all') return false // 'all': Select all's thousands
   const q = key[1] as { q?: string } | undefined
   return !q?.q
 }
@@ -34,6 +34,19 @@ export function cachedTxn(id: number): Txn | undefined {
     }
   }
   return undefined
+}
+
+/** `cachedTxn` for many ids in one pass over the cache (a scan per id was slow over thousands of selected rows). */
+export function cachedTxns(ids: number[]): Map<number, Txn> {
+  const want = new Set(ids)
+  const out = new Map<number, Txn>()
+  for (const [, data] of queryClient.getQueriesData<unknown>({ queryKey: ['transactions'] })) {
+    const pages = (data as { pages?: TxnPage[] } | undefined)?.pages ?? [data as TxnPage]
+    for (const p of pages) {
+      if (Array.isArray(p?.items)) for (const x of p.items) if (want.has(x.id) && !out.has(x.id)) out.set(x.id, x)
+    }
+  }
+  return out
 }
 
 /** Anything that changes rows: refresh balances, months and every list. Single entries not on screen are dropped,

@@ -6,7 +6,7 @@ import type { SFSymbol } from 'expo-symbols'
 import Animated, { Easing, SlideInDown, SlideOutDown } from 'react-native-reanimated'
 import type { Txn } from '@/lib/api'
 import { deleteTxns } from '@/lib/actions'
-import { accountSide, selectedTotal } from '@/lib/feed'
+import { accountSide, counts, selectedTotal } from '@/lib/feed'
 import { formatCents } from '@/lib/money'
 import { useTally } from '@/lib/tally'
 import { radius, space, useTheme } from '@/theme'
@@ -14,28 +14,41 @@ import { Icon } from './Icon'
 import { Tap } from './Tap'
 import { Txt } from './Txt'
 
-/** `matching`: every entry the filters match, loaded or not; Select all picks them all. */
-export function SelectionBar({ chosen, matching, onAll, onDone }: { chosen: Txn[]; matching: number; onAll: (all: boolean) => void; onDone: () => void }) {
+/** `matching`: what Select all takes, every entry the list shows for these filters, loaded or not, up to what one
+ *  bulk action takes (null while that isn't known yet). `over`: how many more match past that cap. */
+export function SelectionBar({ chosen, matching, over, onAll, onDone }: {
+  chosen: Txn[]; matching: number | null; over: number; onAll: (all: boolean) => void; onDone: () => void
+}) {
   const { c } = useTheme()
   const t = useTally()
   const n = chosen.length
-  const all = n > 0 && n >= matching
+  const all = n > 0 && matching != null && n >= matching
   const ids = chosen.map((x) => x.id).join(',')
   const act = (fn: () => void) => () => { if (n) fn() }
-  const total = selectedTotal(chosen, t.typeOf)
+  // Transfers, saving and loans show muted in the list and don't add up as spending here either.
+  const total = chosen.some((x) => counts(t.typeOf(x))) ? selectedTotal(chosen, t.typeOf) : null
+  const sum = total == null ? '' : `, ${total < 0 ? '+' : ''}${formatCents(Math.abs(total))}`
   return (
     <Animated.View entering={SlideInDown.duration(320).easing(Easing.bezier(0.23, 1, 0.32, 1))} exiting={SlideOutDown.duration(220)}
       style={{ position: 'absolute', left: space.l, right: space.l, bottom: 100, borderRadius: radius.panel, borderCurve: 'continuous', backgroundColor: c.panelRaised, padding: space.m, gap: space.s, boxShadow: '0 8px 30px rgba(0,0,0,0.18)' }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingHorizontal: space.xs, minHeight: 24 }}>
         <Txt variant="sub" tone="label2" style={{ flex: 1 }} numberOfLines={1}>
-          {n ? `${n} selected, ${total < 0 ? '+' : ''}${formatCents(Math.abs(total))}` : 'Tap entries to select them'}
+          {n ? `${n.toLocaleString('en-US')} selected${sum}` : 'Tap entries to select them'}
         </Txt>
-        {matching > 1 && (
+        {matching != null && matching > 1 && (
           <Tap feedback="opacity" onPress={() => onAll(!all)} hitSlop={10}>
-            <Txt variant="sub" style={{ fontWeight: '600' }}>{all ? 'Deselect all' : `Select all ${matching.toLocaleString('en-US')}`}</Txt>
+            <Txt variant="sub" style={{ fontWeight: '600' }}>
+              {all ? 'Deselect all' : `Select ${over ? 'first' : 'all'} ${matching.toLocaleString('en-US')}`}
+            </Txt>
           </Tap>
         )}
       </View>
+      {/* Past the cap, say what's left out instead of acting on fewer than it looks like. */}
+      {over > 0 && matching != null && (
+        <Txt variant="foot" tone="label2" style={{ paddingHorizontal: space.xs }}>
+          {`${(matching + over).toLocaleString('en-US')} entries match. One action changes ${matching.toLocaleString('en-US')} at most, the first in the list's order.`}
+        </Txt>
+      )}
       <View style={{ flexDirection: 'row', gap: space.s }}>
         <BarBtn label="Category" sf="square.grid.2x2" md="category" disabled={!n}
           onPress={act(() => router.push({ pathname: '/pick', params: { kind: 'bulk-category', ids } }))} />
