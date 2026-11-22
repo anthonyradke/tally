@@ -1,7 +1,7 @@
 // The facts behind a month's story (app/story.tsx): what came in and went out, where it went, the biggest day, the
 // favorite place, how it compares with the month before. Pure, from the bootstrap months and that month's rows.
 import type { Bootstrap, Category, MonthRow, Txn } from './api'
-import { budgetFor } from './budgets'
+import { billTest, budgetFor } from './budgets'
 import { addDays, fromISO, lastOfMonth } from './dates'
 import { merchantKey } from '@/icons/merchants'
 
@@ -49,7 +49,8 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
 
   // Bills: categories whose month is mostly recurring rows. "Most of it went to Rent, 60%" said nothing new.
   const recurring = new Map<number, number>()
-  for (const t of spending) if (t.recurring_id) recurring.set(t.category_id, (recurring.get(t.category_id) ?? 0) + t.amount)
+  const bill = billTest(b)
+  for (const t of spending) if (bill(t)) recurring.set(t.category_id, (recurring.get(t.category_id) ?? 0) + t.amount)
   const byCat = Object.entries(m.by_category)
     .map(([id, cents]) => ({ c: cats.get(Number(id))!, cents }))
     .filter((x) => x.c?.type === 'Spending' && x.cents > 0).sort((a, z) => z.cents - a.cents)
@@ -60,7 +61,7 @@ export function buildStory(b: Bootstrap, month: string, rows: Txn[]): Story | nu
   const days = new Map<string, Txn[]>()
   for (const t of spending) days.set(t.date, [...(days.get(t.date) ?? []), t])
   const daily = new Map<string, Txn[]>()
-  for (const t of spending) if (!t.recurring_id) daily.set(t.date, [...(daily.get(t.date) ?? []), t])
+  for (const t of spending) if (!bill(t)) daily.set(t.date, [...(daily.get(t.date) ?? []), t])
   let biggestDay: Story['biggestDay'] = null
   for (const [date, list] of daily) {
     const cents = list.reduce((n, t) => n + t.amount, 0)

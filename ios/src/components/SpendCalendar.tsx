@@ -6,6 +6,7 @@ import { View } from 'react-native'
 import { router } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import type { Bootstrap } from '@/lib/api'
+import { billTest } from '@/lib/budgets'
 import { bigWeekday, daysOf } from '@/lib/calendar'
 import { useTransactions } from '@/lib/data'
 import { addDays, dayLabel, fromISO, lastOfMonth } from '@/lib/dates'
@@ -32,8 +33,9 @@ export function SpendCalendar({ b, month }: { b: Bootstrap; month: string }) {
   const days = daysOf(month, items)
   // Shading follows everyday spending: with rent in it, the 1st went solid and every other day the same pale grey.
   // A recurring bill marks its day with a dot instead.
-  const everyday = new Map(daysOf(month, items.filter((t) => !t.recurring_id)).map((d) => [d.date, d.cents]))
-  const bills = new Set(items.filter((t) => t.recurring_id).map((t) => t.date))
+  const bill = billTest(b)
+  const everyday = new Map(daysOf(month, items.filter((t) => !bill(t))).map((d) => [d.date, d.cents]))
+  const bills = new Set(items.filter(bill).map((t) => t.date))
   const max = Math.max(1, ...days.filter((d) => d.date <= b.today).map((d) => everyday.get(d.date) ?? 0))
   const lead = (fromISO(month).getDay() + 6) % 7 // weeks start on Monday
   const past = days.filter((d) => d.date <= b.today)
