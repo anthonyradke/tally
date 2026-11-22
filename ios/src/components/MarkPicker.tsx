@@ -38,8 +38,9 @@ export function MarkPicker({ what, merchant, searchRef }: { what: string; mercha
     else if (k && k !== merchant) next[merchant] = 'auto'
     write(() => api.putSettings({ merchant_marks: next }))
   }
+  const searching = !!query.trim()
   const ranked = rankMarks(MARK_OPTIONS, what, query)
-  const brands = all || query ? ranked : ranked.slice(0, 12)
+  const brands = all || searching ? ranked : ranked.slice(0, 12)
   return (
     <Section title="Logo">
       <Panel style={{ gap: space.l }}>
@@ -53,29 +54,40 @@ export function MarkPicker({ what, merchant, searchRef }: { what: string; mercha
           <Chip label="Automatic" selected={cur == null} onDark onPress={() => choose(null)} />
           <Chip label="Category symbol" selected={cur === 'category'} onDark onPress={() => choose('category')} />
         </View>
-        <View style={{ gap: space.s }}>
-          <Txt variant="sub" tone="label2">A letter</Txt>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-            {TINTS.map((tn) => {
-              const v = `tint:${tn}`
-              return (
-                <Pick key={tn} on={cur === v} label={`Letter on ${tn}`} onPress={() => choose(v)}>
-                  <Mark kind="spec" spec={specFor(v, what)!} size={40} />
-                </Pick>
-              )
-            })}
+        {/* While searching, the letters step aside so the matches sit right under the field. */}
+        {(!searching || !brands.length) && (
+          <View style={{ gap: space.s }}>
+            <Txt variant="sub" tone="label2">A letter</Txt>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
+              {TINTS.map((tn) => {
+                const v = `tint:${tn}`
+                return (
+                  <Pick key={tn} on={cur === v} label={`Letter on ${tn}`} onPress={() => choose(v)}>
+                    <Mark kind="spec" spec={specFor(v, what)!} size={40} />
+                  </Pick>
+                )
+              })}
+            </View>
           </View>
-        </View>
+        )}
         <View style={{ gap: space.s }}>
-          <Txt variant="sub" tone="label2">{query ? (brands.length ? `Brands matching "${query.trim()}"` : `No brand matches "${query.trim()}". A letter works for any place.`) : 'A brand'}</Txt>
+          <Txt variant="sub" tone="label2">{searching ? (brands.length ? `Brands matching "${query.trim()}"` : `No brand matches "${query.trim()}". A letter works for any place.`) : 'A brand'}</Txt>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
-            {brands.map((m) => (
+            {brands.map((m) => searching ? (
+              // Search results are named: bare icons left you guessing which "Shell" was which.
+              <View key={m.id} style={{ width: 64, alignItems: 'center', gap: 2 }}>
+                <Pick on={cur === m.id} label={m.spec.title} onPress={() => choose(m.id)}>
+                  <Mark kind="spec" spec={m.spec} size={40} />
+                </Pick>
+                <Txt variant="foot" tone="label2" numberOfLines={1} style={{ maxWidth: 64 }}>{m.spec.title}</Txt>
+              </View>
+            ) : (
               <Pick key={m.id} on={cur === m.id} label={m.spec.title} onPress={() => choose(m.id)}>
                 <Mark kind="spec" spec={m.spec} size={40} />
               </Pick>
             ))}
           </View>
-          {!all && !query && (
+          {!all && !searching && (
             <Tap feedback="opacity" onPress={() => setAll(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: space.xs }}>
               <Txt variant="callout" style={{ fontWeight: '600' }}>Show all {MARK_OPTIONS.length}</Txt>
               <Icon sf="chevron.down" md="expand_more" size={12} color={c.label} />
