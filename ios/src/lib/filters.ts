@@ -1,6 +1,6 @@
 // Activity's filters live outside the screen so the Filters sheet can edit them.
 import { create } from 'zustand'
-import type { CatType, TxnQuery } from './api'
+import type { CatType, SavedView, TxnQuery } from './api'
 import { namedRange, rangeDates } from './filterBar'
 
 export interface Filters {
@@ -53,5 +53,29 @@ export function fromViewQuery(query: string, today: string): Filters {
     tag: p.get('tag') ?? undefined, group: p.get('group') ?? undefined, sort: (p.get('sort') as Filters['sort']) ?? 'date', dir: (p.get('dir') as Filters['dir']) ?? 'desc' }
 }
 
+/** The tag the Filters sheet's field filters by, from what's typed ("#Trip " is trip). */
+export const tagOf = (text: string) => text.trim().replace(/^#/, '').toLowerCase() || undefined
+
+/** Tags in use to offer with the Filters sheet's tag field: most used first (`used` comes that way from bootstrap),
+ *  starting with what's typed, so a tag is picked whole instead of typed to the letter. Once the field holds a whole
+ *  tag, the most used again, that one among them, so another is one tap away. */
+export function tagChoices(used: { tag: string }[], text: string, max = 8): string[] {
+  const word = tagOf(text) ?? ''
+  const all = used.map((x) => x.tag)
+  if (!all.includes(word)) return all.filter((x) => x.startsWith(word)).slice(0, max)
+  const top = all.slice(0, max)
+  return top.includes(word) ? top : [...top.slice(0, max - 1), word]
+}
+
 /** Whether these filters are exactly what a saved view puts on (its query read the way it would be saved now). */
 export const isView = (query: string, f: Filters, today: string) => viewQuery(fromViewQuery(query, today), today) === viewQuery(f, today)
+
+/** The saved view Activity names above its list: the one these filters are (the one last put on first, if two
+ *  match), or, once they've moved on from the one last put on, that one, to go back to (`on` false). None while
+ *  nothing is filtered. */
+export function namedView(views: SavedView[], f: Filters, view: number | null, today: string): { v: SavedView; on: boolean } | undefined {
+  const last = views.find((v) => v.id === view)
+  if (!f.q && !f.type && !extraCount(f)) return undefined
+  const match = [...(last ? [last] : []), ...views].find((v) => isView(v.query, f, today))
+  return match ? { v: match, on: true } : last && { v: last, on: false }
+}

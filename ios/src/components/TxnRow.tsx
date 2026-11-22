@@ -7,6 +7,7 @@ import type { Account, Category, Txn } from '@/lib/api'
 import { deleteTxns, openEntry, openTag, quickFromEntry, repeatEntry } from '@/lib/actions'
 import { isFuture } from '@/lib/dates'
 import { useFresh } from '@/lib/motion'
+import { accountAmount } from '@/lib/feed'
 import { rowAmount } from '@/lib/txn'
 import { merchantKey, type MarkSpec } from '@/icons/merchants'
 import { categoryVisual } from '@/icons/categories'
@@ -50,7 +51,7 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
 }) {
   const theme = useTheme()
   const v = categoryVisual(c)
-  const amt = rowAmount(c.type, t.amount)
+  const amt = (here != null && accountAmount(c.type, t, here)) || rowAmount(c.type, t.amount) // signed from the account's side
   const future = isFuture(t.date, today)
   const where = accountLine(t, c, acct, here)
   // From → To is long: it goes under the name, where the category would be, instead of squeezing both into "Chase CC
@@ -130,7 +131,7 @@ export const TxnRow = memo(function TxnRow({ t, c, acct, mark, today, showDate, 
           toggles), and the swipe and menu actions are its custom actions. */}
       <View onLayout={(e) => fold.measured(e.nativeEvent.layout.height)}
         accessible accessibilityRole="button"
-        accessibilityLabel={`${t.what || c.name}, ${c.name}, ${amt.sign === 'always' ? '+' : ''}${(amt.cents / 100).toFixed(2)} dollars${where ? `, ${where}` : ''}${future ? ', scheduled' : ''}${t.tags.length ? `, tagged ${t.tags.join(', ')}` : ''}`}
+        accessibilityLabel={`${t.what || c.name}, ${c.name}, ${amt.sign === 'always' && amt.cents > 0 ? '+' : ''}${(amt.cents / 100).toFixed(2)} dollars${where ? `, ${where}` : ''}${future ? ', scheduled' : ''}${t.tags.length ? `, tagged ${t.tags.join(', ')}` : ''}`}
         accessibilityState={selecting ? { selected: !!selected } : undefined}
         accessibilityActions={[{ name: 'activate' }, ...(selecting ? [] : [{ name: 'edit', label: 'Edit' }, { name: 'duplicate', label: 'Duplicate to today' }, { name: 'category', label: 'Change category' }, ...(place ? [{ name: 'place', label: `All at ${t.what}` }] : []), ...(tag ? [{ name: 'tag', label: `All tagged ${tag}` }] : []), ...(single && !t.recurring_id ? [{ name: 'repeat', label: 'Repeat' }] : []), ...(single ? [{ name: 'quick', label: 'Make quick action' }] : []), { name: 'delete', label: 'Delete' }])]}
         onAccessibilityAction={(e) => {

@@ -3,7 +3,7 @@
     >100  >=100  <20  <=20   amount (either sign), in dollars, "$" and "," allowed
     aug  august  aug 2025    that month; without a year, the latest one up to this month
     today  yesterday         that day
-    this week  last week     Sunday to Saturday
+    this week  last week     Sunday to Saturday; on a Sunday "this week" is the 7 days up to today
     this month  last month
     #trip                    that tag
 
@@ -42,6 +42,8 @@ def _span(word: str, unit: str, today: date) -> Optional[tuple[date, date]]:
     """"this week", "last month" and the like as first and last day."""
     if unit == "week":
         sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        if word == "this" and sunday == today:
+            return today - timedelta(days=6), today  # the week just begun is today alone, and found nothing
         first = sunday - timedelta(days=7) if word == "last" else sunday
         return first, first + timedelta(days=6)
     if unit == "month":

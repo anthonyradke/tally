@@ -20,9 +20,10 @@ import { Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { api, type TxnQuery } from '@/lib/api'
+import { balanceWords, useAllTxns } from '@/lib/balances'
 import { dayLabel, lastOfMonth } from '@/lib/dates'
 import { queryClient } from '@/lib/data'
-import { feedItems, hidesAhead, pickedRows, selectable, type FeedOptions, type Item } from '@/lib/feed'
+import { closingBalances, deletedMatches, feedItems, hidesAhead, isStatement, pickedRows, selectable, type FeedOptions, type Item } from '@/lib/feed'
 import { isAhead, next30 } from '@/lib/filterBar'
 import { EMPTY, extraCount, toId, toQuery, useFilters, type Filters } from '@/lib/filters'
 import { formatCents } from '@/lib/money'
@@ -125,11 +126,17 @@ export default function Activity() {
   // Newest first, the scheduled entries (recurring bills a month out) used to fill the top of the list before anything
   // that had happened. They fold into one row until you open it; a date filter or the Upcoming chip shows them as usual.
   const [showSched, setShowSched] = useState(false)
+  // One cash account or card on its own reads like its statement: each day header shows the balance that day ended on.
+  const stmt = isStatement(f) && f.account != null ? t.acct.get(f.account) : undefined
+  const stmtAcct = stmt && (stmt.kind === 'cash' || stmt.kind === 'card') ? stmt : undefined
+  const ledger = useAllTxns(!!stmtAcct)
+  const start = t.b?.start
+  const closing = useMemo(() => (stmtAcct && ledger.data && start ? closingBalances(stmtAcct, ledger.data.items, start) : undefined), [stmtAcct, ledger.data, start])
   const feed: FeedOptions = {
     byAmount: f.sort === 'amount', fold: f.sort === 'date' && f.dir === 'desc' && !f.start && !f.end, showSched,
-    exact: first?.exact ?? 0, total: first?.total, today, typeOf: t.typeOf,
+    exact: first?.exact ?? 0, total: first?.total, today, typeOf: t.typeOf, closing,
   }
-  const items = useMemo<Item[]>(() => feedItems(rows, feed), [rows, f.sort, f.dir, f.start, f.end, showSched, first?.exact, first?.total, today, t.typeOf]) // eslint-disable-line react-hooks/exhaustive-deps
+  const items = useMemo<Item[]>(() => feedItems(rows, feed), [rows, f.sort, f.dir, f.start, f.end, showSched, first?.exact, first?.total, today, t.typeOf, closing]) // eslint-disable-line react-hooks/exhaustive-deps
   const hide = hidesAhead(rows, feed) // the scheduled rows are folded out of sight
   const shown = useMemo(() => (hide ? rows.filter((r) => r.date <= today) : rows), [hide, rows, today])
 
@@ -147,6 +154,11 @@ export default function Activity() {
     return top ? { key: top[0], ...top[1] } : null
   }, [f.q, rows])
   const extra = extraCount(f)
+  // A search that finds nothing points to a match deleted lately, which it can't see.
+  const nothing = !!qText && first?.total === 0 && !q.isPlaceholderData
+  const del = useQuery({ queryKey: ['deleted'], queryFn: api.deleted, enabled: nothing, staleTime: 0 })
+  const catOf = t.catOf
+  const gone = useMemo(() => (nothing && del.data ? deletedMatches(del.data, qText, (r) => [catOf(r).name]).length : 0), [nothing, del.data, qText, catOf])
 
   // A selection belongs to the filters it was made under: under new ones (a search typed, a chip tapped) it's let go,
   // since rows picked before may be out of sight now. `all`: what Select all fetched past the loaded pages, as a live
@@ -324,7 +336,7 @@ export default function Activity() {
           ListEmptyComponent={
             q.isError || t.q.isError ? <StateView q={q.isError ? (q as never) : t.q} /> :
             q.isLoading || !t.b ? <View style={{ paddingHorizontal: space.l }}><StateView q={t.q} shape="list" /></View> :
-            <Empty filtered={filtered} />
+            <Empty filtered={filtered} gone={gone} />
           }
           renderItem={({ item }) => {
             if (item.kind === 'sched') {
@@ -347,8 +359,9 @@ export default function Activity() {
               return (
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: space.l + space.xs, paddingTop: space.l, paddingBottom: space.s }}>
                   <Txt variant="headline">{dayLabel(item.date, t.b!.today)}</Txt>
-                  {/* A day still ahead has bills due, not spending. */}
-                  {item.spent > 0 && <Txt variant="sub" tone="label2" num>{formatCents(item.spent)} {item.date > t.b!.today ? 'due' : 'spent'}</Txt>}
+                  {/* An account's statement: the balance the day ended on. Otherwise a day still ahead has bills due, not spending. */}
+                  {item.bal != null && stmtAcct ? <Txt variant="sub" tone={item.bal < 0 && stmtAcct.kind === 'cash' ? 'neg' : 'label2'} num>{stmtAcct.kind === 'cash' ? `Balance ${formatCents(item.bal)}` : balanceWords(item.bal, stmtAcct.kind)}</Txt>
+                    : item.spent > 0 && <Txt variant="sub" tone="label2" num>{formatCents(item.spent)} {item.date > t.b!.today ? 'due' : 'spent'}</Txt>}
                 </View>
               )
             }
@@ -390,7 +403,7 @@ function Sum({ label, cents, pos }: { label: string; cents: number; pos?: boolea
   )
 }
 
-function Empty({ filtered }: { filtered: boolean }) {
+function Empty({ filtered, gone }: { filtered: boolean; gone: number }) {
   const { c } = useTheme()
   return (
     <View style={{ alignItems: 'center', paddingTop: 64, paddingHorizontal: space.xxl, gap: space.s }}>
@@ -399,6 +412,14 @@ function Empty({ filtered }: { filtered: boolean }) {
       <Txt variant="callout" tone="label2" style={{ textAlign: 'center' }}>
         {filtered ? 'Try fewer filters, or search for part of a name, a note, a tag or an amount. Search also takes >50, <20, yesterday, last week, a month like aug, and #tags.' : 'Tap + to add your first entry.'}
       </Txt>
+      {gone > 0 && (
+        <Tap feedback="opacity" onPress={() => router.push('/settings/deleted')} accessibilityHint="Opens Recently deleted"
+          style={{ marginTop: space.m, flexDirection: 'row', alignItems: 'center', gap: space.s, height: 40, paddingHorizontal: space.l, borderRadius: radius.pill, backgroundColor: c.panel }}>
+          <Icon sf="trash" md="delete" size={15} color={c.label2} />
+          <Txt variant="sub" style={{ fontWeight: '600' }}>{gone === 1 ? '1 match in Recently deleted' : `${gone} matches in Recently deleted`}</Txt>
+          <Icon sf="chevron.right" md="chevron_right" size={12} color={c.label3} weight="bold" />
+        </Tap>
+      )}
     </View>
   )
 }

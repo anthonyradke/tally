@@ -16,7 +16,10 @@ Changes to anything below get written here first.
   category, as a label (a second tap target inside the row caught taps meant for the entry); the row's long-press
   menu lists that tag's entries.
 - **Grouped by day, inset panels.** Activity reads like a statement: day headers with the day's spending, entries on
-  rounded panels, the account under each amount.
+  rounded panels, the account under each amount. One account's rows (its page, Catch up, Activity filtered to it)
+  are signed from its side, + for money in and − for money out, in the same tones; Activity filtered to just that
+  cash account or card, by date, also shows the balance each day ended on in its day header, to check against the
+  bank line by line.
 - **What's coming, drawn ahead.** Scheduled entries carry a cash account's line past today as a dashed path (red
   if it dips below zero); Home's Next 30 days shows each account's path as a small line, all on one scale so a small charge stays a small
   step; with Coming up also on Home they form one section. Only what's on the books
@@ -87,7 +90,8 @@ Changes to anything below get written here first.
   actions, filters, reconcile) are form sheets with a grabber. Nothing uses a confirm dialog: deletes happen and
   offer Undo, and closing an editor with unsaved changes shows "Changes not saved" with Restore. Settings lists save
   as you change them and say Saved; money fields have a Done bar on the keypad. Activity's filters that have no lit
-  chip show as removable pills under the chip rows, so a filter is never on out of sight. Tapping a toast's message
+  chip show as removable pills under the chip rows, so a filter is never on out of sight; a saved view that's on
+  leads them with its name, and once the filters move on from it, stays as a plain pill that puts it back. Tapping a toast's message
   opens what it's about (the entry just added).
 
 ## Color
