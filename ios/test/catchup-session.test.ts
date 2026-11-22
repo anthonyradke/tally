@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { duplicateOf, isNewPlace, lastShown, newPlaceCategories, runningBalances, sessionRows } from '@/lib/catchup'
+import { duplicateOf, isNewPlace, lastShown, newPlaceCategories, queuedRows, runningBalances, sessionRows } from '@/lib/catchup'
 import { acct, row } from './fixtures'
 
 const CHK = 1
@@ -16,6 +16,16 @@ test('catchup: a row this session added is a lookalike too, but not one it took 
   assert.equal(duplicateOf(rows!, { date: '2026-11-22', amount: 4299, what: 'amazon' }, CHK, gone, true)?.id, amazon.id)
   // Re-adding the entry an Undo took back to fix it isn't a duplicate of itself.
   assert.equal(duplicateOf(rows!, { date: '2026-11-22', amount: 1500, what: 'Gas' }, CHK, gone), null)
+})
+
+test('catchup: an entry waiting on the phone (added offline) is a lookalike too', () => {
+  const line = { date: '2026-11-21', what: 'Shell', category_id: 2, from_id: CHK, to_id: null, amount: 5120, note: '', tags: [] }
+  const split = [{ ...line, what: 'Target', amount: 3000 }, { ...line, what: 'Target', amount: 2000, category_id: 3 }]
+  const waiting = queuedRows([{ lines: [line] }, { lines: split }])
+  assert.deepEqual(waiting.map((x) => x.id), [-1, -2, -3]) // never a saved row's id
+  const none = () => false
+  assert.equal(duplicateOf(waiting, { date: '2026-11-22', amount: 5120, what: 'Shell' }, CHK, none)?.what, 'Shell')
+  assert.equal(duplicateOf(waiting, { date: '2026-11-22', amount: 5120, what: 'Shell' }, 9, none), null) // another account
 })
 
 test('catchup: the balance after the entry just added follows a later fix to it', () => {

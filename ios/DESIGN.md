@@ -56,7 +56,7 @@ Changes to anything below get written here first.
   day strip and "What was it?" with this account's usual places, then the keypad with the account's usual categories
   as chips (and the other account for a transfer, with a button to turn it around). The account and day carry over,
   Add saves at once and slides the next entry in, and a line at the top says what was added, with Undo. A same-amount
-  entry on the account within three days shows as a gentle "Already in Tally?" under the figure, never a refusal,
+  entry on the account within three days (one still waiting on the phone too) shows as a gentle "Already in Tally?" under the figure, never a refusal,
   with "Skip, it's already in". The first entry on an account starts on the day of its newest entry (the day strip
   stretches back to it); a past place fills in its last amount as a lighter suggestion the first key replaces. The
   Added line shows the balance after it, and "N added" opens the session's entries. Once entries are in, the first

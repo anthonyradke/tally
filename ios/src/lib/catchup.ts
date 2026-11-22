@@ -2,6 +2,7 @@
 // The pure parts live here so the tests can run them.
 import { merchantKey } from '@/icons/merchants'
 import type { Account, CatType, Txn } from './api'
+import type { Queued } from './outbox'
 import { balanceOn, effect } from './balances'
 import { dayLabel, fromISO } from './dates'
 import { SHAPES } from './shapes'
@@ -147,6 +148,17 @@ export function duplicateOf(rows: Txn[], line: { date: string; amount: number; w
   const hits = lookalikes(rows, line, acct).filter((x) => !skip(x.id))
   const want = merchantKey(line.what)
   return (suggested ? hits.filter((x) => x.date === line.date && merchantKey(x.what) === want) : hits)[0] ?? null
+}
+
+/** Entries waiting on the phone (the outbox) as rows, so the lookalike check sees one added offline: losing your place
+ *  in the bank's list is as likely then. Ids are below zero, which no saved row has. */
+export function queuedRows(items: Pick<Queued, 'lines'>[]): Txn[] {
+  const out: Txn[] = []
+  for (const q of items) for (const l of q.lines) {
+    out.push({ id: -(out.length + 1), date: l.date, what: l.what, category_id: l.category_id, from_id: l.from_id, to_id: l.to_id,
+      amount: l.amount, note: l.note ?? '', tags: l.tags ?? [], split_group: null, receipt: null, recurring_id: null })
+  }
+  return out
 }
 
 /** The entry just added, as the line on "What was it?" shows it: none once it's deleted (from the session list or the

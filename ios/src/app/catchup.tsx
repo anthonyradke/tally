@@ -14,7 +14,7 @@ import { Pages } from '@/components/Pages'
 import { useShake } from '@/components/Shake'
 import { merchantKey } from '@/icons/merchants'
 import { api, ApiError, type Txn } from '@/lib/api'
-import { balanceAfter, catchable, duplicateOf, exactPlace, flip, hintFor, lastShown, otherSide, sides, touches } from '@/lib/catchup'
+import { balanceAfter, catchable, duplicateOf, exactPlace, flip, hintFor, lastShown, otherSide, queuedRows, sides, touches } from '@/lib/catchup'
 import { refreshCatchUp, useBankMatch, useCatchUpSession, useKeyboardBar } from '@/lib/catchupHooks'
 import { offerCatchUp } from '@/lib/caughtUp'
 import { useTransactions } from '@/lib/data'
@@ -23,7 +23,7 @@ import { blank, fromCents, fromTxn, toCents, toInputs, useDraft } from '@/lib/dr
 import { formatCents } from '@/lib/money'
 import { markFresh } from '@/lib/motion'
 import { close, useBusy, useLatest } from '@/lib/nav'
-import { sendOrQueue } from '@/lib/outbox'
+import { sendOrQueue, useOutbox } from '@/lib/outbox'
 import { Reveal } from '@/lib/privacy'
 import { fits, HINT } from '@/lib/shapes'
 import { play } from '@/lib/sound'
@@ -97,6 +97,8 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
   const count = mine.length
   const bank = useBankMatch(busy)
   const shown = lastShown(last, ledger.live, running)
+  const outbox = useOutbox((s) => s.items)
+  const waiting = useMemo(() => queuedRows(outbox), [outbox])
 
   const recent = useTransactions({ account: acct?.id, end: today, limit: RECENT + count }, !!acct && !!today)
   // Only this account's own rows: a list still showing the last account's while the new one loads would mislead.
@@ -121,7 +123,7 @@ export function CatchUp({ account, amount }: { account?: number; amount?: number
   // Not while it saves or draws its check: the row just added is in the ledger by then, and would be its own lookalike
   // (with a Skip that dropped its Undo).
   const lookalike = acct && cents && page === 'amount' && !saving && !done
-    ? duplicateOf(ledger.rows ?? [...ledger.live, ...(history.data?.items ?? [])], { date: d.date, amount: cents * (d.refund ? -1 : 1), what: d.what },
+    ? duplicateOf([...(ledger.rows ?? [...ledger.live, ...(history.data?.items ?? [])]), ...waiting], { date: d.date, amount: cents * (d.refund ? -1 : 1), what: d.what },
       acct.id, (id) => gone.has(id), fresh && suggested)
     : null
 
