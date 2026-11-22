@@ -10,6 +10,7 @@ import { Mark } from '@/components/Mark'
 import { Money } from '@/components/Money'
 import { DatePick } from '@/components/native/DatePick'
 import { Group, Row } from '@/components/Row'
+import { TagChips } from '@/components/TagChips'
 import { Button } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
@@ -22,7 +23,7 @@ import { monthsNow } from '@/lib/months'
 import { fits, SHAPES } from '@/lib/shapes'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
-import { parseTags } from '@/lib/txn'
+import { addTag, parseTags, tagSuggestions } from '@/lib/txn'
 import { space, useTheme } from '@/theme'
 
 const TYPE_ORDER: CatType[] = ['Spending', 'Money in', 'Transfer', 'Saving', 'Loan']
@@ -33,7 +34,7 @@ export default function Pick() {
   const { c } = useTheme()
   const title = { category: 'Category', from: 'From', to: 'To', date: 'Date', 'bulk-category': ids?.includes(',') ? 'Move to category' : 'Category', 'bulk-tag': 'Add a tag', 'bulk-account': ids?.includes(',') ? 'Move to account' : 'Account' }[kind] ?? ''
   return (
-    <ScrollView contentContainerStyle={{ padding: space.l, paddingTop: space.xl, gap: space.l, paddingBottom: 48 }} style={{ backgroundColor: c.bg }}>
+    <ScrollView contentContainerStyle={{ padding: space.l, paddingTop: space.xl, gap: space.l, paddingBottom: 48 }} style={{ backgroundColor: c.bg }} keyboardShouldPersistTaps="handled">
       <Txt variant="title2" accessibilityRole="header" style={{ paddingHorizontal: space.xs }}>{title}</Txt>
       {(kind === 'category' || kind === 'bulk-category') && <Categories line={line} ids={ids} checked={current ? Number(current) : undefined} />}
       {(kind === 'from' || kind === 'to') && <Accounts side={kind} />}
@@ -206,7 +207,10 @@ const undo = (before: BulkBefore[]) => ({
 
 function BulkTag({ ids }: { ids: string }) {
   const { c } = useTheme()
+  const t = useTally()
   const [tag, setTag] = useState('')
+  // The tags in use, most used first and narrowed to the one being typed, so "work" doesn't drift into "wrk".
+  const offer = tagSuggestions(t.b?.tags ?? [], tag)
   const busy = useBusy()
   const closeHere = useCloseHere()
   const apply = () => busy(async () => {
@@ -226,6 +230,11 @@ function BulkTag({ ids }: { ids: string }) {
       <TextInput autoFocus value={tag} onChangeText={setTag} placeholder="trip, gift, work" placeholderTextColor={c.label3} autoCapitalize="none"
         autoCorrect={false} onSubmitEditing={apply} returnKeyType="done"
         style={{ height: 50, borderRadius: 12, backgroundColor: c.panel, paddingHorizontal: space.l, fontSize: 17, color: c.label }} />
+      {(t.b?.tags?.length ?? 0) > 0 && (
+        <View style={{ height: 36, marginHorizontal: -space.l }}>
+          <TagChips tags={offer} onPick={(x) => setTag(`${addTag(tag, x).join(' ')} `)} />
+        </View>
+      )}
       <Button label="Add tag" onPress={apply} disabled={!tag.trim()} />
     </View>
   )

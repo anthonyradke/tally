@@ -6,6 +6,7 @@ import { router } from 'expo-router'
 import { Chip } from '@/components/Chip'
 import { Icon } from '@/components/Icon'
 import { Mark } from '@/components/Mark'
+import { TagChips } from '@/components/TagChips'
 import { Group, Row } from '@/components/Row'
 import { Button, Tap } from '@/components/Tap'
 import { Txt } from '@/components/Txt'
@@ -14,7 +15,7 @@ import { api, type SavedView } from '@/lib/api'
 import { close, useBusy } from '@/lib/nav'
 import { invalidateAll } from '@/lib/data'
 import { activeRange, ranges, SORTS, TYPES } from '@/lib/filterBar'
-import { extraCount, fromViewQuery, isView, useFilters, viewQuery } from '@/lib/filters'
+import { extraCount, fromViewQuery, isView, tagChoices, tagOf, useFilters, viewQuery } from '@/lib/filters'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
@@ -36,6 +37,7 @@ export default function FiltersSheet() {
   const cat = f.category ? t.cat.get(f.category) : undefined
   const acct = f.account ? t.acct.get(f.account) : undefined
   const check = <Icon sf="checkmark" md="check" size={16} color={c.ink} weight="bold" />
+  const typeTag = (v: string) => { setTagText(v); set({ tag: tagOf(v) }) }
 
   const saveView = () => busy(async () => { // once, however many taps
     const name = viewName.trim()
@@ -57,22 +59,24 @@ export default function FiltersSheet() {
 
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, paddingTop: space.xl, gap: space.xl, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* Its height kept for Reset, so the first filter turned on doesn't push the sheet down. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 34 }}>
         <Txt variant="title2" accessibilityRole="header">Filters</Txt>
         {/* Everything off, search and type too, the same as Activity's Clear filters. */}
         {(extraCount(f) > 0 || !!f.q || !!f.type) && <Button label="Reset" secondary onPress={() => { setTagText(''); reset() }} style={{ height: 34, paddingHorizontal: space.l }} />}
       </View>
 
-      {!!f.q && (
-        <Group>
-          <Row label="Search" sf="magnifyingglass" md="search" value={`“${f.q}”`} chevron={false}
-            trailing={
+      {/* Always there, dimmed with no search: clearing it used to pull everything below up under the finger. */}
+      <Group>
+        <View style={{ opacity: f.q ? 1 : 0.5 }}>
+          <Row label="Search" sf="magnifyingglass" md="search" value={f.q ? `“${f.q}”` : 'No search'} chevron={false}
+            trailing={f.q ? (
               <Tap feedback="opacity" onPress={() => set({ q: '' })} hitSlop={10} accessibilityLabel="Clear search">
                 <Icon sf="xmark.circle.fill" md="cancel" size={20} color={c.label3} />
               </Tap>
-            } />
-        </Group>
-      )}
+            ) : <View style={{ width: 20 }} />} />
+        </View>
+      </Group>
 
       <View style={{ gap: space.s }}>
         <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.xs }}>Type</Txt>
@@ -112,10 +116,19 @@ export default function FiltersSheet() {
             <Row key={a.id} label={a.name} chevron={false} trailing={a.id === f.account ? check : undefined}
               onPress={() => { set({ account: a.id }); setPickAcct(false) }} />
           ))]}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
-          <Icon sf="number" md="tag" size={18} color={c.label2} />
-          <TextInput value={tagText} placeholder="Tag" placeholderTextColor={c.label3} autoCapitalize="none" autoCorrect={false}
-            onChangeText={(v) => { setTagText(v); set({ tag: v.trim().replace(/^#/, '').toLowerCase() || undefined }) }} style={{ flex: 1, fontSize: 17, color: c.label }} />
+        <View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
+            <Icon sf="number" md="tag" size={18} color={c.label2} />
+            <TextInput value={tagText} placeholder="Tag" placeholderTextColor={c.label3} autoCapitalize="none" autoCorrect={false}
+              onChangeText={typeTag} style={{ flex: 1, fontSize: 17, color: c.label }} />
+          </View>
+          {/* The tags in use, so one is picked whole; the lit one is the filter, and tapping it lets go. The row keeps
+              its height while nothing matches what's typed, so the sheet doesn't move under the finger. */}
+          {!!t.b.tags?.length && (
+            <View style={{ height: 36, marginBottom: space.m }}>
+              <TagChips tags={tagChoices(t.b.tags, tagText)} selected={f.tag} onDark onPick={(tag) => typeTag(tag === f.tag ? '' : tag)} />
+            </View>
+          )}
         </View>
       </Group>
 

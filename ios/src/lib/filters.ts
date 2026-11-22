@@ -53,5 +53,19 @@ export function fromViewQuery(query: string, today: string): Filters {
     tag: p.get('tag') ?? undefined, group: p.get('group') ?? undefined, sort: (p.get('sort') as Filters['sort']) ?? 'date', dir: (p.get('dir') as Filters['dir']) ?? 'desc' }
 }
 
+/** The tag the Filters sheet's field filters by, from what's typed ("#Trip " is trip). */
+export const tagOf = (text: string) => text.trim().replace(/^#/, '').toLowerCase() || undefined
+
+/** Tags in use to offer with the Filters sheet's tag field: most used first (`used` comes that way from bootstrap),
+ *  starting with what's typed, so a tag is picked whole instead of typed to the letter. Once the field holds a whole
+ *  tag, the most used again, that one among them, so another is one tap away. */
+export function tagChoices(used: { tag: string }[], text: string, max = 8): string[] {
+  const word = tagOf(text) ?? ''
+  const all = used.map((x) => x.tag)
+  if (!all.includes(word)) return all.filter((x) => x.startsWith(word)).slice(0, max)
+  const top = all.slice(0, max)
+  return top.includes(word) ? top : [...top.slice(0, max - 1), word]
+}
+
 /** Whether these filters are exactly what a saved view puts on (its query read the way it would be saved now). */
 export const isView = (query: string, f: Filters, today: string) => viewQuery(fromViewQuery(query, today), today) === viewQuery(f, today)
