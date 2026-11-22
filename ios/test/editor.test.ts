@@ -1,0 +1,54 @@
+// The entry editor's logic: split lines that balance themselves, tag suggestions, repeating an entry, and telling
+// whether a draft has changed.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { blank } from '@/lib/draft'
+import { addTag, balanceFirst, nextMonthly, parseTags, tagSuggestions } from '@/lib/txn'
+import { snap } from '@/lib/unsaved'
+
+test('the first split line takes what the others leave', () => {
+  const lines = [{ key: 'a', category_id: 1, amount: '120.00' }, { key: 'b', category_id: null, amount: '40.00' }]
+  assert.deepEqual(balanceFirst(lines, 12000).map((l) => l.amount), ['80', '40.00'])
+  const three = [...lines, { key: 'c', category_id: 2, amount: '15.50' }]
+  assert.equal(balanceFirst(three, 12000)[0].amount, '64.50')
+  // More in the other lines than the total: line 1 goes to nothing, never below.
+  assert.equal(balanceFirst([lines[0], { ...lines[1], amount: '150.00' }], 12000)[0].amount, '')
+  assert.deepEqual(balanceFirst([lines[0]], 500), [lines[0]])
+})
+
+test('a repeat starts on the same day of the month after today', () => {
+  assert.equal(nextMonthly('2026-10-05', '2026-11-22'), '2026-12-05')
+  assert.equal(nextMonthly('2026-11-22', '2026-11-22'), '2026-12-22')
+  assert.equal(nextMonthly('2026-11-25', '2026-11-22'), '2026-12-25')
+  // The 31st lands on a short month's last day, and comes back to the 31st after it.
+  assert.equal(nextMonthly('2027-01-31', '2027-02-01'), '2027-02-28')
+  assert.equal(nextMonthly('2027-01-31', '2027-02-28'), '2027-03-31')
+  assert.equal(nextMonthly('2026-12-15', '2026-12-20'), '2027-01-15')
+})
+
+test('tags parse loosely and suggestions follow the tag being typed', () => {
+  assert.deepEqual(parseTags('#Trip, work  gift'), ['trip', 'work', 'gift'])
+  const used = [{ tag: 'trip', count: 9 }, { tag: 'work', count: 4 }, { tag: 'reimburse', count: 2 }, { tag: 'tripod', count: 1 }]
+  assert.deepEqual(tagSuggestions(used, ''), ['trip', 'work', 'reimburse', 'tripod'])
+  assert.deepEqual(tagSuggestions(used, 'tr'), ['trip', 'tripod'])
+  assert.deepEqual(tagSuggestions(used, 'trip'), ['tripod']) // typed in full: it's on the entry already
+  assert.deepEqual(tagSuggestions(used, 'trip '), ['work', 'reimburse', 'tripod'])
+  assert.deepEqual(tagSuggestions(used, 'work re'), ['reimburse'])
+  assert.deepEqual(tagSuggestions(used, '', 2), ['trip', 'work'])
+})
+
+test('a picked tag replaces the one being typed, or goes on the end', () => {
+  assert.deepEqual(addTag('', 'trip'), ['trip'])
+  assert.deepEqual(addTag('work re', 'reimburse'), ['work', 'reimburse'])
+  assert.deepEqual(addTag('work ', 'trip'), ['work', 'trip'])
+  assert.deepEqual(addTag('#Trip wo', 'work'), ['trip', 'work'])
+  assert.deepEqual(addTag('trip, ', 'trip'), ['trip']) // never twice
+})
+
+test('a draft counts as changed only for what would be saved', () => {
+  const d = { ...blank('2026-11-22'), amount: '5.4', what: 'Coffee' }
+  assert.equal(snap(d), snap({ ...d, amount: '5.40', target: 'b' }))
+  assert.notEqual(snap(d), snap({ ...d, amount: '5.41' }))
+  assert.notEqual(snap(d), snap({ ...d, tags: ['trip'] }))
+  assert.notEqual(snap(d), snap({ ...d, date: '2026-11-21' }))
+})
