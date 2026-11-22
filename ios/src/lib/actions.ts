@@ -1,12 +1,14 @@
-// Row actions shared by every list: delete with undo, duplicate to today.
+// Row actions shared by every list: delete with undo, duplicate to today, repeat, make a quick action.
 import * as Haptics from 'expo-haptics'
 import { router } from 'expo-router'
 import { api, ApiError, type Txn } from './api'
 import { invalidateAll } from './data'
+import { dollarsText } from './forms'
 import { formatCents } from './money'
 import { markFresh } from './motion'
 import { play } from './sound'
 import { toast } from './toast'
+import { nextMonthly } from './txn'
 
 const why = (e: unknown) => (e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable. Check Tailscale.')
 
@@ -53,3 +55,20 @@ export function openEntry(id?: number, mode?: 'duplicate') {
   if (!id) router.push('/new')
   else router.push({ pathname: '/entry', params: { id: String(id), ...(mode ? { mode } : {}) } })
 }
+
+/** A new recurring template filled in from an entry, monthly from the same day next time round. Nothing is added
+ *  until it's saved. */
+export function repeatEntry(t: Txn, today: string, label: string) {
+  router.push({ pathname: '/edit', params: { kind: 'recurring', prefill: JSON.stringify({
+    label, what: t.what || label, category_id: t.category_id, from_account_id: t.from_id, to_account_id: t.to_id,
+    amount: dollarsText(t.amount), freq: 'monthly', next_date: nextMonthly(t.date, today) }) } })
+}
+
+/** A new quick action filled in from an entry. */
+export function quickFromEntry(t: Txn, label: string) {
+  router.push({ pathname: '/edit', params: { kind: 'quick', prefill: JSON.stringify({
+    label, category_id: t.category_id, from_account_id: t.from_id, to_account_id: t.to_id, amount: dollarsText(t.amount) }) } })
+}
+
+/** Activity showing one tag's entries. */
+export const openTag = (tag: string) => router.push({ pathname: '/activity', params: { tag } })
