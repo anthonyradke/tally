@@ -1,10 +1,11 @@
 // The draft's tags: typed, separated by spaces, or picked from the tags already in use. The ones used most sit as
-// chips above the field (filtered to the tag being typed), so "work" doesn't drift into "Work" or "wrk".
+// chips above the field (filtered to the tag being typed), so "work" doesn't drift into "Work" or "wrk". They show
+// while the field is focused or once the entry has a tag, not on every entry's form.
 import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
 import { useDraft } from '@/lib/draft'
 import { useTally } from '@/lib/tally'
-import { addTag, parseTags, tagSuggestions } from '@/lib/txn'
+import { addTag, offersTags, parseTags, tagSuggestions } from '@/lib/txn'
 import { space, useTheme } from '@/theme'
 import { Chip } from './Chip'
 import { Field } from './Field'
@@ -15,10 +16,11 @@ export function TagField({ onFocus, onBlur }: { onFocus?: () => void; onBlur?: (
   const t = useTally()
   const { d, set } = useDraft()
   const [text, setText] = useState<string | null>(null) // raw text while editing
+  const [focused, setFocused] = useState(false)
   const shown = text ?? d.tags.join(' ')
   // Before the field is typed into, its last tag is finished, not one still being typed.
   const typed = text ?? (d.tags.length ? `${shown} ` : '')
-  const offer = tagSuggestions(t.b?.tags ?? [], typed)
+  const offer = offersTags(focused, d.tags) ? tagSuggestions(t.b?.tags ?? [], typed) : []
   const change = (v: string) => { setText(v); set({ tags: parseTags(v) }) }
   return (
     <View>
@@ -37,7 +39,7 @@ export function TagField({ onFocus, onBlur }: { onFocus?: () => void; onBlur?: (
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 50 }}>
         <Icon sf="number" md="tag" size={18} color={c.label2} />
         <Field value={shown} placeholder="Tags, separated by spaces" placeholderTextColor={c.label3}
-          autoCapitalize="none" autoCorrect={false} onFocus={onFocus} onBlur={() => { onBlur?.(); setText(null) }}
+          autoCapitalize="none" autoCorrect={false} onFocus={() => { setFocused(true); onFocus?.() }} onBlur={() => { onBlur?.(); setFocused(false); setText(null) }}
           onChangeText={change} style={{ flex: 1, fontSize: 17, color: c.label, paddingVertical: space.m }} />
       </View>
     </View>
