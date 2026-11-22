@@ -9,7 +9,8 @@ import { formatCents } from './money'
 
 /** Every row, oldest first, reused by Accounts and account detail (one cached request). The limit is far past any
  *  real ledger (about a thousand rows a year); the server sorts oldest first, so a cut would drop the newest. */
-export const useAllTxns = (enabled = true) => useTransactions({ limit: 1_000_000, sort: 'date', dir: 'asc' }, enabled)
+export const ALL_TXNS = { limit: 1_000_000, sort: 'date', dir: 'asc' } as const
+export const useAllTxns = (enabled = true) => useTransactions(ALL_TXNS, enabled)
 
 export interface Series { dates: string[]; values: number[] }
 
@@ -74,8 +75,9 @@ export function split(b: Bootstrap, bal: Map<number, number>) {
   return { assets, debts, net: assets - debts }
 }
 
-/** A group's total on Accounts. Cards and loans read "owed"; one paid past zero is a credit, not "−$6.88 owed". */
-export function groupTotal(cents: number, kind: Account['kind']): string {
+/** A balance in words, as the account's own app would put it (Accounts' group totals, Catch up): a card or loan
+ *  owes, and one paid past zero is in credit, not "−$6.88 owed". */
+export function balanceWords(cents: number, kind: Account['kind']): string {
   if (kind !== 'card' && kind !== 'loan') return formatCents(cents)
-  return cents < 0 ? `${formatCents(-cents)} credit` : `${formatCents(cents)} owed`
+  return cents < 0 ? `${formatCents(-cents)} in credit` : `${formatCents(cents)} owed`
 }

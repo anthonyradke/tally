@@ -20,10 +20,26 @@ export async function loadCaughtUp() {
   } catch { /* unreadable: start over */ }
 }
 
-export function markCaughtUp(accountId: number, when = new Date()) {
-  const at = { ...useCaughtUp.getState().at, [String(accountId)]: when.toISOString() }
+const save = (at: Record<string, string>) => {
   useCaughtUp.setState({ at })
   AsyncStorage.setItem(KEY, JSON.stringify(at)).catch(() => {})
+}
+
+/** Marks an account caught up (entries added in Catch up, a look through it with nothing to add, a reconcile that
+ *  matched). Returns when it was before, for an Undo (undefined: never). */
+export function markCaughtUp(accountId: number, when = new Date()): string | undefined {
+  const k = String(accountId)
+  const before = useCaughtUp.getState().at
+  save({ ...before, [k]: when.toISOString() })
+  return before[k]
+}
+
+/** Puts back what `markCaughtUp` replaced. */
+export function unmarkCaughtUp(accountId: number, before: string | undefined) {
+  const at = { ...useCaughtUp.getState().at }
+  if (before) at[String(accountId)] = before
+  else delete at[String(accountId)]
+  save(at)
 }
 
 /** Whole days since `iso` (a time), by the phone's calendar. */

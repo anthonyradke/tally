@@ -24,7 +24,7 @@ import { Txt } from '@/components/Txt'
 import { ReconcileSince as SinceLast } from '@/components/ReconcileSince'
 import { api, ApiError, type Account, type Diagnosis, type StatementLine, type StatementMatch, type Txn } from '@/lib/api'
 import { handToCatchUp } from '@/lib/caughtUp'
-import { close, useBusy } from '@/lib/nav'
+import { close, useBusy, useCloseHere } from '@/lib/nav'
 import { Group, Row } from '@/components/Row'
 import { dayLabel } from '@/lib/dates'
 import { press, toCents } from '@/lib/draft'
@@ -44,26 +44,28 @@ export default function Reconcile() {
   const [amount, setAmount] = useState('')
   const [neg, setNeg] = useState(false) // a card in credit, or an overdrawn account: the keypad has no minus
   const [dx, setDx] = useState<Diagnosis | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState(false) // only for the label: `once` is what stops a second tap
   const [party, setParty] = useState(0)
   const [shakeStyle, shake] = useShake()
   const [sm, setSm] = useState<StatementMatch | null>(null)
   const once = useBusy()
+  const closeHere = useCloseHere()
   if (!a || !t.b) return null
   const owed = a.kind === 'card'
 
-  const check = async (save = false) => {
+  // A Check that matches saves too, so a second tap while it's going would save a second reconciliation.
+  const check = (save = false) => once(async () => {
     setBusy(true)
     try {
       const actual = toCents(amount) * (neg ? -1 : 1)
       let r = await api.reconcile(a.id, actual, save)
       if (!save && r.gap === 0) r = await api.reconcile(a.id, actual, true) // matched to the cent: saved, with Undo
       setDx(r)
-      if (r.saved) toastReconciled(a.name, r, () => setDx((x) => (x ? { ...x, saved: false, id: null } : x)))
+      if (r.saved) toastReconciled(a, r, () => setDx((x) => (x ? { ...x, saved: false, id: null } : x)))
       if (save) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
         play('add')
-        close()
+        closeHere()
       } else {
         Haptics.notificationAsync(r.gap === 0 ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning).catch(() => {})
         if (r.gap === 0) { setParty((n) => n + 1); play('success') }
@@ -72,7 +74,7 @@ export default function Reconcile() {
     } catch (e) {
       toast({ text: e instanceof ApiError ? e.errors.join(' ') : 'Tally is unreachable.', tone: 'error' })
     } finally { setBusy(false) }
-  }
+  })
 
   // A statement exported from the bank's site (CSV): every line paired with an entry, and what's on one but not the
   // other. Missing lines open the composer filled in.
