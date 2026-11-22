@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { duplicateOf, lastShown, runningBalances, sessionRows } from '@/lib/catchup'
+import { duplicateOf, isNewPlace, lastShown, newPlaceCategories, runningBalances, sessionRows } from '@/lib/catchup'
 import { acct, row } from './fixtures'
 
 const CHK = 1
@@ -33,4 +33,20 @@ test('catchup: the balance after the entry just added follows a later fix to it'
   assert.equal(lastShown(last, [], null), null)
   const skipped = { row: null, label: 'Pay off card', cents: 5000, skipped: true as const }
   assert.equal(lastShown(skipped, [], null), skipped)
+})
+
+test('catchup: a name never seen before leads its chips with the most used spending, then the account\'s own', () => {
+  const SAV = 3, CARD = 2
+  const h = [
+    row('2026-10-30', 1, { from_id: CHK, to_id: SAV, category_id: 20, what: 'To savings' }),
+    row('2026-10-29', 1, { from_id: CHK, to_id: CARD, category_id: 21, what: 'Pay off card' }),
+    row('2026-10-27', 1, { from_id: CARD, category_id: 6, what: 'Target' }),
+    row('2026-10-26', 1, { from_id: CARD, category_id: 5, what: 'Safeway' }),
+    row('2026-10-25', 1, { from_id: CARD, category_id: 5, what: 'Safeway' }),
+  ]
+  const spending = (id: number) => id < 10
+  assert.deepEqual(newPlaceCategories(h, CHK, spending), [5, 6, 20, 21])
+  assert.equal(isNewPlace(h, 'Venmo'), true)
+  assert.equal(isNewPlace(h, 'safeway '), false)
+  assert.equal(isNewPlace(h, ''), false) // no name: the account's own chips, as before
 })

@@ -89,6 +89,21 @@ export function usualCategories(history: Txn[], acct: number, n = 6, spending?: 
   return [...mine, ...rest].slice(0, total)
 }
 
+/** The chips for a name never seen before: the most used Spending categories anywhere first (a new place is nearly
+ *  always spending, a Venmo or an ATM on checking too), then the account's own. Not a new name: `usualCategories`. */
+export function newPlaceCategories(history: Txn[], acct: number, spending: (id: number) => boolean, total = 8): number[] {
+  const count = new Map<number, number>()
+  for (const x of history) if (spending(x.category_id)) count.set(x.category_id, (count.get(x.category_id) ?? 0) + 1)
+  const top = [...count.entries()].sort((a, z) => z[1] - a[1]).map(([id]) => id).slice(0, total - 3)
+  return [...top, ...usualCategories(history, acct, total).filter((id) => !top.includes(id))].slice(0, total)
+}
+
+/** A name no entry has had (by merchant): its chips lead with everyday spending. */
+export const isNewPlace = (history: Txn[], what: string): boolean => {
+  const want = merchantKey(what)
+  return !!want && !history.some((x) => merchantKey(x.what) === want)
+}
+
 /** The account's balance after each row, the way a bank's list shows a running balance: day by day, and in the order
  *  they were entered within a day. `rows` in any order; rows before `start` don't count, as in the engine. */
 export function runningBalances(acct: Account, rows: Txn[], start: string): Map<number, number> {

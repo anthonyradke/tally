@@ -6,7 +6,7 @@ import Animated, { ZoomIn } from 'react-native-reanimated'
 import { categoryVisual, KIND_LABEL } from '@/icons/categories'
 import type { Account, CatType, Kind, Txn } from '@/lib/api'
 import { balanceWords } from '@/lib/balances'
-import { otherSide, suggest, usualCategories } from '@/lib/catchup'
+import { isNewPlace, newPlaceCategories, otherSide, suggest, usualCategories } from '@/lib/catchup'
 import { dayLabel } from '@/lib/dates'
 import { press, toCents, useDraft } from '@/lib/draft'
 import { formatCents } from '@/lib/money'
@@ -145,7 +145,10 @@ export function Amount({ acct, history, count, lookalike, errors, shake, after, 
   const t = useTally()
   const { d, set } = useDraft()
   const cents = toCents(d.amount)
-  const usual = useMemo(() => usualCategories(history, acct.id, 6, (id) => t.cat.get(id)?.type === 'Spending'), [history, acct.id, t.cat])
+  const usual = useMemo(() => {
+    const spending = (id: number) => t.cat.get(id)?.type === 'Spending'
+    return isNewPlace(history, d.what) ? newPlaceCategories(history, acct.id, spending) : usualCategories(history, acct.id, 6, spending)
+  }, [history, acct.id, t.cat, d.what])
   const chips = [...(d.category_id ? [d.category_id] : []), ...usual.filter((x) => x !== d.category_id)]
     .map((id) => t.cat.get(id)).filter((x) => x && (x.active || x.id === d.category_id))
   const two = SHAPES[d.kind].from !== 'blank' && SHAPES[d.kind].to !== 'blank'
