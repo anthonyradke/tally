@@ -2,7 +2,7 @@
 // Its own Cancel/Save; destructive actions sit at the bottom and act at once (the server refuses deletes that would
 // orphan entries, and says to hide the item instead). Closing with unsaved changes says so, with the draft one tap
 // away (no confirm dialogs).
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Keyboard, KeyboardAvoidingView, ScrollView, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import * as Haptics from 'expo-haptics'
@@ -21,11 +21,12 @@ import { categoryVisual, GLYPH_NAMES, GLYPHS } from '@/icons/categories'
 import { useAdmin, write } from '@/lib/admin'
 import { close, useBusy, useCloseHere, useLatest } from '@/lib/nav'
 import { api, ApiError, type AdminData, type CatType, type Freq } from '@/lib/api'
-import { accountUsers, budgetAmount, changed, favoriteBody, initial, movedText, pctStr, recurringBody, swapAccount, usersText, type Form } from '@/lib/forms'
+import { budgetAmount, changed, favoriteBody, initial, movable, movedText, pctStr, recurringBody, swapAccount, unmoveBody, usersText, type Form } from '@/lib/forms'
 import { monthOf } from '@/lib/dates'
-import { dueOf, removeRecurring } from '@/lib/recurringActions'
+import { removeRecurring } from '@/lib/recurringActions'
 import { useTally } from '@/lib/tally'
 import { toast, type ToastMsg } from '@/lib/toast'
+import { useOfferBack } from '@/lib/unsaved'
 import { radius, space, TINTS, useTheme, type Tint } from '@/theme'
 
 const TITLE: Record<string, [string, string]> = {
@@ -37,7 +38,7 @@ type Note = Omit<ToastMsg, 'id'>
 
 export default function Edit() {
   // prefill: starting fields for a new item, as JSON (a suggested recurring template from Settings → Recurring).
-  // draft: fields typed before the editor was closed without saving, brought back by the toast's Keep editing.
+  // draft: fields typed before the editor was closed without saving, brought back by the toast's Restore.
   const { kind, id, prefill, draft } = useLocalSearchParams<{ kind: string; id?: string; prefill?: string; draft?: string }>()
   const { c } = useTheme()
   const admin = useAdmin()
@@ -47,7 +48,7 @@ export default function Edit() {
   const [busy, setBusy] = useState(false)
   const once = useBusy() // a ref, not the state above: two quick taps both saw busy as false
   const closeHere = useCloseHere()
-  const finished = useRef(false) // saved or deleted: closing has nothing to warn about
+  const leaving = useRef(false) // saved, saving or deleted: closing has nothing to offer back
   const set = (p: Form) => setF((s) => ({ ...s!, ...p }))
   const a = admin.data
   const n = id ? Number(id) : undefined
@@ -60,18 +61,20 @@ export default function Edit() {
     setF({ ...s, ...parse(draft) })
   }
 
-  // ✕ and a swipe down both unmount the screen; changes that weren't saved come back with Keep editing.
+  // ✕ and a swipe down both unmount the screen; changes that weren't saved come back with Restore (lib/unsaved.ts,
+  // shared with the entry editor).
   const latest = useLatest({ f, start })
-  useEffect(() => () => {
+  useOfferBack(() => {
     const { f: now, start: was } = latest.current
-    if (finished.current || !now || !was || !changed(was, now)) return
-    toast({ text: 'Changes not saved', action: { label: 'Keep editing', run: () => { router.push({ pathname: '/edit', params: { kind, ...(id ? { id } : {}), draft: JSON.stringify(now) } }) } } })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (leaving.current || !now || !was || !changed(was, now)) return null
+    return () => { router.push({ pathname: '/edit', params: { kind, ...(id ? { id } : {}), draft: JSON.stringify(now) } }) }
+  })
 
   const save = () => once(saveNow)
   async function saveNow() {
     if (!f || !a) return
     setBusy(true)
+    leaving.current = true // swiped down while it saves: nothing is lost
     let note: Note = { text: 'Saved' }
     const ok = await write(async () => {
       switch (kind) {
@@ -80,13 +83,15 @@ export default function Edit() {
         case 'quick': return api.saveFavorite(f, n)
         case 'recurring': {
           const r = a.recurring.find((x) => x.id === n)
-          // Unchanged by hand, it goes back as the date due now: a skip from this screen moves that on meanwhile, and
-          // the date it opened with would then read as a move.
-          if (!r || f.next_date === start?.next_date) return api.saveRecurring(r ? { ...f, next_date: dueOf(r) } : f, n)
-          // A new date: its entries ahead are posted again from it. Undo puts the old schedule back.
-          await api.saveRecurring({ ...f, move: true }, n)
-          note = { text: movedText(String(f.label), f.freq as Freq, String(f.next_date), t.today), action: { label: 'Undo', run: async () => {
-            await write(() => api.saveRecurring({ ...recurringBody(r), next_date: dueOf(r), move: true }, n))
+          if (!r) return api.saveRecurring(f, n)
+          // Paused or not is the template's own, read now: Pause and its Undo act at once, outside the form.
+          const body = { ...f, active: !!r.active }
+          // An untouched date keeps the schedule, whatever moved it on meanwhile (a skip from this screen, midnight).
+          if (f.next_date === start?.next_date) return api.saveRecurring({ ...body, move: false }, n)
+          // A new date: its entries ahead are posted again from it. Undo puts the old schedule back, day and all.
+          const after = await api.saveRecurring({ ...body, move: true }, n)
+          note = { text: movedText(String(f.label), f.freq as Freq, String(f.next_date), t.today, after.next_due), action: { label: 'Undo', run: async () => {
+            await write(() => api.saveRecurring(unmoveBody(r), n))
           } } }
           return
         }
@@ -99,8 +104,7 @@ export default function Edit() {
       }
     })
     setBusy(false)
-    if (!ok) return
-    finished.current = true
+    if (!ok) { leaving.current = false; return }
     toast(note)
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
     closeHere()
@@ -113,8 +117,10 @@ export default function Edit() {
     // Quick actions, views and recurring templates come back with Undo (no confirm dialogs anywhere). Accounts and
     // categories can only be deleted when nothing uses them, so there's nothing to lose.
     const r = a.recurring.find((x) => x.id === n)
+    leaving.current = true // swiped down while it deletes: nothing is lost
     if (kind === 'recurring') {
-      if (r && await removeRecurring(r)) { finished.current = true; closeHere() }
+      if (r && await removeRecurring(r)) closeHere()
+      else leaving.current = false
       return
     }
     let back: (() => Promise<unknown>) | undefined
@@ -132,8 +138,7 @@ export default function Edit() {
         if (x) back = async () => { const made = await api.saveView(x); await api.orderViews(ids.map((i) => (i === n ? made.id : i))) }
       } else await (kind === 'account' ? api.deleteAccount : api.deleteCategory)(n)
     })
-    if (!ok) return
-    finished.current = true
+    if (!ok) { leaving.current = false; return }
     toast({ text: 'Deleted', action: back ? { label: 'Undo', run: async () => { await write(back!) } } : undefined })
     closeHere()
   }
@@ -169,7 +174,7 @@ export default function Edit() {
               {kind === 'category' && <CategoryForm f={f} set={set} />}
               {kind === 'quick' && <QuickForm f={f} set={set} a={a} />}
               {kind === 'recurring' && <RecurringForm f={f} set={set} a={a} id={n} />}
-              {kind === 'recurring' && !!n && <RecurringActions id={n} a={a} onActive={(on) => { set({ active: on }); setStart((s) => s && { ...s, active: on }) }} />}
+              {kind === 'recurring' && !!n && <RecurringActions id={n} a={a} />}
               {kind === 'view' && <Group><Field label="Name" value={String(f.name ?? '')} onChange={(v) => set({ name: v })} /></Group>}
               {kind === 'budget' && <BudgetForm f={f} set={set} a={a} id={n!} />}
               {id && kind !== 'budget' && (
@@ -186,7 +191,8 @@ export default function Edit() {
 }
 
 /** Saves an account; hiding one with "Move them to" picked also moves its quick actions and recurring bills there,
- *  and the toast says so with Undo. */
+ *  and the toast says so with Undo. The moves go first and the hide last: a move the server refuses puts back the
+ *  ones already made, so nothing is left half done (the account used to be hidden already, with some items moved). */
 async function saveAccount(f: Form, a: AdminData, n: number | undefined, today: string): Promise<Note | undefined> {
   const orig = a.accounts.find((x) => x.id === n)
   const { move_to: to, ...body } = f
@@ -194,21 +200,32 @@ async function saveAccount(f: Form, a: AdminData, n: number | undefined, today: 
   if (orig && f.apy === pctStr(orig.apy)) delete body.apy
   if (orig && f.loan_rate === pctStr(orig.loan_rate)) delete body.loan_rate
   if (f.kind !== 'loan' && f.kind !== 'investment') body.opened = ''
-  await api.saveAccount(body, n)
-  if (!orig || !n || to == null || !orig.active || f.active) return undefined
-  const u = accountUsers(a, n)
+  if (!orig || !n || to == null || !orig.active || f.active) { await api.saveAccount(body, n); return undefined }
+  const u = movable(a, n)
   const dest = Number(to)
-  for (const q of u.quick) await api.saveFavorite(favoriteBody(swapAccount(q, n, dest)), q.id)
-  for (const r of u.recurring) await api.saveRecurring(recurringBody(swapAccount(r, n, dest)), r.id)
+  const back: (() => Promise<unknown>)[] = []
+  try {
+    for (const q of u.quick) {
+      await api.saveFavorite(favoriteBody(swapAccount(q, n, dest)), q.id)
+      back.push(() => api.saveFavorite(favoriteBody(q), q.id))
+    }
+    for (const r of u.recurring) {
+      await api.saveRecurring(recurringBody(swapAccount(r, n, dest)), r.id)
+      back.push(() => api.saveRecurring(recurringBody(r), r.id))
+    }
+    await api.saveAccount(body, n)
+  } catch (e) {
+    for (const undo of back.reverse()) await undo().catch(() => {})
+    throw e
+  }
   const was = initial('account', n, a, today)
   delete was.apy
   delete was.loan_rate
   return {
     text: `Hidden ${orig.name}. Moved ${usersText(u)} to ${a.accounts.find((x) => x.id === dest)?.name ?? 'the other account'}.`,
     action: { label: 'Undo', run: async () => { await write(async () => {
-      for (const q of u.quick) await api.saveFavorite(favoriteBody(q), q.id)
-      for (const r of u.recurring) await api.saveRecurring(recurringBody(r), r.id)
       await api.saveAccount(was, n)
+      for (const undo of back) await undo()
     }) } },
   }
 }

@@ -44,8 +44,9 @@ export interface StatementMatch { account_id: number; first: string; last: strin
 /** Settings rows straight from the tables: `active` and `ef` are SQLite's 0/1 here. Saving one returns the same. */
 export type AdminAccount = Omit<Account, 'active' | 'ef'> & { sort: number; active: number; ef: number }
 export type AdminCategory = Omit<Category, 'active'> & { sort: number; active: number }
-/** `next_due`: the next date that will happen (its first row still ahead); `next_date` is the one after those. */
-export type AdminRecurring = Recurring & { next_due?: string }
+/** `next_due`: the next date that will happen (its first row still ahead); `next_slot`: the date that row was posted
+ *  for (it differs once the row is moved by hand); `next_date` is the one after those. */
+export type AdminRecurring = Recurring & { next_due?: string; next_slot?: string }
 export interface AdminData { accounts: AdminAccount[]; categories: AdminCategory[]; favorites: Favorite[]; recurring: AdminRecurring[]; saved_views: SavedView[]; budgets: Budget[]; skips: Skip[]; settings: Record<string, string> }
 
 export class ApiError extends Error {
@@ -143,7 +144,8 @@ export const api = {
   saveFavorite: (body: object, id?: number) => id ? call<Favorite>('PUT', `/favorites/${id}`, body) : call<Favorite>('POST', '/favorites', body),
   deleteFavorite: (id: number) => call<void>('DELETE', `/favorites/${id}`),
   orderFavorites: (ids: number[]) => call<{ ok: true }>('PUT', '/favorites/order', { ids }),
-  saveRecurring: (body: object, id?: number) => id ? call<Recurring>('PUT', `/recurring/${id}`, body) : call<Recurring>('POST', '/recurring', body),
+  /** `move: true` moves its schedule to `next_date`, `move: false` keeps it (see app/api_recurring.py). */
+  saveRecurring: (body: object, id?: number) => id ? call<AdminRecurring>('PUT', `/recurring/${id}`, body) : call<AdminRecurring>('POST', '/recurring', body),
   /** Returns the template and the future rows that went with it, for Undo: `restoreRecurring`, then `restore`.
    *  Nothing (204) when it was already gone. */
   deleteRecurring: (id: number) => call<{ template: Recurring; rows: Txn[] } | undefined>('DELETE', `/recurring/${id}`),

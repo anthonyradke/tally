@@ -40,15 +40,15 @@ export function RecurringForm({ f, set, a, id }: { f: Form; set: (p: Form) => vo
   )
 }
 
-/** Pause or resume, and skip one date, each at once with Undo. `onActive` keeps the open form in step, so saving it
- *  afterwards doesn't undo the pause. */
-export function RecurringActions({ id, a, onActive }: { id: number; a: AdminData; onActive: (on: boolean) => void }) {
+/** Pause or resume, and skip one date, each at once with Undo. The form keeps no copy of Pause: saving it sends the
+ *  template's own, so a pause (or its Undo) made here isn't reversed by the save. */
+export function RecurringActions({ id, a }: { id: number; a: AdminData }) {
   const t = useTally()
   const once = useBusy()
   const r = a.recurring.find((x) => x.id === id)
   if (!r) return null
   const skipped = a.skips.filter((x) => x.recurring_id === id)
-  const pause = () => once(async () => { if (await togglePause(r, t.today)) onActive(!r.active) })
+  const pause = () => once(() => togglePause(r, t.today))
   const skip = () => once(async () => { if (await skipNext(r, t.today)) Haptics.selectionAsync().catch(() => {}) })
   return (
     <Group footer={r.active ? `Pausing takes out its entries still ahead; resuming skips the dates missed meanwhile. Skipping leaves the template as it is, say for a bill paid another way this time.` : `Paused: nothing posts until it's resumed, and it then skips the dates missed meanwhile.`}>

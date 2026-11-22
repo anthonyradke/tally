@@ -1,5 +1,5 @@
 // Starting values for the Settings editor (edit.tsx): each form's fields as the text inputs show them.
-import type { AdminData, Favorite, Freq, Recurring } from './api'
+import type { AdminAccount, AdminData, AdminRecurring, Favorite, Freq, Recurring } from './api'
 import { fromCents } from './draft'
 import { parseDollars } from './money'
 import { fromISO, monthOf } from './dates'
@@ -32,8 +32,10 @@ export function initial(kind: string, id: number | undefined, a: AdminData, toda
     }
     case 'recurring': {
       const x = a.recurring.find((r) => r.id === id)
-      return x ? { label: x.label, what: x.what, category_id: x.category_id, from_account_id: x.from_account_id, to_account_id: x.to_account_id, amount: dollarsText(x.amount), freq: x.freq, next_date: x.next_due ?? x.next_date, horizon_days: x.horizon_days, active: !!x.active }
-        : { label: '', what: '', category_id: a.categories.find((r) => r.type === 'Spending' && r.active)?.id ?? null, from_account_id: null, to_account_id: null, amount: '', freq: 'monthly', next_date: today, horizon_days: 45, active: true }
+      // No `active`: Pause and Resume act at once, and the save sends the template's own, read when it's sent. A copy
+      // here went stale after Pause then Undo, and the save paused it again.
+      return x ? { label: x.label, what: x.what, category_id: x.category_id, from_account_id: x.from_account_id, to_account_id: x.to_account_id, amount: dollarsText(x.amount), freq: x.freq, next_date: x.next_due ?? x.next_date, horizon_days: x.horizon_days }
+        : { label: '', what: '', category_id: a.categories.find((r) => r.type === 'Spending' && r.active)?.id ?? null, from_account_id: null, to_account_id: null, amount: '', freq: 'monthly', next_date: today, horizon_days: 45 }
     }
     case 'view': {
       const x = a.saved_views.find((r) => r.id === id)
@@ -70,10 +72,18 @@ export function amountsById(fields: Record<string, string>, positiveOnly = false
 export const budgetAmount = (text: string): number | null | undefined => (text.trim() === '' ? null : parseDollars(text) ?? undefined)
 
 /** A saved template as the body `saveRecurring` takes (dollars), for an action that changes one thing about it from a
- *  list (pause, another account) without the editor. */
+ *  list (pause, another account) without the editor. `move: false` keeps its schedule whatever the date says: the
+ *  date can be a moment old (an Undo of a pause sent the one from before the pause, which read as a move and dropped
+ *  the bills already scheduled). */
 export const recurringBody = (r: Recurring): Form => ({
   label: r.label, what: r.what, category_id: r.category_id, from_account_id: r.from_account_id, to_account_id: r.to_account_id,
-  amount: r.amount / 100, freq: r.freq, next_date: r.next_date, horizon_days: r.horizon_days, active: !!r.active,
+  amount: r.amount / 100, freq: r.freq, next_date: r.next_date, horizon_days: r.horizon_days, active: !!r.active, move: false,
+})
+
+/** The body that undoes a move of `r`'s date: back to where its schedule stood, aiming for its old day (without it, a
+ *  bill on the 31st moved and moved back aimed for the 30th). */
+export const unmoveBody = (r: AdminRecurring): Form => ({
+  ...recurringBody(r), next_date: r.next_slot ?? r.next_due ?? r.next_date, anchor_day: r.anchor_day, move: true,
 })
 
 /** A quick action as the body `saveFavorite` takes. */
@@ -90,21 +100,38 @@ export function shortDay(iso: string, today: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(d.getFullYear() === fromISO(today).getFullYear() ? {} : { year: 'numeric' }) })
 }
 
-/** What a template does after its date moved, for the toast: "Rent now posts on the 3rd, starting Dec 3". */
-export function movedText(label: string, freq: Freq, next: string, today: string): string {
+/** What a template does after its date moved, for the toast: "Rent now posts on the 3rd, starting Dec 3". `starts`
+ *  is the first date it really posts when that's later (the date picked was skipped). */
+export function movedText(label: string, freq: Freq, next: string, today: string, starts?: string): string {
   const d = fromISO(next)
   const weekday = d.toLocaleDateString('en-US', { weekday: 'long' })
   const when = freq === 'monthly' ? `on the ${ordinal(d.getDate())}`
     : freq === 'weekly' ? `on ${weekday}s`
     : freq === 'biweekly' ? `every other ${weekday}`
     : `each year on ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-  return `${label || 'It'} now posts ${when}, starting ${shortDay(next, today)}`
+  return `${label || 'It'} now posts ${when}, starting ${shortDay(starts && starts > next ? starts : next, today)}`
 }
+
+type Sides = { from_account_id: number | null; to_account_id: number | null }
+const uses = (x: Sides, id: number) => x.from_account_id === id || x.to_account_id === id
 
 /** Quick actions and running recurring templates that post to an account, for when it's hidden. */
 export function accountUsers(a: AdminData, id: number): { quick: Favorite[]; recurring: Recurring[] } {
-  const on = (x: { from_account_id: number | null; to_account_id: number | null }) => x.from_account_id === id || x.to_account_id === id
-  return { quick: a.favorites.filter(on), recurring: a.recurring.filter((r) => r.active && on(r)) }
+  return { quick: a.favorites.filter((x) => uses(x, id)), recurring: a.recurring.filter((r) => r.active && uses(r, id)) }
+}
+
+/** What hiding an account offers to move: its users, paused templates included (resumed, one would post to the hidden
+ *  account again). */
+export function movable(a: AdminData, id: number): { quick: Favorite[]; recurring: Recurring[] } {
+  const u = accountUsers(a, id)
+  return { ...u, recurring: [...u.recurring, ...a.recurring.filter((r) => !r.active && uses(r, id))] }
+}
+
+/** Accounts those users can move to: shown ones that none of them already has on its other side (From and To the
+ *  same account is refused, which left a hide half done). */
+export function moveTargets(a: AdminData, id: number, u: { quick: Sides[]; recurring: Sides[] }): AdminAccount[] {
+  const other = new Set([...u.quick, ...u.recurring].map((x) => (x.from_account_id === id ? x.to_account_id : x.from_account_id)))
+  return a.accounts.filter((x) => x.active && x.id !== id && !other.has(x.id))
 }
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
