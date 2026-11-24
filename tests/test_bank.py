@@ -178,6 +178,7 @@ def test_unmapped_accounts_stay_out(client, world, fake, linked):
     fake.push(added=[row("u", "acc-card", 3.0, "2026-09-12", "SNACK")])
     client.post("/api/bank/sync")
     assert client.get("/api/bank/inbox").json() == []
+    assert client.get("/api/bank").json()["waiting"] == 0
 
 
 def test_one_bank_account_per_ledger_account(client, world, fake, linked):

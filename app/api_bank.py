@@ -30,14 +30,16 @@ def _plaid(fn, *a):
 
 
 @router.get("")
-def status(b: Bank):
+def status(b: Bank, con: Con):
     items = []
     for it in b.execute("SELECT id, institution, error, synced_at, created_at FROM items ORDER BY id"):
         accts = [dict(a) for a in b.execute(
             "SELECT id, name, official_name, mask, type, subtype, tally_account_id, current, available, balance_at"
             " FROM accounts WHERE item_id=? ORDER BY id", (it["id"],))]
         items.append({**dict(it), "accounts": accts})
-    new = b.execute("SELECT COUNT(*) FROM txns WHERE status='new' AND pending=0").fetchone()[0]
+    mapped = bank._mapped(b, service.load(con))
+    new = sum(1 for r in b.execute("SELECT account_id FROM txns WHERE status='new' AND pending=0")
+              if r[0] in mapped)
     return {"env": plaid.env(), "items": items, "waiting": new}
 
 
