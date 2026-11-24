@@ -2,15 +2,18 @@
 without them (the real Tally, for now) looks exactly as it did. Same conventions as api.py: cents on the wire,
 dollars in request bodies."""
 from __future__ import annotations
-import sqlite3
+import asyncio, logging, os, sqlite3
 from datetime import date
 from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
-from . import bank, plaid, service
+from . import bank, db, plaid, service
 from .api import Con
 from .engine import Txn
 from .entries import _full, _write
 from .inputs import bad, body, day, money, opt_id, text, whole
+
+
+log = logging.getLogger(__name__)
 
 
 def _on():
@@ -39,10 +42,7 @@ def status(b: Bank, con: Con):
             "SELECT id, name, official_name, mask, type, subtype, tally_account_id, current, available, balance_at"
             " FROM accounts WHERE item_id=? ORDER BY id", (it["id"],))]
         items.append({**dict(it), "accounts": accts})
-    mapped = bank._mapped(b, service.load(con))
-    new = sum(1 for r in b.execute("SELECT account_id FROM txns WHERE status='new' AND pending=0")
-              if r[0] in mapped)
-    return {"env": plaid.env(), "items": items, "waiting": new}
+    return {"env": plaid.env(), "items": items, "waiting": bank.waiting(b, service.load(con)), "ask": bank.ask(b)}
 
 
 @router.post("/link-token")
@@ -64,6 +64,13 @@ def _refresh(b, con) -> dict:
     return {"synced": counts, "paired": bank.link(b, st)}
 
 
+def _connected(b, con, access: str, item_id: str) -> dict:
+    """A new connection: store it, match its accounts to the ledger's where that's clear, then pull its history."""
+    iid = _plaid(bank.add_item, b, access, item_id)
+    matched = bank.automap(b, service.load(con), iid)
+    return {"item_id": iid, "matched": matched, **_refresh(b, con)}
+
+
 @router.post("/connect", status_code=201)
 async def connect(request: Request, b: Bank, con: Con):
     """Body: {"public_token": from Plaid Link}. Stores the connection, then pulls its history."""
@@ -72,8 +79,7 @@ async def connect(request: Request, b: Bank, con: Con):
     if not pt:
         bad("Missing public_token.")
     access, item_id = _plaid(plaid.exchange, pt)
-    iid = _plaid(bank.add_item, b, access, item_id)
-    return {"item_id": iid, **_refresh(b, con)}
+    return _connected(b, con, access, item_id)
 
 
 @router.delete("/items/{iid}", status_code=204)
@@ -101,15 +107,43 @@ async def map_account(aid: int, request: Request, b: Bank, con: Con):
     if target is not None and b.execute("SELECT 1 FROM accounts WHERE tally_account_id=? AND id!=?",
                                         (target, aid)).fetchone():
         bad(f"Another bank account is already {st.acct[target].name}.")
-    if not b.execute("UPDATE accounts SET tally_account_id=? WHERE id=?", (target, aid)).rowcount:
+    if not b.execute("SELECT 1 FROM accounts WHERE id=?", (aid,)).fetchone():
         raise HTTPException(404)
+    bank.assign(b, st, aid, target)
     b.commit()
     return {"paired": bank.link(b, st)}
 
 
 @router.post("/sync")
-def sync(b: Bank, con: Con):
+def sync(b: Bank, con: Con, max_age: Optional[int] = None):
+    """`max_age` (seconds): skip asking the banks when every connection was checked more recently than that (the app
+    asks on every open; the banks only change a few times a day)."""
+    if max_age is not None and bank.fresh(b, max_age):
+        return {"synced": {}, "paired": bank.link(b, service.load(con))}
     return _refresh(b, con)
+
+
+SYNC_HOURS = float(os.environ.get("TALLY_BANK_SYNC_HOURS", "4"))
+
+
+def sync_now() -> None:
+    """One background check of every bank, on its own connections (the timer below, not a request)."""
+    b, con = bank.connect(), db.connect()
+    try:
+        _refresh(b, con)
+    finally:
+        b.close()
+        con.close()
+
+
+async def sync_loop() -> None:
+    """Checks the banks every SYNC_HOURS while the server runs, so new rows are waiting before the app opens."""
+    while plaid.enabled() and SYNC_HOURS > 0:
+        await asyncio.sleep(SYNC_HOURS * 3600)
+        try:
+            await asyncio.to_thread(sync_now)
+        except Exception:
+            log.exception("bank sync failed")
 
 
 @router.get("/inbox")
@@ -163,6 +197,30 @@ async def accept(bid: int, request: Request, b: Bank, con: Con):
     b.commit()
     bank.link(b, service.load(con))  # the other side of a transfer pairs with the same entry
     return _full(con, [tid])[0]
+
+
+@router.post("/inbox/accept")
+async def accept_many(request: Request, b: Bank, con: Con):
+    """Body: {"ids": [bank row ids]}: add each as Tally guessed it. Rows already done (the other side of a transfer
+    added a moment ago) or without a category are skipped. Returns the new entries."""
+    raw = await body(request)
+    ids = raw.get("ids")
+    if not isinstance(ids, list) or not ids:
+        bad("Pick some to add.")
+    st = service.load(con)
+    done = []
+    for bid in [whole(i, "Bank row") for i in ids][:500]:
+        r = b.execute("SELECT * FROM txns WHERE id=?", (bid,)).fetchone()
+        if not r or r["status"] != "new" or r["pending"] or bank.guess(b, st, r).category_id is None:
+            continue
+        tid = _accept(b, st, r, {})
+        con.commit()
+        bank.decide(b, r["id"], tid, "added")
+        b.commit()
+        st = service.load(con)
+        bank.link(b, st)
+        done.append(tid)
+    return _full(con, done) if done else []
 
 
 @router.post("/inbox/accept-sure")
@@ -235,5 +293,4 @@ def sandbox_connect(b: Bank, con: Con, institution: Optional[str] = None):
         raise HTTPException(404)
     pt = _plaid(plaid.sandbox_item, *([institution] if institution else []))
     access, item_id = _plaid(plaid.exchange, pt)
-    iid = _plaid(bank.add_item, b, access, item_id)
-    return {"item_id": iid, **_refresh(b, con)}
+    return _connected(b, con, access, item_id)

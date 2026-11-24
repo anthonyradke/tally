@@ -20,6 +20,13 @@ Added
   Tally yet with a guess for each, one tap to add, a sheet to change the name, category or accounts, and "Add all"
   for the ones Tally is sure about. Settings, Banks connects banks through Plaid Link, sets which Tally account each
   bank account is, repairs a lapsed connection in place, and checks an account against its bank.
+- Opening the app with bank sync on brings up New from the bank when something waits: once on the first open of
+  the day and again when new rows arrive. Guessed rows are ticked and added with one button, the rest take a
+  category chip, and a new everyday bank account asks which Tally account it is.
+- The server checks connected banks every few hours (`TALLY_BANK_SYNC_HOURS`, default 4) and skips a check the app
+  asks for when it checked within the last half hour. A new connection's accounts are matched to Tally accounts by
+  kind and name where one clearly fits. The inbox on each account starts a few days before its last entry when it is
+  connected; older bank rows show only in the account's audit.
 
 ## 3.7.0 (2026-11-22)
 A pass over how the app feels in daily use, from reviewers using it the way it gets used: logging single purchases,

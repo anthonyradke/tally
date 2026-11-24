@@ -56,8 +56,11 @@ export interface AdminData { accounts: AdminAccount[]; categories: AdminCategory
  *  positive is money leaving the account (a purchase, a charge on a card), negative is money arriving. */
 export interface BankAccount { id: number; name: string; official_name: string | null; mask: string | null; type: string | null; subtype: string | null; tally_account_id: number | null; current: number | null; available: number | null; balance_at: string | null }
 export interface BankItem { id: number; institution: string | null; error: string | null; synced_at: string | null; created_at: string; accounts: BankAccount[] }
+/** An everyday bank account (checking, savings, a card) nobody has said is or isn't one of Tally's; `kinds`: the
+ *  Tally account kinds it could be. */
+export interface BankAsk { id: number; name: string; mask: string | null; institution: string | null; kinds: Kind[] }
 /** `waiting`: posted bank rows on connected accounts that no entry stands for yet. */
-export interface BankStatus { env: 'sandbox' | 'production'; items: BankItem[]; waiting: number }
+export interface BankStatus { env: 'sandbox' | 'production'; items: BankItem[]; waiting: number; ask: BankAsk[] }
 export type Confidence = 'sure' | 'likely' | 'guess' | 'unknown'
 /** Tally's best guess at the entry a bank row stands for, shaped like an entry (`amount` signed as the entry). */
 export interface BankGuess { what: string; category_id: number | null; from_id: number | null; to_id: number | null; amount: number; confidence: Confidence; source: 'history' | 'transfer' | 'plaid' | 'none'; why: string; pair_id: number | null }
@@ -66,6 +69,8 @@ export interface BankRow { id: number; date: string; authorized_date: string | n
 export interface BankAccept { what?: string; category_id?: number; from_id?: number | null; to_id?: number | null; amount?: number; date?: string; note?: string }
 export interface BankAudit { account_id: number; bank_account: string; first: string; bank_balance: number | null; tally_balance: number | null; gap: number | null; pending: number; balance_at: string | null; matched: number; missing: { id: number; date: string; raw: string; merchant: string | null; amount: number }[]; extra: { id: number; date: string; what: string; amount: number }[] }
 export interface BankSynced { synced: Record<string, { added?: number; modified?: number; removed?: number; error?: string; message?: string }>; paired: number }
+/** A new connection: the accounts Tally matched to its own by name. */
+export type BankConnected = BankSynced & { item_id: number; matched: { bank_account: string; account_id: number }[] }
 
 export class ApiError extends Error {
   constructor(public status: number, public errors: string[]) { super(errors.join(' ')) }
@@ -186,14 +191,17 @@ export const api = {
     /** 404 when the server has no Plaid keys (the real Tally, for now): bank sync is off there. */
     status: () => call<BankStatus>('GET', '/bank'),
     inbox: () => call<BankRow[]>('GET', '/bank/inbox', undefined, 30_000),
-    sync: () => call<BankSynced>('POST', '/bank/sync', undefined, 90_000),
+    /** `maxAge` (seconds): the server skips the banks when it checked them all more recently than that. */
+    sync: (maxAge?: number) => call<BankSynced>('POST', maxAge === undefined ? '/bank/sync' : `/bank/sync?max_age=${maxAge}`, undefined, 90_000),
     linkToken: (itemId?: number) => call<{ link_token: string }>('POST', '/bank/link-token', itemId ? { item_id: itemId } : {}),
-    connect: (publicToken: string) => call<BankSynced & { item_id: number }>('POST', '/bank/connect', { public_token: publicToken }, 120_000),
-    sandbox: () => call<BankSynced & { item_id: number }>('POST', '/bank/sandbox/connect', undefined, 120_000),
+    connect: (publicToken: string) => call<BankConnected>('POST', '/bank/connect', { public_token: publicToken }, 120_000),
+    sandbox: () => call<BankConnected>('POST', '/bank/sandbox/connect', undefined, 120_000),
     disconnect: (itemId: number) => call<void>('DELETE', `/bank/items/${itemId}`),
     mapAccount: (bankAccountId: number, tallyAccountId: number | null) => call<{ paired: number }>('PUT', `/bank/accounts/${bankAccountId}`, { tally_account_id: tallyAccountId }),
     /** Adds the entry a bank row stands for: the guess, with anything in `over` instead (`amount` in cents here). */
     accept: (id: number, over: BankAccept = {}) => call<Txn>('POST', `/bank/inbox/${id}/accept`, over.amount === undefined ? over : { ...over, amount: over.amount / 100 }),
+    /** Adds each row as Tally guessed it; ones without a category are skipped. */
+    acceptMany: (ids: number[]) => call<Txn[]>('POST', '/bank/inbox/accept', { ids }, 60_000),
     acceptSure: () => call<Txn[]>('POST', '/bank/inbox/accept-sure', undefined, 60_000),
     pair: (id: number, txnId: number) => call<{ ok: true }>('POST', `/bank/inbox/${id}/pair`, { txn_id: txnId }),
     ignore: (id: number) => call<{ ok: true }>('POST', `/bank/inbox/${id}/ignore`),

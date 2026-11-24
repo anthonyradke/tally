@@ -22,7 +22,7 @@ import re
 import sqlite3
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from . import plaid
@@ -31,6 +31,7 @@ from .engine import Txn
 WINDOW = 3  # days between the bank's date and the entry's
 PAIR_DAYS = 5  # days between the two sides of a transfer
 SYNCED_KINDS = ("cash", "card")  # loans and investments follow typed balances; only their balances come across
+FRESH_DAYS = 30  # how far back the inbox starts on an account with no entries yet
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items(
@@ -62,6 +63,11 @@ def connect(path: Optional[str] = None) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys=ON")
     con.executescript(SCHEMA)
+    have = {r[1] for r in con.execute("PRAGMA table_info(accounts)")}
+    for col, decl in (("since", "TEXT"), ("skip", "INTEGER NOT NULL DEFAULT 0")):
+        if col not in have:  # added 2026-11-24
+            con.execute(f"ALTER TABLE accounts ADD COLUMN {col} {decl}")
+    con.commit()
     if fresh:
         os.chmod(path, 0o600)  # it holds the access tokens
     return con
@@ -185,6 +191,13 @@ def sync_item(bcon, iid: int) -> dict:
     return dict(counts)
 
 
+def fresh(bcon, max_age: int) -> bool:
+    """Every connection was checked within the last `max_age` seconds."""
+    cut = (datetime.now(timezone.utc) - timedelta(seconds=max_age)).isoformat(timespec="seconds")
+    rows = bcon.execute("SELECT synced_at FROM items").fetchall()
+    return all(r[0] and r[0] > cut for r in rows)
+
+
 def sync_all(bcon) -> dict:
     out = {}
     for it in bcon.execute("SELECT id, institution FROM items").fetchall():
@@ -193,6 +206,77 @@ def sync_all(bcon) -> dict:
         except plaid.PlaidError as e:
             out[it["id"]] = {"error": e.code, "message": e.message}
     return out
+
+
+# ---------- which ledger account each bank account is ----------
+
+def kinds_for(a) -> tuple[str, ...]:
+    """The ledger account kinds a bank account can be, by Plaid's type (an HSA is a depository at the bank and often
+    an investment in Tally)."""
+    if a["type"] == "credit":
+        return ("card",)
+    if a["type"] == "depository":
+        return ("cash", "investment") if a["subtype"] == "hsa" else ("cash",)
+    return (a["type"],) if a["type"] in ("loan", "investment") else ()
+
+
+def start_for(st, acct_id: int) -> str:
+    """Where the inbox starts on a newly connected account: a few days before its last entry, so a week not caught
+    up yet comes in and the years before (the audit's business) don't. An account with no entries starts a month
+    back."""
+    last = max((t.date for t in st.txns if acct_id in (t.from_id, t.to_id) and t.date <= st.today), default=None)
+    return ((last - timedelta(days=WINDOW)) if last else (st.today - timedelta(days=FRESH_DAYS))).isoformat()
+
+
+def assign(bcon, st, aid: int, target: Optional[int]) -> None:
+    """Make bank account `aid` the ledger account `target`, or none (`skip`: asked and answered, don't ask again)."""
+    since = start_for(st, target) if target is not None else None
+    bcon.execute("UPDATE accounts SET tally_account_id=?, since=?, skip=? WHERE id=?",
+                 (target, since, int(target is None), aid))
+
+
+_ALIAS = {"american": "amex", "express": "amex", "cc": "card", "credit": "card", "savings": "saving",
+          "hysa": "saving", "loans": "loan"}
+_STOP = {"bank", "account", "plaid", "the", "of", "na", "fsb", "n"}
+
+
+def _tokens(*texts) -> set[str]:
+    out = set()
+    for t in texts:
+        for w in re.split(r"[^a-z0-9]+", (t or "").lower().replace("(k)", "k")):
+            w = _ALIAS.get(w, w)
+            if w and w not in _STOP:
+                out.add(w)
+    return out
+
+
+def automap(bcon, st, iid: int) -> list[dict]:
+    """Match a new connection's accounts to ledger accounts by kind and shared words (Chase + checking is Chase
+    Checking, American Express is Amex CC), only where one account clearly wins. The rest wait for an answer."""
+    inst = (bcon.execute("SELECT institution FROM items WHERE id=?", (iid,)).fetchone() or [None])[0]
+    taken = {r[0] for r in bcon.execute("SELECT tally_account_id FROM accounts WHERE tally_account_id IS NOT NULL")}
+    done = []
+    for a in bcon.execute("SELECT * FROM accounts WHERE item_id=? AND tally_account_id IS NULL AND skip=0 ORDER BY id",
+                          (iid,)).fetchall():
+        words = _tokens(inst, a["name"], a["official_name"], a["subtype"])
+        scored = sorted(((len(words & _tokens(x.name)), x.id) for x in st.accounts
+                         if x.kind in kinds_for(a) and x.id not in taken), reverse=True)
+        if scored and scored[0][0] > 0 and (len(scored) == 1 or scored[0][0] > scored[1][0]):
+            assign(bcon, st, a["id"], scored[0][1])
+            taken.add(scored[0][1])
+            done.append({"bank_account": a["name"], "account_id": scored[0][1]})
+    bcon.commit()
+    return done
+
+
+def ask(bcon) -> list[dict]:
+    """Everyday accounts (checking, savings, cards) nobody has said yet are or aren't one of the ledger's."""
+    return [{"id": r["id"], "name": r["name"], "mask": r["mask"], "institution": r["institution"],
+             "kinds": list(kinds_for(r))}
+            for r in bcon.execute(
+                "SELECT a.*, i.institution FROM accounts a JOIN items i ON i.id=a.item_id WHERE a.tally_account_id IS "
+                "NULL AND a.skip=0 AND (a.type='credit' OR (a.type='depository' AND a.subtype IN ('checking',"
+                "'savings'))) ORDER BY a.id")]
 
 
 # ---------- pairing with the ledger ----------
@@ -433,13 +517,13 @@ def inbox(bcon, st) -> list[dict]:
     without a guess (the bank can still change them)."""
     seen, pfc = history(bcon, st)
     mapped = _mapped(bcon, st)
-    names = {r["id"]: r for r in bcon.execute("SELECT id, name, mask, tally_account_id FROM accounts")}
+    names = {r["id"]: r for r in bcon.execute("SELECT id, name, mask, tally_account_id, since FROM accounts")}
     rows = bcon.execute("SELECT * FROM txns WHERE status='new' ORDER BY pending, date DESC, id DESC").fetchall()
     fresh = [r for r in rows if not r["pending"]] + bcon.execute(
         "SELECT * FROM txns WHERE status='linked' AND pending=0").fetchall()
     out = []
     for r in rows:
-        if r["account_id"] not in mapped:
+        if r["account_id"] not in mapped or _before(r, names[r["account_id"]]["since"]):
             continue
         item = {"id": r["id"], "date": r["date"], "authorized_date": r["authorized_date"], "raw": r["raw"],
                 "merchant": r["merchant"], "logo": r["logo"], "amount": r["amount"], "pending": bool(r["pending"]),
@@ -450,6 +534,19 @@ def inbox(bcon, st) -> list[dict]:
             item["guess"] = g.__dict__
         out.append(item)
     return out
+
+
+def _before(r, since: Optional[str]) -> bool:
+    """A row from before the inbox starts on its account: the audit shows it, the inbox doesn't."""
+    return bool(since) and (r["authorized_date"] or r["date"]) < since
+
+
+def waiting(bcon, st) -> int:
+    """Posted rows the inbox would show."""
+    mapped = _mapped(bcon, st)
+    since = {r["id"]: r["since"] for r in bcon.execute("SELECT id, since FROM accounts")}
+    return sum(1 for r in bcon.execute("SELECT account_id, date, authorized_date FROM txns WHERE status='new' AND "
+                                       "pending=0") if r["account_id"] in mapped and not _before(r, since[r["account_id"]]))
 
 
 def decide(bcon, bank_id: int, txn_id: Optional[int], how: str) -> None:

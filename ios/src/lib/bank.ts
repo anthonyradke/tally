@@ -1,8 +1,10 @@
 // Bank sync on the phone (Tally Lab for now): whether the server has it, the inbox of bank rows no entry stands for
 // yet, and connecting a bank through Plaid Link. The server does the work (app/bank.py); this asks and shows.
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useQuery } from '@tanstack/react-query'
 import { api, ApiError, type Account, type BankRow, type BankStatus } from './api'
 import { invalidateAll, queryClient } from './data'
+import { scoped } from './server'
 
 /** The server's bank sync, or null when it has none (404: no Plaid keys, as on the real Tally). */
 async function status(): Promise<BankStatus | null> {
@@ -54,4 +56,39 @@ export async function openPlaidLink(linkToken: string): Promise<string | null> {
       onEvent: () => {},
     }).then((session) => session.open(true)).catch(reject)
   })
+}
+
+/** What the check-in last showed: the day, and the newest bank row in it. */
+export interface Seen { day: string; maxId: number }
+
+/** Whether opening Tally should bring up New from the bank: something waits (a row to add, an account to place),
+ *  and either it's the first look today or a row came in since the last one. */
+export function shouldCheckIn(rows: Pick<BankRow, 'id' | 'pending'>[], asks: number, seen: Seen | null, today: string): boolean {
+  const posted = rows.filter((r) => !r.pending)
+  if (!posted.length && !asks) return false
+  if (!seen || seen.day !== today) return true
+  return posted.some((r) => r.id > seen.maxId)
+}
+
+export const newestId = (rows: Pick<BankRow, 'id' | 'pending'>[]) => rows.reduce((m, r) => (r.pending ? m : Math.max(m, r.id)), 0)
+
+const seenKey = () => scoped('tally.bankSeen')
+
+export async function loadSeen(): Promise<Seen | null> {
+  try { return JSON.parse((await AsyncStorage.getItem(seenKey())) ?? 'null') as Seen | null } catch { return null }
+}
+
+export const saveSeen = (s: Seen) => AsyncStorage.setItem(seenKey(), JSON.stringify(s)).catch(() => {})
+
+/** Checks the banks (the server skips it when it did within half an hour) and returns what's waiting, or null on a
+ *  server without bank sync. */
+export async function freshBank(): Promise<{ status: BankStatus; rows: BankRow[] } | null> {
+  const s = await queryClient.fetchQuery({ queryKey: ['bank'], queryFn: status, staleTime: 0, retry: false })
+  if (!s) return null
+  await api.bank.sync(30 * 60).catch(() => {})
+  const [st, rows] = await Promise.all([
+    queryClient.fetchQuery({ queryKey: ['bank'], queryFn: status, staleTime: 0, retry: false }),
+    queryClient.fetchQuery({ queryKey: ['bank', 'inbox'], queryFn: api.bank.inbox, staleTime: 0 }),
+  ])
+  return st ? { status: st, rows } : null
 }

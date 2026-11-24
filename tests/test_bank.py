@@ -212,3 +212,48 @@ def test_disconnect(client, fake, linked):
     assert client.delete(f"/api/bank/items/{iid}").status_code == 204
     assert fake.removed == ["access-sandbox-1"]
     assert client.get("/api/bank").json()["items"] == []
+
+
+def test_connect_matches_clear_accounts(client, world, fake, monkeypatch):
+    """Checking finds Checking by name; the card is a tie between two cards, so it waits to be asked."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    client.post("/api/accounts", json={"name": "Other card", "kind": "card"})
+    r = client.post("/api/bank/sandbox/connect").json()
+    assert [m["account_id"] for m in r["matched"]] == [world["chk"]]
+    s = client.get("/api/bank").json()
+    assert [a["name"] for a in s["ask"]] == ["Card"] and s["ask"][0]["kinds"] == ["card"]
+    card = s["ask"][0]["id"]
+    assert client.put(f"/api/bank/accounts/{card}", json={"tally_account_id": None}).status_code == 200
+    assert client.get("/api/bank").json()["ask"] == []  # answered "not used": not asked again
+
+
+def test_inbox_starts_near_last_entry(client, world, fake, monkeypatch):
+    """Rows from well before the account's last entry go to the audit, not the inbox."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    client.post("/api/transactions", json=txn(world, date="2026-09-20"))
+    client.post("/api/bank/sandbox/connect")
+    acct = next(a for a in client.get("/api/bank").json()["items"][0]["accounts"] if a["name"] == "Card")
+    client.put(f"/api/bank/accounts/{acct['id']}", json={"tally_account_id": world["card"]})
+    fake.push(added=[row("old", "acc-card", 7.00, "2026-09-01", "OLD PLACE"),
+                     row("edge", "acc-card", 8.00, "2026-09-17", "EDGE PLACE"),
+                     row("new", "acc-card", 9.00, "2026-09-25", "NEW PLACE")])
+    client.post("/api/bank/sync")
+    assert [b["raw"] for b in client.get("/api/bank/inbox").json()] == ["NEW PLACE", "EDGE PLACE"]
+    assert client.get("/api/bank").json()["waiting"] == 2
+    assert "OLD PLACE" in [m["raw"] for m in client.get(f"/api/bank/audit/{acct['id']}").json()["missing"]]
+
+
+def test_accept_many_and_throttled_sync(client, world, fake, linked):
+    fake.push(added=[row("a", "acc-card", 5.00, "2026-09-20", "SHELL OIL 123", "Shell", pfc="TRANSPORTATION_GAS"),
+                     row("b", "acc-card", 6.00, "2026-09-21", "MYSTERY 9")])
+    client.post("/api/bank/sync")
+    box = {b["raw"]: b for b in client.get("/api/bank/inbox").json()}
+    assert box["SHELL OIL 123"]["guess"]["category_id"] == world["gas"]
+    added = client.post("/api/bank/inbox/accept", json={"ids": [b["id"] for b in box.values()]}).json()
+    assert [t["what"] for t in added] == ["Shell"]  # the one without a category stays
+    assert [b["raw"] for b in client.get("/api/bank/inbox").json()] == ["MYSTERY 9"]
+    fake.push(added=[row("c", "acc-card", 7.00, "2026-09-22", "LATER")])
+    client.post("/api/bank/sync?max_age=3600")  # checked a moment ago: Plaid isn't asked
+    assert len(fake.pages) == 1
+    client.post("/api/bank/sync?max_age=0")
+    assert fake.pages == []

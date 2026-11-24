@@ -11,7 +11,7 @@ import { Hairline } from '@/components/Panel'
 import { Group, Row } from '@/components/Row'
 import { StateView } from '@/components/StateView'
 import { Txt } from '@/components/Txt'
-import { api, ApiError, type BankAccount, type BankItem } from '@/lib/api'
+import { api, ApiError, type BankAccount, type BankConnected, type BankItem } from '@/lib/api'
 import { openPlaidLink, refreshBank, useBank } from '@/lib/bank'
 import { formatCents } from '@/lib/money'
 import { useBusy } from '@/lib/nav'
@@ -21,6 +21,13 @@ import { space } from '@/theme'
 
 const errText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.errors.join(' ') : e instanceof Error ? e.message : fallback)
 
+/** "Connected. 214 transactions came across; Plaid Checking is Chase Checking." */
+function connectedText(r: BankConnected, name: (id: number) => string | undefined, lead = 'Connected') {
+  const n = Object.values(r.synced)[0]?.added ?? 0
+  const m = r.matched.map((x) => `${x.bank_account} is ${name(x.account_id)}`).join(', ')
+  return `${lead}. ${n} transactions came across${m ? `; ${m}` : ''}.`
+}
+
 const since = (iso: string | null) => {
   if (!iso) return 'Not yet'
   const m = (Date.now() - new Date(iso).getTime()) / 6e4
@@ -29,7 +36,9 @@ const since = (iso: string | null) => {
 
 export function Banks() {
   const q = useBank()
+  const t = useTally()
   const busy = useBusy()
+  const nameOf = (id: number) => t.acct.get(id)?.name
   const [working, setWorking] = useState<string | null>(null)
   if (!q.data) return <StateView q={q} shape="list" />
   const s = q.data
@@ -47,14 +56,12 @@ export function Banks() {
     if (itemId) {
       await api.bank.sync() // update mode keeps the same connection; Plaid needs no exchange
     } else {
-      const r = await api.bank.connect(pt)
-      toast({ text: `Connected. ${Object.values(r.synced)[0]?.added ?? 0} transactions came across.` })
+      toast({ text: connectedText(await api.bank.connect(pt), nameOf) })
     }
     await refreshBank()
   })
   const sandbox = () => run('Test bank', async () => {
-    const r = await api.bank.sandbox()
-    toast({ text: `Test bank connected. ${Object.values(r.synced)[0]?.added ?? 0} transactions came across.` })
+    toast({ text: connectedText(await api.bank.sandbox(), nameOf, 'Test bank connected') })
     await refreshBank()
   })
   const sync = () => run('Sync', async () => {
@@ -68,7 +75,7 @@ export function Banks() {
       {s.env === 'sandbox' && (
         <Txt variant="foot" tone="warn" style={{ paddingHorizontal: space.l }}>{"Plaid's sandbox: test banks with made-up transactions, not your real ones."}</Txt>
       )}
-      <Group footer={s.waiting ? undefined : 'Tally checks the banks when you open From the bank, or pull down there.'}>
+      <Group footer={s.waiting ? undefined : 'Tally checks the banks every few hours and when you open it, and shows anything new.'}>
         {s.waiting > 0 && <Row label="From the bank" value={String(s.waiting)} sf="tray.and.arrow.down" md="move_to_inbox" href="/bank" />}
         <Row label={working === 'Sync' ? 'Checking…' : 'Check the banks now'} sf="arrow.clockwise" md="refresh" chevron={false} onPress={sync} />
       </Group>

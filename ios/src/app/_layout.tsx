@@ -8,6 +8,7 @@ import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persi
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { focusManager } from '@tanstack/react-query'
 import Constants from 'expo-constants'
+import { BankCheckIn } from '@/components/BankCheckIn'
 import { Launch } from '@/components/Launch'
 import { ThemeWash } from '@/components/ThemeWash'
 import { Toaster } from '@/components/Toaster'
@@ -68,8 +69,10 @@ function RootStack() {
       {/* A modal, not a form sheet: inside a form sheet the rolling amount never moved as you typed. */}
       <Stack.Screen name="reconcile/[id]" options={{ presentation: 'modal', headerShown: false, contentStyle: { backgroundColor: c.bg } }} />
       <Stack.Screen name="story" options={{ presentation: 'fullScreenModal', headerShown: false, contentStyle: { backgroundColor: '#000000' } }} />
-      {/* Bank sync (Tally Lab): the inbox, one row's sheet, and an account checked against its bank. */}
+      {/* Bank sync (Tally Lab): the inbox, what opening Tally brings up, one row's sheet, and an account checked
+          against its bank. */}
       <Stack.Screen name="bank" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
+      <Stack.Screen name="bank-new" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
       <Stack.Screen name="bank-item" options={{
         presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true, headerShown: false,
         contentStyle: { backgroundColor: c.bg },
@@ -101,6 +104,7 @@ export default function RootLayout() {
         <ThemeProvider value={{ ...nav, colors: { ...nav.colors, primary: c.ink, background: c.bg, card: c.bg } }}>
           <RootStack />
           <OutboxSync />
+          <BankCheckIn />
           <Toaster />
           <ThemeWash />
           <LockScreen />

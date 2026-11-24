@@ -2,20 +2,27 @@
 The web apps were retired: Jinja + HTMX on 2026-09-18, the React PWA on 2026-09-24 (see git history).
 Run: uvicorn app.main:app --host 127.0.0.1 --port 8000"""
 from __future__ import annotations
-import csv, decimal, io, sqlite3
+import asyncio, contextlib, csv, decimal, io, sqlite3
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from . import auth, service
 from .api import Con, router as api_router
 from .api_ops import router as ops_router
 from .api_admin import router as admin_router
-from .api_bank import router as bank_router
+from .api_bank import router as bank_router, sync_loop
 from .api_deleted import router as deleted_router
 from .api_files import router as files_router
 from .api_recurring import router as recurring_router
 from .engine import month_of
 
-app = FastAPI(title="Tally", docs_url=None, redoc_url=None, openapi_url=None)
+@contextlib.asynccontextmanager
+async def _lifespan(app):
+    task = asyncio.create_task(sync_loop())  # returns at once on a server without Plaid keys
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="Tally", docs_url=None, redoc_url=None, openapi_url=None, lifespan=_lifespan)
 
 
 @app.middleware("http")
