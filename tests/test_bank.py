@@ -218,6 +218,8 @@ def test_connect_matches_clear_accounts(client, world, fake, monkeypatch):
     """Checking finds Checking by name; the card is a tie between two cards, so it waits to be asked."""
     freeze(monkeypatch, date(2026, 9, 30))
     client.post("/api/accounts", json={"name": "Other card", "kind": "card"})
+    old = client.post("/api/accounts", json={"name": "Old Checking", "kind": "cash"}).json()["id"]
+    client.put(f"/api/accounts/{old}", json={"name": "Old Checking", "kind": "cash", "active": False})
     r = client.post("/api/bank/sandbox/connect").json()
     assert [m["account_id"] for m in r["matched"]] == [world["chk"]]
     s = client.get("/api/bank").json()

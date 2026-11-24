@@ -260,7 +260,7 @@ def automap(bcon, st, iid: int) -> list[dict]:
                           (iid,)).fetchall():
         words = _tokens(inst, a["name"], a["official_name"], a["subtype"])
         scored = sorted(((len(words & _tokens(x.name)), x.id) for x in st.accounts
-                         if x.kind in kinds_for(a) and x.id not in taken), reverse=True)
+                         if x.kind in kinds_for(a) and x.id not in taken and x.id not in st.hidden), reverse=True)
         if scored and scored[0][0] > 0 and (len(scored) == 1 or scored[0][0] > scored[1][0]):
             assign(bcon, st, a["id"], scored[0][1])
             taken.add(scored[0][1])
