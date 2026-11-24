@@ -31,17 +31,27 @@ function Waiting({ r }: { r: BankRow }) {
   const g = r.guess
   const out = r.amount > 0
   const [cat, setCat] = useState<number | null>(g?.category_id ?? null)
+  const guessOther = g ? (g.from_id === r.account_id ? g.to_id : g.from_id) : null
+  const [other, setOther] = useState<number | null>(guessOther)
   const [busy, setBusy] = useState(false)
   const c = cat !== null ? L.cat.get(cat) : undefined
   const look = categoryLook(c)
-  const types: CatType[] = out ? ['Spending'] : ['Money in', 'Spending']
-  const options = (L.b?.categories ?? []).filter((x) => x.active && (types.includes(x.type) || x.id === g?.category_id))
+  // Money out: spending first, then moves; money in: income, moves, then refunds.
+  const types: CatType[] = out ? ['Spending', 'Transfer', 'Loan', 'Saving'] : ['Money in', 'Transfer', 'Spending']
+  const options = (L.b?.categories ?? []).filter((x) => x.active && types.includes(x.type))
+    .sort((a, b) => types.indexOf(a.type) - types.indexOf(b.type))
+  const moving = c?.type === 'Transfer' || c?.type === 'Loan' || c?.type === 'Saving'
+  const needsOther = c?.type === 'Transfer' || (moving && !out)
+  const accounts: [number, string][] = (L.b?.accounts ?? []).filter((x) => x.active && x.id !== r.account_id).map((x) => [x.id, x.name])
   const name = g?.what || r.merchant || r.raw
+  const ready = cat !== null && (!needsOther || other !== null)
   const add = async () => {
-    if (cat === null) return
+    if (!ready) return
     setBusy(true)
+    const sides = moving ? (out ? { from_id: r.account_id, to_id: other } : { from_id: other, to_id: r.account_id }) : {}
     try {
-      const e = await api.bank.accept(r.id, cat === g?.category_id ? {} : { category_id: cat })
+      const same = cat === g?.category_id && (!moving || other === guessOther)
+      const e = await api.bank.accept(r.id, same ? {} : { category_id: cat!, ...sides })
       success()
       await refreshBank()
       notify({ text: `Added ${e.what}`, symbol: 'checkmark.circle.fill', action: { label: 'Undo', run: async () => { await api.deleteTxn(e.id); await api.bank.reset(r.id); await refreshBank() } } })
@@ -61,11 +71,14 @@ function Waiting({ r }: { r: BankRow }) {
         </View>
         <Money cents={amt.cents} plus={amt.plus} tone={amt.tone} />
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 54 }}>
-        <Choice options={options.map((x) => [x.id, x.name])} value={cat} onChange={setCat} none="Choose Category" />
-        <Press onPress={add} disabled={cat === null || busy} accessibilityLabel={`Add ${name}`}
-          style={{ height: 32, paddingHorizontal: 14, borderRadius: 16, justifyContent: 'center', backgroundColor: cat === null ? p.fill3 : p.blue, opacity: busy ? 0.5 : 1 }}>
-          <Txt v="subhead" weight="600" color={cat === null ? p.label3 : '#FFFFFF'}>Add</Txt>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 54, gap: space.s }}>
+        <View style={{ flex: 1, gap: space.xs, alignItems: 'flex-start' }}>
+          <Choice options={options.map((x) => [x.id, x.name])} value={cat} onChange={setCat} none="Choose Category" />
+          {moving && <Choice options={accounts} value={other} onChange={setOther} none={out ? 'To Which Account?' : 'From Which Account?'} />}
+        </View>
+        <Press onPress={add} disabled={!ready || busy} accessibilityLabel={`Add ${name}`}
+          style={{ height: 32, paddingHorizontal: 14, borderRadius: 16, justifyContent: 'center', backgroundColor: ready ? p.blue : p.fill3, opacity: busy ? 0.5 : 1 }}>
+          <Txt v="subhead" weight="600" color={ready ? '#FFFFFF' : p.label3}>Add</Txt>
         </Press>
       </View>
       {r.raw && r.raw !== name ? <Txt v="caption" tone="label3" numberOfLines={1} style={{ paddingLeft: 54, marginTop: -space.s }}>{r.raw}</Txt> : null}

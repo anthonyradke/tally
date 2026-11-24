@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
+import threading
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -63,6 +64,9 @@ MIGRATIONS = (("accounts", "since", "TEXT"), ("accounts", "skip", "INTEGER NOT N
               ("txns", "pfc_conf", "TEXT"))
 
 
+_setup = threading.Lock()
+
+
 def connect(path: Optional[str] = None) -> sqlite3.Connection:
     path = path or os.environ.get("TALLY_BANK_DB", "data/bank.db")
     fresh = path != ":memory:" and not os.path.exists(path)
@@ -71,11 +75,12 @@ def connect(path: Optional[str] = None) -> sqlite3.Connection:
     con = sqlite3.connect(path, check_same_thread=False)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys=ON")
-    con.executescript(SCHEMA)
-    for table, col, decl in MIGRATIONS:
-        if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
-            con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
-    con.commit()
+    with _setup:  # requests arrive together on a new file; two adding the same column fail
+        con.executescript(SCHEMA)
+        for table, col, decl in MIGRATIONS:
+            if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+        con.commit()
     if fresh:
         os.chmod(path, 0o600)  # it holds the access tokens
     return con

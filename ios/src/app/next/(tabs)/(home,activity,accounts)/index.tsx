@@ -57,10 +57,14 @@ export default function Summary() {
   const m = L.month
   const ym = monthOf(L.today)
   const prev = L.b?.months[(L.b?.months.findIndex((x) => x.month === ym) ?? 0) - 1]
-  const budget = (L.b?.categories ?? []).filter((c) => c.type === 'Spending' && c.active)
-    .reduce((n, c) => n + (L.b?.budgets.find((x) => x.category_id === c.id && x.month === ym)?.amount ?? c.budget ?? 0), 0)
+  // The budget covers the categories that have one; it's measured against what those categories spent.
+  const budgeted = (L.b?.categories ?? []).filter((c) => c.type === 'Spending')
+    .map((c) => ({ c, amount: L.b?.budgets.find((x) => x.category_id === c.id && x.month === ym)?.amount ?? c.budget ?? 0 }))
+    .filter((x) => x.amount > 0)
+  const budget = budgeted.reduce((n, x) => n + x.amount, 0)
+  const used = budgeted.reduce((n, x) => n + (m?.by_category[String(x.c.id)] ?? 0), 0)
   const spent = m?.spent ?? 0
-  const share = budget > 0 ? Math.min(1, spent / budget) : 0
+  const share = budget > 0 ? Math.min(1, used / budget) : 0
   const waiting = bank?.waiting ?? 0
   const added = recent.data?.length ?? 0
   const weekTotal = days.reduce((n, d) => n + d.total, 0)
@@ -97,8 +101,8 @@ export default function Summary() {
                     <View style={{ width: `${share * 100}%`, height: 8, borderRadius: 4, backgroundColor: share >= 1 ? p.red : share > 0.85 ? p.orange : p.blue }} />
                   </View>
                   <Txt v="subhead" tone="label2">
-                    <Txt v="subhead" weight="600" tone={budget - spent < 0 ? 'red' : 'label'}>{formatCents(Math.abs(budget - spent), { cents: false })} {budget - spent < 0 ? 'over' : 'left'}</Txt>
-                    {` of ${formatCents(budget, { cents: false })}`}
+                    <Txt v="subhead" weight="600" tone={used > budget ? 'red' : 'label'}>{formatCents(Math.abs(budget - used), { cents: false })} {used > budget ? 'over' : 'left'}</Txt>
+                    {used > budget ? ` your ${formatCents(budget, { cents: false })} budget` : ` of your ${formatCents(budget, { cents: false })} budget`}
                   </Txt>
                 </View>
               ) : prev ? (

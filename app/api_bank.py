@@ -8,7 +8,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from . import bank, db, plaid, service
 from .api import Con
-from .engine import Txn
+from .engine import Txn, month_of
 from .entries import _full, _write
 from .inputs import bad, body, day, money, opt_id, text, whole
 
@@ -100,11 +100,26 @@ def auto_add(b, con, passes: int = 2) -> int:
     return added
 
 
+def _reach_back(b, con) -> None:
+    """A ledger set up with all its history starts at the month of the oldest bank row, including rows the bank sent
+    after setup (the first sync has only recent ones; the rest follow within minutes)."""
+    row = con.execute("SELECT value FROM settings WHERE key='bank_history'").fetchone()
+    if not row or row[0] != "all":
+        return
+    first = b.execute("SELECT MIN(t.date) FROM txns t JOIN accounts a ON a.id=t.account_id WHERE a.anchor=1 "
+                      "AND t.pending=0").fetchone()[0]
+    start = con.execute("SELECT value FROM settings WHERE key='start_month'").fetchone()[0]
+    if first and month_of(date.fromisoformat(first)).isoformat() < start:
+        db.set_setting(con, "start_month", month_of(date.fromisoformat(first)).isoformat())
+        con.commit()
+
+
 def _settle(b, con) -> int:
     """After rows or entries change on a ledger kept from the banks: add what's sure, then hold balances to the
     bank's. Returns how many were added."""
     if not _auto(con):
         return 0
+    _reach_back(b, con)
     n = auto_add(b, con)
     bank.anchor(b, con, service.load(con))
     return n
@@ -267,7 +282,10 @@ async def accept_many(request: Request, b: Bank, con: Con):
         r = b.execute("SELECT * FROM txns WHERE id=?", (bid,)).fetchone()
         if not r or r["status"] != "new" or r["pending"] or bank.guess(b, st, r).category_id is None:
             continue
-        tid = _accept(b, st, r, {})
+        try:
+            tid = _accept(b, st, r, {})
+        except HTTPException:
+            continue  # the guess doesn't make a whole entry (a transfer missing its other account): it waits
         con.commit()
         bank.decide(b, r["id"], tid, "added")
         b.commit()

@@ -201,9 +201,10 @@ export const api = {
     finish: (body: { history: 'all' | 'month'; accounts: { id: number; name?: string; include: boolean }[] }) =>
       call<SetupDone>('POST', '/setup', body, 240_000),
   },
-  /** An entry's logo by its name, or an account's bank logo (404 when there's none: show a symbol instead). */
-  logoUrl: (q: { name?: string; account?: number }) =>
-    `${getServer()}/api/logo${q.account !== undefined ? `?account=${q.account}` : `?name=${encodeURIComponent(q.name ?? '')}`}`,
+  /** An entry's logo by its name, an account's bank logo, or a connected bank's (`item`). 404 when there's none:
+   *  show a symbol instead. */
+  logoUrl: (q: { name?: string; account?: number; item?: number }) =>
+    `${getServer()}/api/logo${q.item !== undefined ? `?item=${q.item}` : q.account !== undefined ? `?account=${q.account}` : `?name=${encodeURIComponent(q.name ?? '')}`}`,
   hideLogo: (name: string) => call<void>('DELETE', `/logo?name=${encodeURIComponent(name)}`),
   showLogo: (name: string) => call<void>('POST', `/logo/show?name=${encodeURIComponent(name)}`),
   bank: {

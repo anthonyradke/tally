@@ -40,6 +40,12 @@ DOMAINS = {
     "bank of america": "bankofamerica.com", "capital one": "capitalone.com", "us bank": "usbank.com",
 }
 WALLETS = ("venmo", "zelle", "paypal", "cash app", "apple cash")
+# Words that only say what kind of thing it was at a place: "Tesla Insurance" is Tesla's, "Chase CC payment" Chase's.
+# The first word stands for the name only when everything after it is one of these ("First Platypus" is not first.com).
+DESCRIBES = set("""
+insurance membership plan subscription store shop order purchase rewards cc card payment payments refund interest
+hysa checking savings loan bill bills account deposit fee fees app online pharmacy gas station market delivery
+""".split())
 
 
 def folder() -> Path:
@@ -78,8 +84,8 @@ def domains_for(name: str) -> list[str]:
         return []
     out = [_slug(n) + ".com"]
     first = words[0]
-    if len(words) > 1 and first not in GENERIC and len(_slug(first)) >= 3:
-        out.append(DOMAINS.get(first, _slug(first) + ".com"))  # "Tesla Insurance" is Tesla's
+    if len(words) > 1 and first not in GENERIC and len(_slug(first)) >= 2 and all(w in DESCRIBES for w in words[1:]):
+        out.append(DOMAINS.get(first, _slug(first) + ".com"))
     return list(dict.fromkeys(out))
 
 

@@ -8,7 +8,7 @@ import { success } from '@/next/haptics'
 import { space, usePalette } from '@/next/theme'
 import { Button } from '@/next/ui/Button'
 import { Row, Section } from '@/next/ui/List'
-import { Symbol } from '@/next/ui/Symbol'
+import { SF } from '@/next/ui/SF'
 import { Txt } from '@/next/ui/Txt'
 
 export default function Done() {
@@ -21,7 +21,7 @@ export default function Done() {
       <View style={{ flex: 1, alignItems: 'center', gap: space.l }}>
         <Animated.View entering={ZoomIn.delay(150).springify().damping(10).stiffness(160)}
           style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: p.green, alignItems: 'center', justifyContent: 'center' }}>
-          <Symbol name="checkmark" size={46} color="#FFFFFF" weight="bold" />
+          <SF name="checkmark" size={46} color="#FFFFFF" weight="bold" />
         </Animated.View>
         <Animated.View entering={FadeInDown.delay(350).springify()} style={{ alignItems: 'center', gap: space.s }}>
           <Txt v="largeTitle" center>You’re All Set</Txt>

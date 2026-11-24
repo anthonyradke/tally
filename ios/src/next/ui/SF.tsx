@@ -2,7 +2,7 @@ import { View } from 'react-native'
 import { SymbolView, type SFSymbol, type SymbolWeight } from 'expo-symbols'
 
 /** An SF Symbol. The web preview has none, so it draws a faint dot of the same size there. */
-export function Symbol({ name, size = 17, color, weight = 'regular' }: { name: SFSymbol; size?: number; color: string; weight?: SymbolWeight }) {
+export function SF({ name, size = 17, color, weight = 'regular' }: { name: SFSymbol; size?: number; color: string; weight?: SymbolWeight }) {
   return (
     <SymbolView name={name} size={size} tintColor={color} weight={weight} resizeMode="scaleAspectFit"
       style={{ width: size, height: size }}

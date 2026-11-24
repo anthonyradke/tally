@@ -2,7 +2,7 @@ import { View } from 'react-native'
 import { router } from 'expo-router'
 import { space, usePalette } from '../theme'
 import { Press } from './Press'
-import { Symbol } from './Symbol'
+import { SF } from './SF'
 import { Txt } from './Txt'
 
 /** The top of a sheet: a large title and the round close button iOS 26 sheets carry. */
@@ -13,7 +13,7 @@ export function SheetHeader({ title, subtitle, onClose = () => router.back() }: 
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', height: 36 }}>
         <Press onPress={onClose} accessibilityLabel="Close" hitSlop={10}
           style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: p.fill3, alignItems: 'center', justifyContent: 'center' }}>
-          <Symbol name="xmark" size={15} color={p.label2} weight="bold" />
+          <SF name="xmark" size={15} color={p.label2} weight="bold" />
         </Press>
       </View>
       <Txt v="largeTitle">{title}</Txt>

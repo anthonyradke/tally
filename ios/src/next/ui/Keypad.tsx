@@ -4,7 +4,7 @@ import { Pressable, View } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
 import { tick } from '../haptics'
 import { springs, usePalette } from '../theme'
-import { Symbol } from './Symbol'
+import { SF } from './SF'
 import { Txt } from './Txt'
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫']
@@ -20,7 +20,7 @@ function Key({ k, onKey }: { k: string; onKey: (k: string) => void }) {
       onPressOut={() => { down.set(withTiming(0, { duration: 260 })) }}
       onPress={() => onKey(k)}>
       <Animated.View style={[{ position: 'absolute', width: 64, height: 54, borderRadius: 27, backgroundColor: p.fill3 }, bloom]} />
-      {k === '⌫' ? <Symbol name="delete.left" size={24} color={p.label} /> : <Txt v="title1" weight="500" style={{ fontFamily: 'ui-rounded' }}>{k}</Txt>}
+      {k === '⌫' ? <SF name="delete.left" size={24} color={p.label} /> : <Txt v="title1" weight="500" style={{ fontFamily: 'ui-rounded' }}>{k}</Txt>}
     </Pressable>
   )
 }

@@ -107,6 +107,8 @@ def test_domains_for_names():
     assert logos.domains_for("McDonald's") == ["mcdonalds.com"]
     assert logos.domains_for("Chick-fil-A") == ["chickfila.com"]
     assert logos.domains_for("Amex") == ["americanexpress.com"]
+    assert logos.domains_for("First Platypus") == ["firstplatypus.com"]  # not first.com
+    assert logos.domains_for("Chase CC payment") == ["chaseccpayment.com", "chase.com"]
 
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 40
@@ -143,3 +145,24 @@ def test_deleting_an_auto_entry_keeps_it_out(fresh):
     fresh.post("/api/bank/sync")
     assert "Shell" not in [t["what"] for t in fresh.get("/api/transactions").json()["items"]]
     assert "SHELL OIL 5544" not in [b["raw"] for b in fresh.get("/api/bank/inbox").json()]
+
+
+def test_history_arriving_later_comes_in(fresh, fake):
+    """The bank's older rows arrive after setup: the ledger reaches back to them and adds the sure ones."""
+    accts = fresh.get("/api/setup").json()["items"][0]["accounts"]
+    fresh.post("/api/setup", json={"history": "all", "accounts": [{"id": a["id"]} for a in accts]})
+    fake.push(added=[prow("old", "acc-card", 30.00, "2026-06-15", "SHELL OIL 5544", "Shell", "TRANSPORTATION_GAS", "VERY_HIGH"),
+                     prow("odd2", "acc-card", 9.00, "2026-06-16", "SQ *ELSE 1")])
+    assert fresh.post("/api/bank/sync").json()["added"] == 1
+    assert fresh.get("/api/bootstrap").json()["start"] == "2026-06-01"
+    assert "SQ *ELSE 1" in [b["raw"] for b in fresh.get("/api/bank/inbox").json()]
+    card = next(a["id"] for a in fresh.get("/api/bootstrap").json()["accounts"] if a["kind"] == "card")
+    assert fresh.get("/api/bootstrap").json()["months"][-1]["balances"][str(card)] == 5000  # still the bank's
+
+
+def test_accept_many_skips_what_cannot_be_whole(fresh):
+    accts = fresh.get("/api/setup").json()["items"][0]["accounts"]
+    fresh.post("/api/setup", json={"history": "all", "accounts": [{"id": a["id"]} for a in accts]})
+    ids = [b["id"] for b in fresh.get("/api/bank/inbox").json()]
+    r = fresh.post("/api/bank/inbox/accept", json={"ids": ids})
+    assert r.status_code == 200

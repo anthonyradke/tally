@@ -5,7 +5,7 @@ import { View, type StyleProp, type ViewStyle } from 'react-native'
 import type { SFSymbol } from 'expo-symbols'
 import { radius, space, usePalette } from '../theme'
 import { Press } from './Press'
-import { Symbol } from './Symbol'
+import { SF } from './SF'
 import { Txt } from './Txt'
 
 export function Card({ children, style, pad }: { children: ReactNode; style?: StyleProp<ViewStyle>; pad?: boolean }) {
@@ -58,7 +58,7 @@ export function Row({ leading, title, subtitle, value, valueTone = 'label2', tra
       </View>
       {value !== undefined && <Txt v="body" tone={valueTone} num numberOfLines={1}>{value}</Txt>}
       {trailing}
-      {chevron && <Symbol name="chevron.right" size={13} color={p.label3} weight="semibold" />}
+      {chevron && <SF name="chevron.right" size={13} color={p.label3} weight="semibold" />}
     </View>
   )
   return onPress && !disabled ? <Press feel="highlight" haptic={false} onPress={onPress}>{body}</Press> : body
@@ -68,7 +68,7 @@ export function Row({ leading, title, subtitle, value, valueTone = 'label2', tra
 export function Tile({ symbol, color, size = 36 }: { symbol: SFSymbol; color: string; size?: number }) {
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
-      <Symbol name={symbol} size={size * 0.48} color="#FFFFFF" weight="semibold" />
+      <SF name={symbol} size={size * 0.48} color="#FFFFFF" weight="semibold" />
     </View>
   )
 }
@@ -78,7 +78,7 @@ export function Empty({ symbol, title, body, children }: { symbol: SFSymbol; tit
   const p = usePalette()
   return (
     <View style={{ alignItems: 'center', gap: space.s, paddingVertical: 48, paddingHorizontal: space.xxl }}>
-      <Symbol name={symbol} size={48} color={p.label3} weight="regular" />
+      <SF name={symbol} size={48} color={p.label3} weight="regular" />
       <Txt v="title2" center style={{ marginTop: space.s }}>{title}</Txt>
       {body ? <Txt v="body" tone="label2" center>{body}</Txt> : null}
       {children}

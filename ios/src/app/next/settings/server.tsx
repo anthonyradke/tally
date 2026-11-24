@@ -6,7 +6,7 @@ import { switchProfile } from '@/lib/profile'
 import { success, tick } from '@/next/haptics'
 import { space, usePalette } from '@/next/theme'
 import { Row, Section } from '@/next/ui/List'
-import { Symbol } from '@/next/ui/Symbol'
+import { SF } from '@/next/ui/SF'
 
 export default function Server() {
   const p = usePalette()
@@ -21,7 +21,7 @@ export default function Server() {
       <Section footer="Tally Lab is a separate ledger with bank sync, for trying things out. Nothing in one reaches the other.">
         {PROFILES.map((x) => (
           <Row key={x} title={PROFILE_NAME[x]} onPress={() => pick(x)}
-            trailing={x === s.profile ? <Symbol name="checkmark" size={17} color={p.blue} weight="semibold" /> : undefined} />
+            trailing={x === s.profile ? <SF name="checkmark" size={17} color={p.blue} weight="semibold" /> : undefined} />
         ))}
       </Section>
       <Section title="Connection" footer="The token is kept in the keychain. Leave it empty to keep the one saved.">

@@ -10,7 +10,7 @@ import type { SFSymbol } from 'expo-symbols'
 import { create } from 'zustand'
 import { tap } from '../haptics'
 import { space, usePalette, type Hue } from '../theme'
-import { Symbol } from './Symbol'
+import { SF } from './SF'
 import { Txt } from './Txt'
 
 interface Note { id: number; text: string; symbol?: SFSymbol; hue?: Hue; action?: { label: string; run: () => unknown } }
@@ -34,7 +34,7 @@ export function NoticeHost() {
   if (!note) return null
   const body = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s, paddingLeft: space.l, paddingRight: note.action ? space.s : space.l, height: 48 }}>
-      {note.symbol && <Symbol name={note.symbol} size={17} color={p[note.hue ?? 'green']} weight="semibold" />}
+      {note.symbol && <SF name={note.symbol} size={17} color={p[note.hue ?? 'green']} weight="semibold" />}
       <Txt v="subhead" weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>{note.text}</Txt>
       {note.action && (
         <Pressable hitSlop={8} onPress={() => { tap(); clear(note.id); Promise.resolve(note.action!.run()).catch(() => {}) }}

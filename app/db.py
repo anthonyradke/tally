@@ -1,6 +1,6 @@
 """SQLite schema and loaders. Amounts are integer cents everywhere."""
 from __future__ import annotations
-import os, sqlite3
+import os, sqlite3, threading
 from datetime import date
 from typing import Optional
 from .engine import Account, Category, Txn
@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
 DEFAULT_SETTINGS = {"start_month": "2026-08-01", "ef_months": "6", "roth_limit": "750000"}
 _ready: set[str] = set()  # database paths already set up by this process
+_setup = threading.Lock()
 
 
 def connect(path: Optional[str] = None) -> sqlite3.Connection:
@@ -56,13 +57,15 @@ def connect(path: Optional[str] = None) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys=ON")
     if path == ":memory:" or path not in _ready:
-        con.execute("PRAGMA journal_mode=WAL")
-        con.executescript(SCHEMA)
-        migrate(con)  # additive 2026-09 columns/tables; idempotent
-        for k, v in DEFAULT_SETTINGS.items():
-            con.execute("INSERT OR IGNORE INTO settings VALUES(?,?)", (k, v))
-        con.commit()
-        _ready.add(path)
+        with _setup:  # a new database's first requests arrive together; two migrating at once added a column twice
+            if path == ":memory:" or path not in _ready:
+                con.execute("PRAGMA journal_mode=WAL")
+                con.executescript(SCHEMA)
+                migrate(con)  # additive 2026-09 columns/tables; idempotent
+                for k, v in DEFAULT_SETTINGS.items():
+                    con.execute("INSERT OR IGNORE INTO settings VALUES(?,?)", (k, v))
+                con.commit()
+                _ready.add(path)
     return con
 
 

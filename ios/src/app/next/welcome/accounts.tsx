@@ -17,7 +17,7 @@ import { Row, Section } from '@/next/ui/List'
 import { Logo } from '@/next/ui/Logo'
 import { notify } from '@/next/ui/Notice'
 import { Press } from '@/next/ui/Press'
-import { Symbol } from '@/next/ui/Symbol'
+import { SF } from '@/next/ui/SF'
 import { Txt } from '@/next/ui/Txt'
 
 const since = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
@@ -62,14 +62,14 @@ export default function Accounts() {
             {it.accounts.filter((a) => a.kind).map((a) => {
               const look = KIND_LOOK[a.kind!]
               return (
-                <Row key={a.id} leading={<Logo name={it.brand || undefined} symbol={look.symbol} color={p[look.hue]} size={36} />}
+                <Row key={a.id} leading={<Logo item={it.id} symbol={look.symbol} color={p[look.hue]} size={36} />}
                   title={c.names[a.id] ?? a.suggested}
                   subtitle={[look.one, a.mask ? `••${a.mask}` : '', a.current != null ? formatCents(a.current) : ''].filter(Boolean).join(' · ')}
                   onPress={() => rename(a)}
                   trailing={
                     <Press feel="scale" hitSlop={10} accessibilityLabel={on(a) ? 'Leave out' : 'Include'}
                       onPress={() => { tick(); useChoices.setState((x) => ({ off: { ...x.off, [a.id]: on(a) } })) }}>
-                      <Symbol name={on(a) ? 'checkmark.circle.fill' : 'circle'} size={26} color={on(a) ? p.blue : p.label3} />
+                      <SF name={on(a) ? 'checkmark.circle.fill' : 'circle'} size={26} color={on(a) ? p.blue : p.label3} />
                     </Press>
                   } />
               )
@@ -79,10 +79,10 @@ export default function Accounts() {
         <Section title="Start From" footer="All of it fills your charts from day one. Tally adds what it's sure of and asks you about the rest.">
           <Row title="All History" subtitle={firsts.length ? `Since ${since(firsts[0])} · ${rows.toLocaleString()} transactions` : undefined}
             onPress={() => { tick(); useChoices.setState({ history: 'all' }) }}
-            trailing={c.history === 'all' ? <Symbol name="checkmark" size={17} color={p.blue} weight="semibold" /> : undefined} />
+            trailing={c.history === 'all' ? <SF name="checkmark" size={17} color={p.blue} weight="semibold" /> : undefined} />
           <Row title="This Month" subtitle="Older history stays at the bank for later"
             onPress={() => { tick(); useChoices.setState({ history: 'month' }) }}
-            trailing={c.history === 'month' ? <Symbol name="checkmark" size={17} color={p.blue} weight="semibold" /> : undefined} />
+            trailing={c.history === 'month' ? <SF name="checkmark" size={17} color={p.blue} weight="semibold" /> : undefined} />
         </Section>
       </ScrollView>
       <View style={{ paddingHorizontal: space.xl, gap: space.s }}>

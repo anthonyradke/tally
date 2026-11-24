@@ -66,3 +66,15 @@ export function amountLook(type: CatType | undefined, cents: number): { cents: n
   if (type === 'Spending') return cents < 0 ? { cents: -cents, plus: true, tone: 'pos' } : { cents, plus: false, tone: 'plain' }
   return { cents: Math.abs(cents), plus: false, tone: 'quiet' }
 }
+
+const BANKS: Record<string, string> = {
+  amex: 'American Express', 'american express': 'American Express', wells: 'Wells Fargo', 'wells fargo': 'Wells Fargo',
+  chase: 'Chase', sofi: 'SoFi', mohela: 'MOHELA', x: 'X', schwab: 'Charles Schwab', empower: 'Empower',
+}
+/** The bank under an account's name, as people write it ("wells" is Wells Fargo); null when it only repeats the
+ *  kind (an "hsa" bank on an HSA). */
+export function bankName(a: Pick<Account, 'bank' | 'name'>): string | null {
+  const b = a.bank?.trim()
+  if (!b || a.name.toLowerCase() === b.toLowerCase()) return null
+  return BANKS[b.toLowerCase()] ?? b.replace(/\b\w/g, (c) => c.toUpperCase())
+}

@@ -13,7 +13,7 @@ import { space, usePalette } from '../theme'
 import { Logo } from './Logo'
 import { Money } from './Money'
 import { Press } from './Press'
-import { Symbol } from './Symbol'
+import { SF } from './SF'
 import { Txt } from './Txt'
 
 const web = process.env.EXPO_OS === 'web'
@@ -27,7 +27,7 @@ export function TxnRow({ t, showDate, showAccount = true }: { t: Txn; showDate?:
   const a = L.acct.get(accountOf(t, type) ?? -1)
   const amt = amountLook(type, t.amount)
   const logo = wantsLogo(type)
-  const sub = [c?.name, showDate ? dayLabel(t.date, L.today) : showAccount ? a?.name : undefined].filter(Boolean).join(' · ')
+  const sub = [c && c.name.toLowerCase() !== t.what.toLowerCase() ? c.name : undefined, showDate ? dayLabel(t.date, L.today) : showAccount ? a?.name : undefined].filter(Boolean).join(' · ')
   const future = t.date > L.today
   const href = { pathname: '/next/txn/[id]' as const, params: { id: String(t.id) } }
 
@@ -64,7 +64,7 @@ export function TxnRow({ t, showDate, showAccount = true }: { t: Txn; showDate?:
       renderRightActions={() => (
         <Pressable onPress={() => deleteEntry(t)} accessibilityLabel={`Delete ${t.what}`}
           style={{ width: 88, backgroundColor: p.red, alignItems: 'center', justifyContent: 'center' }}>
-          <Symbol name="trash.fill" size={20} color="#FFFFFF" />
+          <SF name="trash.fill" size={20} color="#FFFFFF" />
         </Pressable>
       )}>
       {row}

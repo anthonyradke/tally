@@ -8,7 +8,7 @@ import { useBank } from '@/lib/bank'
 import { fromISO } from '@/lib/dates'
 import { formatCents } from '@/lib/money'
 import { useLedger } from '@/next/ledger'
-import { KIND_LOOK } from '@/next/look'
+import { bankName, KIND_LOOK } from '@/next/look'
 import { space, usePalette } from '@/next/theme'
 import { LabTag } from '@/next/ui/LabTag'
 import { Card, Empty, Row, Section, Tile } from '@/next/ui/List'
@@ -69,7 +69,7 @@ export default function Accounts() {
                 <Section key={k} title={look.title} aside={formatCents(total, { cents: false })} inset={64}>
                   {list.map((a) => (
                     <Row key={a.id} leading={<Logo account={a.id} symbol={look.symbol} color={p[look.hue]} size={36} />}
-                      title={a.name} subtitle={a.bank ? a.bank.replace(/^./, (c) => c.toUpperCase()) : look.one}
+                      title={a.name} subtitle={bankName(a) ?? look.one}
                       value={formatCents(now?.balances[a.id] ?? 0)} valueTone="label" chevron
                       onPress={() => router.push({ pathname: '/next/account/[id]', params: { id: String(a.id) } })} />
                   ))}

@@ -36,9 +36,11 @@ def _title(s: str) -> str:
 
 
 def suggest(institution: str | None, a) -> str:
-    """A name for the ledger account: the bank's own name for it, with the bank in front ("Chase Total Checking")."""
+    """A name for the ledger account: the bank's own name for it, with the bank in front ("Chase Total Checking").
+    The official name only when it's short; "Plaid Gold Standard 0% Interest Checking" is just "Plaid Checking"."""
     brand = _brand(institution)
-    own = _title(re.sub(r"[®™]", "", a["official_name"] or a["name"] or "Account")).strip()
+    official = re.sub(r"[®™]", "", a["official_name"] or "").strip()
+    own = _title(official if official and len(official) <= 26 else re.sub(r"[®™]", "", a["name"] or "Account")).strip()
     return own if not brand or brand.lower() in own.lower() else f"{brand} {own}"
 
 
@@ -112,10 +114,13 @@ async def finish(request: Request, b: Bank, con: Con):
     for i, (a, name) in enumerate(chosen):
         tid = con.execute("INSERT INTO accounts(name, kind, bank, start_balance, sort) VALUES(?,?,?,0,?)",
                           (name, KIND[a["type"]], _brand(a["institution"]), i)).lastrowid
+        # All history: no start on the inbox, since the bank keeps sending older rows for a few minutes after
+        # connecting, and the ledger's start month follows them back (api_bank._settle).
         b.execute("UPDATE accounts SET tally_account_id=?, since=?, skip=0, anchor=1 WHERE id=?",
-                  (tid, start.isoformat(), a["id"]))
+                  (tid, None if history == "all" else start.isoformat(), a["id"]))
         made.append({"id": tid, "name": name, "kind": KIND[a["type"]]})
     db.set_setting(con, "bank_auto", "1")
+    db.set_setting(con, "bank_history", history)
     con.commit()
     b.commit()
     added = _settle(b, con)

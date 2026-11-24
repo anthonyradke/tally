@@ -13,7 +13,7 @@ import { Button } from '@/next/ui/Button'
 import { Card } from '@/next/ui/List'
 import { Logo } from '@/next/ui/Logo'
 import { notify } from '@/next/ui/Notice'
-import { Symbol } from '@/next/ui/Symbol'
+import { SF } from '@/next/ui/SF'
 import { Txt } from '@/next/ui/Txt'
 
 export default function Connect() {
@@ -43,7 +43,7 @@ export default function Connect() {
     <View style={{ flex: 1, backgroundColor: p.bg, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, space.l) }}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.xl, paddingTop: 56, gap: space.xxl }}>
         <View style={{ alignItems: 'center', gap: space.m }}>
-          <Symbol name="building.columns.fill" size={52} color={p.blue} />
+          <SF name="building.columns.fill" size={52} color={p.blue} />
           <Txt v="largeTitle" center>Connect Your Banks</Txt>
           <Txt v="body" tone="label2" center>Sign in to each bank you use: checking, cards, savings, loans and investments. You can add more later.</Txt>
         </View>
@@ -53,12 +53,12 @@ export default function Connect() {
               <Animated.View key={it.id} entering={ZoomIn.springify().damping(14)}>
                 {i > 0 && <View style={{ height: 0.5, backgroundColor: p.separator, marginLeft: 68 }} />}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.l }}>
-                  <Logo name={it.brand || it.institution || undefined} letter size={40} />
+                  <Logo item={it.id} name={it.brand || it.institution || undefined} letter size={40} />
                   <View style={{ flex: 1 }}>
                     <Txt v="body" numberOfLines={1}>{it.institution ?? 'Bank'}</Txt>
                     <Txt v="subhead" tone="label2">{it.accounts.length} {it.accounts.length === 1 ? 'account' : 'accounts'}</Txt>
                   </View>
-                  <Symbol name="checkmark.circle.fill" size={24} color={p.green} />
+                  <SF name="checkmark.circle.fill" size={24} color={p.green} />
                 </View>
               </Animated.View>
             ))}

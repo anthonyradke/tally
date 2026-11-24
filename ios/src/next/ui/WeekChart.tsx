@@ -14,7 +14,7 @@ const H = 132
 function Bar({ d, max, i, dim, onPress }: { d: Day; max: number; i: number; dim: boolean; onPress: () => void }) {
   const p = usePalette()
   const h = useSharedValue(0)
-  const target = max > 0 ? Math.max(d.total > 0 ? 6 : 0, (d.total / max) * H) : 0
+  const target = max > 0 && d.total > 0 ? Math.max(6, (d.total / max) * H) : 4 // a nub on a quiet day keeps the week's rhythm
   useEffect(() => { h.set(withDelay(i * 45, withSpring(target, springs.bouncy))) }, [target, i, h])
   const anim = useAnimatedStyle(() => ({ height: h.value }))
   return (

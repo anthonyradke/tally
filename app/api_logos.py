@@ -61,7 +61,26 @@ def _account_sources(con, aid: int) -> list[tuple[str, str]]:
     return out
 
 
-def _ident(name: Optional[str], account: Optional[int]) -> tuple[str, str]:
+def _item_sources(iid: int) -> list[tuple[str, str]]:
+    """A connected bank: Plaid's record of its website and logo, then its name."""
+    b = bank.connect()
+    try:
+        it = b.execute("SELECT institution, website, logo FROM items WHERE id=?", (iid,)).fetchone()
+    finally:
+        b.close()
+    if not it:
+        raise HTTPException(404)
+    out: list[tuple[str, str]] = []
+    if d := logos.domain_of(it["website"]):
+        out.append(("domain", d))
+    if it["logo"]:
+        out.append(("base64", it["logo"]))
+    return out + [("domain", d) for d in logos.domains_for(it["institution"] or "")][:1]
+
+
+def _ident(name: Optional[str], account: Optional[int], item: Optional[int] = None) -> tuple[str, str]:
+    if item is not None:
+        return "item", str(item)
     if account is not None:
         return "account", str(account)
     key = logos.norm(name or "")
@@ -71,9 +90,10 @@ def _ident(name: Optional[str], account: Optional[int]) -> tuple[str, str]:
 
 
 @router.get("")
-def get_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None):
-    kind, ident = _ident(name, account)
-    sources = _account_sources(con, account) if account is not None else \
+def get_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None, item: Optional[int] = None):
+    """`item`: a connected bank (setup lists them before any account exists)."""
+    kind, ident = _ident(name, account, item)
+    sources = _item_sources(item) if item is not None else _account_sources(con, account) if account is not None else \
         _bank_sources(con, name or "") + [("domain", d) for d in logos.domains_for(name or "")]
     path = logos.resolve(kind, ident, sources)
     if not path:

@@ -2,7 +2,7 @@ import { ActivityIndicator, View, type StyleProp, type ViewStyle } from 'react-n
 import type { SFSymbol } from 'expo-symbols'
 import { radius, space, usePalette } from '../theme'
 import { Press } from './Press'
-import { Symbol } from './Symbol'
+import { SF } from './SF'
 import { Txt } from './Txt'
 
 /** A capsule button. `filled`: the one primary action on a screen; `tinted`: secondary; `plain`: text only. */
@@ -19,7 +19,7 @@ export function Button({ label, onPress, kind = 'filled', symbol, disabled, busy
       <View style={{ height: 52, borderRadius: radius.control, backgroundColor: bg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s, paddingHorizontal: space.xl }}>
         {busy ? <ActivityIndicator color={fg} /> : (
           <>
-            {symbol && <Symbol name={symbol} size={17} color={fg} weight="semibold" />}
+            {symbol && <SF name={symbol} size={17} color={fg} weight="semibold" />}
             <Txt v="headline" color={fg}>{label}</Txt>
           </>
         )}

@@ -7,7 +7,7 @@ import Animated, { FadeIn, FadeOut, interpolateColor, LinearTransition, useAnima
 import type { SFSymbol } from 'expo-symbols'
 import { tick } from '../haptics'
 import { springs, usePalette, type Hue } from '../theme'
-import { Symbol } from './Symbol'
+import { SF } from './SF'
 
 export interface SwitchOption<K extends string> { key: K; label: string; symbol: SFSymbol; hue: Hue }
 
@@ -27,7 +27,7 @@ function Pill<K extends string>({ o, on, onPress }: { o: SwitchOption<K>; on: bo
       <Pressable accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={o.label}
         onPress={() => { give.set(withSequence(withTiming(1.07, { duration: 90 }), withSpring(1, springs.bouncy))); onPress() }}
         style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: on ? 16 : 0 }}>
-        <Symbol name={o.symbol} size={16} color={on ? '#FFFFFF' : p.label2} weight="semibold" />
+        <SF name={o.symbol} size={16} color={on ? '#FFFFFF' : p.label2} weight="semibold" />
         {on && (
           <Animated.Text entering={FadeIn.duration(200).delay(70)} exiting={FadeOut.duration(70)} numberOfLines={1}
             style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600', letterSpacing: -0.23 }}>{o.label}</Animated.Text>

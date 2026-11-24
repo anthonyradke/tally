@@ -25,7 +25,6 @@ const why = (e: unknown, f: string) => (e instanceof ApiError ? e.errors.join(' 
 
 function Bank({ it, taken }: { it: BankItem; taken: Set<number> }) {
   const L = useLedger()
-  const first = it.accounts.find((a) => a.tally_account_id != null)?.tally_account_id ?? undefined
   const repair = async () => {
     try { const { link_token } = await api.bank.linkToken(it.id); if (await openPlaidLink(link_token)) { await api.bank.sync(); success(); await refreshBank() } }
     catch (e) { failure(); notify({ text: why(e, 'Repair failed'), symbol: 'exclamationmark.triangle.fill', hue: 'orange' }) }
@@ -39,7 +38,7 @@ function Bank({ it, taken }: { it: BankItem; taken: Set<number> }) {
   }
   return (
     <Section inset={64} footer={it.error ? `The bank wants you to sign in again (${it.error}).` : ago(it.synced_at)}>
-      <Row leading={<Logo account={first} name={it.institution ?? undefined} letter={!first} size={36} />} title={it.institution ?? 'Bank'}
+      <Row leading={<Logo item={it.id} name={it.institution ?? undefined} letter size={36} />} title={it.institution ?? 'Bank'}
         subtitle={`${it.accounts.length} ${it.accounts.length === 1 ? 'account' : 'accounts'}`} />
       {it.accounts.map((a) => {
         const mine = a.tally_account_id != null ? L.acct.get(a.tally_account_id) : undefined

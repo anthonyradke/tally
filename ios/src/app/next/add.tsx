@@ -23,7 +23,7 @@ import { DateChoice } from '@/next/ui/native/DateChoice'
 import { Segmented } from '@/next/ui/native/Segmented'
 import { notify } from '@/next/ui/Notice'
 import { Press } from '@/next/ui/Press'
-import { Symbol } from '@/next/ui/Symbol'
+import { SF } from '@/next/ui/SF'
 import { Txt } from '@/next/ui/Txt'
 
 type Mode = 'out' | 'in' | 'move'
@@ -133,7 +133,7 @@ function Composer({ t }: { t?: Txn }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.l, paddingTop: space.l, height: 56 }}>
         <Press onPress={() => router.back()} accessibilityLabel="Cancel" hitSlop={10}
           style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: p.fill3, alignItems: 'center', justifyContent: 'center' }}>
-          <Symbol name="xmark" size={15} color={p.label2} weight="bold" />
+          <SF name="xmark" size={15} color={p.label2} weight="bold" />
         </Press>
         <Txt v="headline">{editing !== null ? 'Edit Transaction' : 'New Transaction'}</Txt>
         <View style={{ width: 36 }} />
