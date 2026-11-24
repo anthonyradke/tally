@@ -1,6 +1,6 @@
 // New from the bank: what opening Tally brings up when the banks have something (components/BankCheckIn.tsx).
-// Kept to three short answers: which of your accounts a new bank account is, the rows Tally has a guess for (all
-// ticked; one button adds them), and the rows it doesn't (a category chip adds each). Tapping a row opens the full
+// Kept to three short answers: the rows Tally has a guess for (all ticked; one button adds them), the rows it doesn't
+// (a category chip adds each), and which of your accounts a new bank account is. Tapping a row opens the full
 // sheet to change the name, category or accounts first.
 import { useMemo, useState } from 'react'
 import { ScrollView, View } from 'react-native'
@@ -80,8 +80,6 @@ export default function BankNew() {
           </View>
         ) : (
           <>
-            {asks.map((a) => <Ask key={a.id} a={a} />)}
-
             {ready.length > 0 && (
               <Section title={ready.length === 1 ? 'Ready to add' : `Ready to add (${ready.length})`}>
                 {ready.map((r, i) => (
@@ -106,6 +104,13 @@ export default function BankNew() {
               <Section title={needs.length === 1 ? 'What was this?' : `What were these? (${needs.length})`}>
                 {needs.map((r, i) => <View key={r.id}>{i > 0 && <Hairline inset={space.l} />}<Needs r={r} /></View>)}
               </Section>
+            )}
+
+            {asks.length > 0 && (
+              <View style={{ gap: 6 }}>
+                <Txt variant="sub" tone="label2" style={{ paddingHorizontal: space.l }}>{asks.length === 1 ? 'A new account at the bank' : 'New accounts at the bank'}</Txt>
+                <View style={{ gap: space.m }}>{asks.map((a) => <Ask key={a.id} a={a} />)}</View>
+              </View>
             )}
 
             {pending > 0 && (
