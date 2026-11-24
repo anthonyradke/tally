@@ -10,6 +10,8 @@ from .api import Con, router as api_router
 from .api_ops import router as ops_router
 from .api_admin import router as admin_router
 from .api_bank import router as bank_router, sync_loop
+from .api_logos import router as logos_router
+from .api_setup import router as setup_router
 from .api_deleted import router as deleted_router
 from .api_files import router as files_router
 from .api_recurring import router as recurring_router
@@ -30,7 +32,8 @@ async def _login(request: Request, call_next):
     return auth.refuse(request) or await call_next(request)
 
 
-for r in (api_router, ops_router, admin_router, recurring_router, files_router, deleted_router, bank_router):
+for r in (api_router, ops_router, admin_router, recurring_router, files_router, deleted_router, bank_router,
+          setup_router, logos_router):
     app.include_router(r)
 
 

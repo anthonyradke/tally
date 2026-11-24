@@ -3,7 +3,7 @@ without them (the real Tally, for now) looks exactly as it did. Same conventions
 dollars in request bodies."""
 from __future__ import annotations
 import asyncio, logging, os, sqlite3
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from . import bank, db, plaid, service
@@ -42,7 +42,8 @@ def status(b: Bank, con: Con):
             "SELECT id, name, official_name, mask, type, subtype, tally_account_id, current, available, balance_at"
             " FROM accounts WHERE item_id=? ORDER BY id", (it["id"],))]
         items.append({**dict(it), "accounts": accts})
-    return {"env": plaid.env(), "items": items, "waiting": bank.waiting(b, service.load(con)), "ask": bank.ask(b)}
+    return {"env": plaid.env(), "items": items, "waiting": bank.waiting(b, service.load(con)), "ask": bank.ask(b),
+            "auto": _auto(con)}
 
 
 @router.post("/link-token")
@@ -58,10 +59,62 @@ async def link_token(request: Request, b: Bank):
     return {"link_token": _plaid(plaid.link_token, token)}
 
 
+def _auto(con) -> bool:
+    """Whether this ledger adds the rows it's sure about by itself (one set up from the banks)."""
+    row = con.execute("SELECT value FROM settings WHERE key='bank_auto'").fetchone()
+    return bool(row and row[0] == "1")
+
+
+def auto_add(b, con, passes: int = 2) -> int:
+    """Add every waiting row that `bank.auto_ok` passes, as its own entry. One side of a move between your own
+    accounts is added; the other pairs with it afterwards. A second pass picks up merchants the first one taught.
+    Returns how many entries were added."""
+    added = 0
+    for _ in range(passes):
+        st = service.load(con)
+        bank.link(b, st)
+        skip: set[int] = set()
+        n = 0
+        for item in bank.inbox(b, st):
+            if not item["guess"] or item["id"] in skip:
+                continue
+            r = b.execute("SELECT * FROM txns WHERE id=?", (item["id"],)).fetchone()
+            g = bank.Guess(**item["guess"])
+            if r["status"] != "new" or not bank.auto_ok(g, r):
+                continue
+            try:
+                tid = _write(st, Txn(None, date.fromisoformat(r["authorized_date"] or r["date"]), g.what,
+                                     g.category_id, g.from_id, g.to_id, g.amount), {})
+            except HTTPException:
+                continue  # doesn't fit (a date before the ledger starts, a shape the category refuses): it waits
+            bank.decide(b, r["id"], tid, "auto")
+            if g.pair_id:
+                skip.add(g.pair_id)
+            n += 1
+        con.commit()
+        b.commit()
+        added += n
+        if not n:
+            break
+    bank.link(b, service.load(con))
+    return added
+
+
+def _settle(b, con) -> int:
+    """After rows or entries change on a ledger kept from the banks: add what's sure, then hold balances to the
+    bank's. Returns how many were added."""
+    if not _auto(con):
+        return 0
+    n = auto_add(b, con)
+    bank.anchor(b, con, service.load(con))
+    return n
+
+
 def _refresh(b, con) -> dict:
     counts = bank.sync_all(b)
     st = service.load(con)
-    return {"synced": counts, "paired": bank.link(b, st)}
+    paired = bank.link(b, st)
+    return {"synced": counts, "paired": paired, "added": _settle(b, con)}
 
 
 def _connected(b, con, access: str, item_id: str) -> dict:
@@ -196,6 +249,7 @@ async def accept(bid: int, request: Request, b: Bank, con: Con):
     bank.decide(b, bid, tid, "added")
     b.commit()
     bank.link(b, service.load(con))  # the other side of a transfer pairs with the same entry
+    _settle(b, con)
     return _full(con, [tid])[0]
 
 
@@ -220,6 +274,7 @@ async def accept_many(request: Request, b: Bank, con: Con):
         st = service.load(con)
         bank.link(b, st)
         done.append(tid)
+    _settle(b, con)
     return _full(con, done) if done else []
 
 
@@ -257,13 +312,32 @@ async def pair(bid: int, request: Request, b: Bank, con: Con):
 
 
 @router.post("/inbox/{bid}/ignore")
-def ignore(bid: int, b: Bank):
+def ignore(bid: int, b: Bank, con: Con):
     r = b.execute("SELECT status FROM txns WHERE id=?", (bid,)).fetchone()
     if not r:
         raise HTTPException(404)
     bank.decide(b, bid, None, "ignored")
     b.commit()
+    _settle(b, con)
     return {"ok": True}
+
+
+@router.get("/recent")
+def recent(b: Bank, con: Con, days: int = 7):
+    """Rows Tally added by itself lately, newest first, with the entry each became: what the check-in shows as
+    "Added for you", to look over or undo."""
+    st = service.load(con)
+    entries = {t.id: t for t in st.txns}
+    out = []
+    cut = (datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 90)))).isoformat(timespec="seconds")
+    for r in b.execute("SELECT * FROM txns WHERE how='auto' AND status='linked' AND decided_at >= ? "
+                       "ORDER BY decided_at DESC, date DESC LIMIT 200", (cut,)):
+        t = entries.get(r["txn_id"])
+        if t:
+            out.append({"id": r["id"], "txn_id": t.id, "date": t.date.isoformat(), "what": t.what,
+                        "category_id": t.category_id, "amount": t.amount, "raw": r["raw"],
+                        "account_id": t.from_id if t.from_id is not None else t.to_id})
+    return out
 
 
 @router.post("/txns/{bid}/reset")

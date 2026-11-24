@@ -74,7 +74,9 @@ def item(access_token: str) -> dict:
 
 
 def institution(institution_id: str) -> dict:
-    return call("/institutions/get_by_id", {"institution_id": institution_id, "country_codes": ["US"]})["institution"]
+    """Name, website (`url`), logo (base64 PNG) and brand color (`primary_color`), where Plaid has them."""
+    return call("/institutions/get_by_id", {"institution_id": institution_id, "country_codes": ["US"],
+                                            "options": {"include_optional_metadata": True}})["institution"]
 
 
 def accounts(access_token: str) -> list[dict]:

@@ -54,6 +54,15 @@ CREATE INDEX IF NOT EXISTS txns_txn ON txns(txn_id);
 """
 
 
+# Added after the first tables (2026-11-24): where the inbox starts on an account, an answered "not one of mine", a
+# ledger account made from the bank and kept at the bank's balance (`anchor`), the institution's site, logo and
+# color, and each row's merchant site and how sure Plaid is of its category.
+MIGRATIONS = (("accounts", "since", "TEXT"), ("accounts", "skip", "INTEGER NOT NULL DEFAULT 0"),
+              ("accounts", "anchor", "INTEGER NOT NULL DEFAULT 0"), ("items", "website", "TEXT"),
+              ("items", "logo", "TEXT"), ("items", "color", "TEXT"), ("txns", "website", "TEXT"),
+              ("txns", "pfc_conf", "TEXT"))
+
+
 def connect(path: Optional[str] = None) -> sqlite3.Connection:
     path = path or os.environ.get("TALLY_BANK_DB", "data/bank.db")
     fresh = path != ":memory:" and not os.path.exists(path)
@@ -63,10 +72,9 @@ def connect(path: Optional[str] = None) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys=ON")
     con.executescript(SCHEMA)
-    have = {r[1] for r in con.execute("PRAGMA table_info(accounts)")}
-    for col, decl in (("since", "TEXT"), ("skip", "INTEGER NOT NULL DEFAULT 0")):
-        if col not in have:  # added 2026-11-24
-            con.execute(f"ALTER TABLE accounts ADD COLUMN {col} {decl}")
+    for table, col, decl in MIGRATIONS:
+        if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
     con.commit()
     if fresh:
         os.chmod(path, 0o600)  # it holds the access tokens
@@ -93,13 +101,15 @@ def _cents(v) -> Optional[int]:
 
 def add_item(bcon, access_token: str, item_id: str) -> int:
     """Store a new connection and its accounts. A connection repaired in update mode keeps its item_id: same row."""
+    info: dict = {}
     try:
         inst = plaid.item(access_token)["item"].get("institution_id")
-        name = plaid.institution(inst)["name"] if inst else None
+        info = plaid.institution(inst) if inst else {}
     except plaid.PlaidError:
-        name = None
-    bcon.execute("INSERT INTO items(item_id, access_token, institution) VALUES(?,?,?) ON CONFLICT(item_id) "
-                 "DO UPDATE SET access_token=excluded.access_token, error=NULL", (item_id, access_token, name))
+        pass
+    bcon.execute("INSERT INTO items(item_id, access_token, institution, website, logo, color) VALUES(?,?,?,?,?,?) "
+                 "ON CONFLICT(item_id) DO UPDATE SET access_token=excluded.access_token, error=NULL",
+                 (item_id, access_token, info.get("name"), info.get("url"), info.get("logo"), info.get("primary_color")))
     iid = bcon.execute("SELECT id FROM items WHERE item_id=?", (item_id,)).fetchone()[0]
     _store_accounts(bcon, iid, plaid.accounts(access_token))
     bcon.commit()
@@ -120,11 +130,15 @@ def _store_accounts(bcon, iid: int, accounts: list[dict]) -> None:
 
 def _row(t: dict) -> tuple:
     pfc = t.get("personal_finance_category") or {}
-    cp = next((c.get("name") for c in t.get("counterparties") or [] if c.get("name")), None)
+    cps = [c for c in t.get("counterparties") or [] if c.get("name")]
+    cp = cps[0]["name"] if cps else None
+    site = t.get("website") or next((c.get("website") for c in cps if c.get("website")), None)
+    logo = t.get("logo_url") or next((c.get("logo_url") for c in cps if c.get("logo_url")), None)
     return (t["transaction_id"], t.get("date"), t.get("authorized_date"),
             t.get("original_description") or t.get("name") or "", t.get("merchant_name"),
             t.get("merchant_entity_id"), cp, _cents(t.get("amount")) or 0, int(bool(t.get("pending"))),
-            t.get("pending_transaction_id"), pfc.get("primary"), pfc.get("detailed"), t.get("logo_url"))
+            t.get("pending_transaction_id"), pfc.get("primary"), pfc.get("detailed"), logo, site,
+            pfc.get("confidence_level"))
 
 
 def _upsert(bcon, t: dict, accounts: dict[str, int]) -> None:
@@ -134,11 +148,11 @@ def _upsert(bcon, t: dict, accounts: dict[str, int]) -> None:
     r = _row(t)
     bcon.execute(
         "INSERT INTO txns(plaid_id, date, authorized_date, raw, merchant, entity, counterparty, amount, pending,"
-        " pending_id, pfc, pfc_detail, logo, account_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        " pending_id, pfc, pfc_detail, logo, website, pfc_conf, account_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         " ON CONFLICT(plaid_id) DO UPDATE SET date=excluded.date, authorized_date=excluded.authorized_date,"
         " raw=excluded.raw, merchant=excluded.merchant, entity=excluded.entity, counterparty=excluded.counterparty,"
         " amount=excluded.amount, pending=excluded.pending, pfc=excluded.pfc, pfc_detail=excluded.pfc_detail,"
-        " logo=excluded.logo", (*r, aid))
+        " logo=excluded.logo, website=excluded.website, pfc_conf=excluded.pfc_conf", (*r, aid))
     pend = t.get("pending_transaction_id")
     if pend and not t.get("pending"):
         # The posted copy of a charge seen while pending: keep what was decided about it.
@@ -400,6 +414,56 @@ HINTS = {
 }
 
 
+# A new ledger's categories (setup), and which of Plaid's categories each one takes. Detailed codes first, then the
+# primary one. Transfers and card payments are left out: they need the other account, which only a matching row on
+# another connected account gives.
+DEFAULT_CATEGORIES = (
+    ("Groceries", "Spending"), ("Dining", "Spending"), ("Transportation", "Spending"), ("Shopping", "Spending"),
+    ("Bills & Utilities", "Spending"), ("Entertainment", "Spending"), ("Health & Fitness", "Spending"),
+    ("Travel", "Spending"), ("Services", "Spending"), ("Fees", "Spending"), ("Gifts & Donations", "Spending"),
+    ("Other", "Spending"), ("Paycheck", "Money in"), ("Interest", "Money in"), ("Other Income", "Money in"),
+    ("Between Accounts", "Transfer"), ("Credit Card Payment", "Transfer"), ("Loan Payment", "Loan"),
+    ("Investing", "Saving"),
+)
+PFC_DEFAULT = {
+    "INCOME_WAGES": "Paycheck", "INCOME_INTEREST_EARNED": "Interest", "INCOME_DIVIDENDS": "Interest",
+    "INCOME": "Other Income", "FOOD_AND_DRINK_GROCERIES": "Groceries", "FOOD_AND_DRINK": "Dining",
+    "TRANSPORTATION": "Transportation", "GENERAL_MERCHANDISE": "Shopping", "HOME_IMPROVEMENT": "Shopping",
+    "RENT_AND_UTILITIES": "Bills & Utilities", "GENERAL_SERVICES_INSURANCE": "Bills & Utilities",
+    "ENTERTAINMENT": "Entertainment", "MEDICAL": "Health & Fitness", "PERSONAL_CARE": "Health & Fitness",
+    "TRAVEL": "Travel", "GENERAL_SERVICES": "Services", "GOVERNMENT_AND_NON_PROFIT_DONATIONS": "Gifts & Donations",
+    "GOVERNMENT_AND_NON_PROFIT": "Services", "BANK_FEES": "Fees", "LOAN_PAYMENTS_CAR_PAYMENT": "Loan Payment",
+    "LOAN_PAYMENTS_STUDENT_LOAN_PAYMENT": "Loan Payment", "LOAN_PAYMENTS_MORTGAGE_PAYMENT": "Loan Payment",
+    "LOAN_PAYMENTS_PERSONAL_LOAN_PAYMENT": "Loan Payment", "LOAN_PAYMENTS_OTHER_PAYMENT": "Loan Payment",
+    "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS": "Investing",
+}
+SURE_PFC = ("VERY_HIGH", "HIGH")
+
+
+def _by_default(st, r) -> Optional[int]:
+    """The setup category Plaid's category goes to, when the ledger has a category of that name."""
+    names = {c.name.lower(): c.id for c in st.categories}
+    for code in (r["pfc_detail"], r["pfc"]):
+        parts = (code or "").split("_")
+        for n in range(len(parts), 0, -1):  # TRANSPORTATION_GAS, then TRANSPORTATION
+            if (hit := names.get(PFC_DEFAULT.get("_".join(parts[:n]), "").lower())):
+                return hit
+    return None
+
+
+def auto_ok(g: "Guess", r) -> bool:
+    """Whether a guess is safe to add without asking: filed the same way every time before, both sides of a move
+    between your own accounts, or a named merchant Plaid is sure of (by its category, or as you filed it last).
+    Anything else waits for an answer."""
+    if g.category_id is None:
+        return False
+    if g.source == "transfer" or (g.source == "history" and g.confidence == "sure"):
+        return True
+    bank_sure = bool(r["merchant"]) and "pfc_conf" in r.keys() and r["pfc_conf"] in SURE_PFC
+    # A merchant the bank is sure of, filed by Plaid's category or the way you filed it the last time.
+    return bank_sure and (g.source == "default" or (g.source == "history" and g.confidence == "likely"))
+
+
 def _by_name(st, r) -> Optional[int]:
     for code in (r["pfc_detail"], r["pfc"]):
         for hint in HINTS.get(code or "", ()):
@@ -484,6 +548,12 @@ def guess(bcon, st, r, seen=None, pfc=None, mapped=None, fresh=None) -> Guess:
             f, t, amt = shape(st, cat, acct, None, r["amount"])
             return Guess(name, cat, f, t, amt, "guess", "plaid",
                          f"Your other {_pfc_words(code)} entries are mostly {st.cat[cat].name}")
+    cat = _by_default(st, r)
+    if cat is not None:
+        f, t, amt = shape(st, cat, acct, None, r["amount"])
+        sure = "pfc_conf" in r.keys() and r["pfc_conf"] in SURE_PFC
+        return Guess(name, cat, f, t, amt, "likely" if sure else "guess", "default",
+                     f"The bank calls it {_pfc_words(r['pfc_detail'] or r['pfc'])}")
     cat = _by_name(st, r)
     if cat is not None:
         f, t, amt = shape(st, cat, acct, None, r["amount"])
@@ -547,6 +617,26 @@ def waiting(bcon, st) -> int:
     since = {r["id"]: r["since"] for r in bcon.execute("SELECT id, since FROM accounts")}
     return sum(1 for r in bcon.execute("SELECT account_id, date, authorized_date FROM txns WHERE status='new' AND "
                                        "pending=0") if r["account_id"] in mapped and not _before(r, since[r["account_id"]]))
+
+
+def anchor(bcon, con, st) -> int:
+    """Keep each ledger account made from a bank at the bank's balance today: its starting balance absorbs whatever
+    the entries don't explain (history before Tally, rows still waiting, a pending charge). Returns how many moved."""
+    row = next((r for r in st.rows if r.month == st.today.replace(day=1)), st.rows[-1] if st.rows else None)
+    if row is None:
+        return 0
+    n = 0
+    for a in bcon.execute("SELECT tally_account_id, current FROM accounts WHERE anchor=1 AND current IS NOT NULL "
+                          "AND tally_account_id IS NOT NULL"):
+        acct = st.acct.get(a["tally_account_id"])
+        if not acct or acct.id not in row.balances:
+            continue
+        gap = a["current"] - row.balances[acct.id]
+        if gap:
+            con.execute("UPDATE accounts SET start_balance=start_balance+? WHERE id=?", (gap, acct.id))
+            n += 1
+    con.commit()
+    return n
 
 
 def decide(bcon, bank_id: int, txn_id: Optional[int], how: str) -> None:

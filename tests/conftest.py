@@ -11,8 +11,10 @@ from fastapi.testclient import TestClient
 # throwaway folder. api_files reads TALLY_RECEIPTS once at import, and db.connect() falls back to data/tally.db, so
 # without this a stray call could reach the real data folder of whichever checkout pytest runs in.
 _SAFE = tempfile.mkdtemp(prefix="tally-tests-")
-for _key, _name in (("TALLY_DB", "stray.db"), ("TALLY_RECEIPTS", "receipts"), ("TALLY_BACKUPS", "backups")):
+for _key, _name in (("TALLY_DB", "stray.db"), ("TALLY_RECEIPTS", "receipts"), ("TALLY_BACKUPS", "backups"),
+                    ("TALLY_BANK_DB", "bank.db"), ("TALLY_LOGOS", "logos")):
     os.environ[_key] = os.path.join(_SAFE, _name)
+os.environ.pop("LOGO_DEV_KEY", None)  # no test reaches logo.dev
 
 
 @pytest.fixture(autouse=True)
@@ -21,6 +23,9 @@ def _own_folders(tmp_path, monkeypatch):
     from app import api_files
     monkeypatch.setenv("TALLY_DB", str(tmp_path / "t.db"))
     monkeypatch.setenv("TALLY_RECEIPTS", str(tmp_path / "receipts"))
+    monkeypatch.setenv("TALLY_BANK_DB", str(tmp_path / "bank.db"))
+    monkeypatch.setenv("TALLY_LOGOS", str(tmp_path / "logos"))
+    monkeypatch.delenv("LOGO_DEV_KEY", raising=False)
     monkeypatch.setattr(api_files, "RECEIPTS", tmp_path / "receipts")
     monkeypatch.setattr(api_files, "_swept", 0.0)
 
