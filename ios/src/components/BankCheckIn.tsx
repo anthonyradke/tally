@@ -7,8 +7,10 @@ import { router, usePathname } from 'expo-router'
 import { freshBank, loadSeen, newestId, saveSeen, shouldCheckIn } from '@/lib/bank'
 import { todayISO } from '@/lib/dates'
 import { useLock } from '@/lib/lock'
+import { useDesign } from '@/next/design'
 
 const ROOTS = new Set(['/', '/activity', '/accounts', '/insights'])
+const NEXT_ROOTS = new Set(['/next', '/next/activity', '/next/accounts'])
 
 export function BankCheckIn() {
   const pathname = usePathname()
@@ -26,9 +28,10 @@ export function BankCheckIn() {
         if (!got) return
         const today = todayISO()
         if (!shouldCheckIn(got.rows, got.status.ask.length, await loadSeen(), today)) return
-        if (useLock.getState().locked || !ROOTS.has(path.current)) return
+        const next = useDesign.getState().design === 'new'
+        if (useLock.getState().locked || !(next ? NEXT_ROOTS : ROOTS).has(path.current)) return
         await saveSeen({ day: today, maxId: newestId(got.rows) })
-        router.push('/bank-new')
+        router.push(next ? '/next/check-in' : '/bank-new')
       } catch {
         // offline or the server is down: the next open tries again
       } finally { running = false }

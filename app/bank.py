@@ -315,11 +315,14 @@ def link(bcon, st) -> int:
     """Check every pairing against the ledger and pair new rows with entries already there. Returns how many rows
     were newly paired."""
     entries = {t.id: t for t in st.txns}
-    gone = [r["id"] for r in bcon.execute("SELECT id, txn_id FROM txns WHERE status='linked'")
+    gone = [r for r in bcon.execute("SELECT id, txn_id, how FROM txns WHERE status='linked'")
             if r["txn_id"] not in entries]
-    if gone:  # the entry was deleted, or the ledger is a fresh copy without it
-        bcon.executemany("UPDATE txns SET status='new', txn_id=NULL, how=NULL, decided_at=NULL WHERE id=?",
-                         [(i,) for i in gone])
+    # The entry was deleted, or the ledger is a fresh copy without it: the row waits again. One Tally added by itself
+    # and you deleted stays out, or the next sync would add it straight back.
+    bcon.executemany("UPDATE txns SET status='new', txn_id=NULL, how=NULL, decided_at=NULL WHERE id=?",
+                     [(r["id"],) for r in gone if r["how"] != "auto"])
+    bcon.executemany("UPDATE txns SET status='ignored', txn_id=NULL, how='removed', decided_at=? WHERE id=?",
+                     [(_now(), r["id"]) for r in gone if r["how"] == "auto"])
     mapped = _mapped(bcon, st)
     taken: set[tuple[int, int]] = {(r["account_id"], r["txn_id"]) for r in bcon.execute(
         "SELECT account_id, txn_id FROM txns WHERE status='linked'")}

@@ -60,7 +60,7 @@ export interface BankItem { id: number; institution: string | null; error: strin
  *  Tally account kinds it could be. */
 export interface BankAsk { id: number; name: string; mask: string | null; institution: string | null; kinds: Kind[] }
 /** `waiting`: posted bank rows on connected accounts that no entry stands for yet. */
-export interface BankStatus { env: 'sandbox' | 'production'; items: BankItem[]; waiting: number; ask: BankAsk[] }
+export interface BankStatus { env: 'sandbox' | 'production'; items: BankItem[]; waiting: number; ask: BankAsk[]; auto?: boolean }
 export type Confidence = 'sure' | 'likely' | 'guess' | 'unknown'
 /** Tally's best guess at the entry a bank row stands for, shaped like an entry (`amount` signed as the entry). */
 export interface BankGuess { what: string; category_id: number | null; from_id: number | null; to_id: number | null; amount: number; confidence: Confidence; source: 'history' | 'transfer' | 'plaid' | 'none'; why: string; pair_id: number | null }
@@ -68,7 +68,15 @@ export interface BankGuess { what: string; category_id: number | null; from_id: 
 export interface BankRow { id: number; date: string; authorized_date: string | null; raw: string; merchant: string | null; logo: string | null; amount: number; pending: boolean; account_id: number; bank_account: string; guess: BankGuess | null }
 export interface BankAccept { what?: string; category_id?: number; from_id?: number | null; to_id?: number | null; amount?: number; date?: string; note?: string }
 export interface BankAudit { account_id: number; bank_account: string; first: string; bank_balance: number | null; tally_balance: number | null; gap: number | null; pending: number; balance_at: string | null; matched: number; missing: { id: number; date: string; raw: string; merchant: string | null; amount: number }[]; extra: { id: number; date: string; what: string; amount: number }[] }
-export interface BankSynced { synced: Record<string, { added?: number; modified?: number; removed?: number; error?: string; message?: string }>; paired: number }
+/** `added`: entries Tally added by itself (a ledger set up from the banks). */
+export interface BankSynced { synced: Record<string, { added?: number; modified?: number; removed?: number; error?: string; message?: string }>; paired: number; added?: number }
+/** A row Tally added by itself lately (a ledger set up from the banks), with the entry it became. */
+export interface BankRecent { id: number; txn_id: number; date: string; what: string; category_id: number; amount: number; raw: string; account_id: number | null }
+/** First-time setup from the banks (app/api_setup.py): each connected bank account as setup would make it. */
+export interface SetupAccount { id: number; name: string; mask: string | null; type: string | null; subtype: string | null; kind: Kind | null; suggested: string; include: boolean; current: number | null; rows: number; first: string | null }
+export interface SetupItem { id: number; institution: string | null; brand: string; color: string | null; logo: boolean; accounts: SetupAccount[] }
+export interface SetupStatus { needed: boolean; env: 'sandbox' | 'production'; items: SetupItem[] }
+export interface SetupDone { accounts: { id: number; name: string; kind: Kind }[]; start: string; added: number; waiting: number }
 /** A new connection: the accounts Tally matched to its own by name. */
 export type BankConnected = BankSynced & { item_id: number; matched: { bank_account: string; account_id: number }[] }
 
@@ -187,6 +195,17 @@ export const api = {
   unskipRecurring: (id: number, date: string) => call<void>('DELETE', `/recurring/${id}/skip/${date}`),
   statement: (accountId: number, csv: string) => call<StatementMatch>('POST', `/reconcile/${accountId}/statement`, { csv }, 30_000),
   putSettings: (body: Record<string, unknown>) => call<Record<string, string>>('PUT', '/settings', body),
+  setup: {
+    /** 404 on a server without bank sync. */
+    status: () => call<SetupStatus>('GET', '/setup'),
+    finish: (body: { history: 'all' | 'month'; accounts: { id: number; name?: string; include: boolean }[] }) =>
+      call<SetupDone>('POST', '/setup', body, 240_000),
+  },
+  /** An entry's logo by its name, or an account's bank logo (404 when there's none: show a symbol instead). */
+  logoUrl: (q: { name?: string; account?: number }) =>
+    `${getServer()}/api/logo${q.account !== undefined ? `?account=${q.account}` : `?name=${encodeURIComponent(q.name ?? '')}`}`,
+  hideLogo: (name: string) => call<void>('DELETE', `/logo?name=${encodeURIComponent(name)}`),
+  showLogo: (name: string) => call<void>('POST', `/logo/show?name=${encodeURIComponent(name)}`),
   bank: {
     /** 404 when the server has no Plaid keys (the real Tally, for now): bank sync is off there. */
     status: () => call<BankStatus>('GET', '/bank'),
@@ -206,6 +225,7 @@ export const api = {
     pair: (id: number, txnId: number) => call<{ ok: true }>('POST', `/bank/inbox/${id}/pair`, { txn_id: txnId }),
     ignore: (id: number) => call<{ ok: true }>('POST', `/bank/inbox/${id}/ignore`),
     reset: (id: number) => call<{ ok: true }>('POST', `/bank/txns/${id}/reset`),
+    recent: (days = 7) => call<BankRecent[]>('GET', `/bank/recent?days=${days}`),
     audit: (bankAccountId: number) => call<BankAudit>('GET', `/bank/audit/${bankAccountId}`, undefined, 30_000),
   },
 }

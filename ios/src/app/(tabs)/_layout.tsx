@@ -1,10 +1,11 @@
 import { DynamicColorIOS, useColorScheme } from 'react-native'
-import { router, useSegments } from 'expo-router'
+import { Redirect, router, useSegments } from 'expo-router'
 import { NativeTabs } from 'expo-router/unstable-native-tabs'
 import * as Haptics from 'expo-haptics'
 import { themeById, useThemeChoice } from '@/theme'
 import { ADD_ICON } from '@/theme/tab-icons'
 import { useFilters } from '@/lib/filters'
+import { useDesign } from '@/next/design'
 
 // Tabs are peers: each keeps its own stack, and re-tapping the active tab pops to its root. The bar is the system's
 // Liquid Glass bar at full size all the time; the theme's accent is the selected color, like every other interactive
@@ -22,6 +23,8 @@ export default function TabLayout() {
     const onActivity = segments.at(-1) === 'activity'
     router.push(onActivity && account != null ? { pathname: '/new', params: { from: String(account) } } : '/new')
   }
+  const design = useDesign((s) => s.design)
+  if (design === 'new') return <Redirect href="/next" />
   return (
     <NativeTabs tintColor={ink} minimizeBehavior="never">
       <NativeTabs.Trigger name="(home)">

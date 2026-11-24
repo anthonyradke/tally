@@ -27,6 +27,16 @@ Added
   asks for when it checked within the last half hour. A new connection's accounts are matched to Tally accounts by
   kind and name where one clearly fits. The inbox on each account starts a few days before its last entry when it is
   connected; older bank rows show only in the account's audit.
+- A new design, switchable in Settings (Classic stays as it was): Summary, Activity, Accounts, an entry's page, Add,
+  the bank check-in and Settings rebuilt from scratch on Apple's system colors, text styles and controls, with
+  company and bank logos, a category switcher like Mail's, a week chart, a net worth chart to drag across, an Apple
+  Cash style keypad and haptics throughout.
+- First-time setup from the banks (server with Plaid keys and an empty ledger): connect banks through Plaid, review
+  the accounts Tally makes from them, choose all history or this month, and Tally creates the accounts, a starter
+  set of categories and the entries it's sure of. Such a ledger adds sure rows by itself on every sync (`bank_auto`)
+  and keeps each account at the bank's balance; an entry it added that you delete stays out.
+- Logos (`/api/logo`): Plaid's merchant logo or website for bank rows, else the name as a website on logo.dev
+  (`LOGO_DEV_KEY`), cached in `TALLY_LOGOS`; a wrong one can be hidden.
 
 ## 3.7.0 (2026-11-22)
 A pass over how the app feels in daily use, from reviewers using it the way it gets used: logging single purchases,

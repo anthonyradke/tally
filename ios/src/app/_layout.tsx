@@ -21,6 +21,7 @@ import { loadLock } from '@/lib/lock'
 import { loadCaughtUp } from '@/lib/caughtUp'
 import { LockScreen } from '@/components/LockScreen'
 import { loadTheme, useTheme } from '@/theme'
+import { loadDesign, useDesign } from '@/next/design'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
@@ -53,6 +54,8 @@ function RootStack() {
   return (
     <Stack screenOptions={{ contentStyle: { backgroundColor: c.bg } }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      {/* The New design (src/app/next), a separate set of screens over the same data. */}
+      <Stack.Screen name="next" options={{ headerShown: false, animation: 'fade' }} />
       {/* The composer and editor show a header; it's on from the start, since switching it on from inside a modal
           remounts the screen (and threw away the keypad's animation state). */}
       <Stack.Screen name="entry" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
@@ -90,10 +93,14 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false)
   const [launching, setLaunching] = useState(true)
   const profile = useServer((s) => s.profile)
+  const design = useDesign((s) => s.design)
   const persister = useMemo(() => persisterFor(profile), [profile])
   useEffect(() => {
-    Promise.all([loadServer(), loadOutbox(), loadTheme(), loadPrivacy(), loadSounds(), loadLock(), loadCaughtUp()]).finally(() => setReady(true))
+    Promise.all([loadServer(), loadOutbox(), loadTheme(), loadPrivacy(), loadSounds(), loadLock(), loadCaughtUp(), loadDesign()]).finally(() => setReady(true))
   }, [])
+  useEffect(() => {
+    if (ready && design === 'new') SplashScreen.hideAsync().catch(() => {}) // New has no launch animation of its own
+  }, [ready, design])
   if (!ready) return null
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -111,7 +118,7 @@ export default function RootLayout() {
         </ThemeProvider>
       </PersistQueryClientProvider>
       {/* Takes over from the native splash (it hides it), then lifts off the app underneath. */}
-      {launching && <Launch onDone={() => setLaunching(false)} />}
+      {launching && design === 'classic' && <Launch onDone={() => setLaunching(false)} />}
     </GestureHandlerRootView>
   )
 }

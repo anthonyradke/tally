@@ -18,6 +18,7 @@ import { useBusy } from '@/lib/nav'
 import { useBank } from '@/lib/bank'
 import { PROFILE_NAME, useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
+import { setDesign } from '@/next/design'
 import { space, themeById, useTheme } from '@/theme'
 
 const ago = (iso: string, now: number) => {
@@ -71,6 +72,9 @@ export default function Settings() {
     <>
       <Stack.Screen options={{ title: 'Settings' }} />
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 80 }}>
+        <Group footer="A from-scratch redesign, built the way Apple's own apps look. Your data is the same in both; switch back any time in its Settings.">
+          <Row label="Try the new design" sf="sparkles" md="auto_awesome" chevron={false} onPress={() => setDesign('new')} />
+        </Group>
         <Group header="Everyday">
           <Row label="Quick actions" value={b ? String(b.favorites.length) : ''} sf="bolt" md="bolt" href="/settings/quick" />
           <Row label="Recurring" value={b ? String(b.recurring.length) : ''} sf="repeat" md="repeat" href="/settings/recurring" />

@@ -133,3 +133,13 @@ def test_logo_endpoint_caches_and_hides(client, monkeypatch):
     assert client.get("/api/logo", params={"name": "Costco"}).status_code == 404
     assert client.post("/api/logo/show", params={"name": "Costco"}).status_code == 204
     assert client.get("/api/logo", params={"name": "Costco"}).status_code == 200
+
+
+def test_deleting_an_auto_entry_keeps_it_out(fresh):
+    accts = fresh.get("/api/setup").json()["items"][0]["accounts"]
+    fresh.post("/api/setup", json={"history": "all", "accounts": [{"id": a["id"]} for a in accts]})
+    shell = next(t for t in fresh.get("/api/transactions").json()["items"] if t["what"] == "Shell")
+    assert fresh.delete(f"/api/transactions/{shell['id']}").status_code == 200
+    fresh.post("/api/bank/sync")
+    assert "Shell" not in [t["what"] for t in fresh.get("/api/transactions").json()["items"]]
+    assert "SHELL OIL 5544" not in [b["raw"] for b in fresh.get("/api/bank/inbox").json()]
