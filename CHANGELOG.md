@@ -8,6 +8,13 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## Unreleased
+Added
+- Bank sync through Plaid (server only, off unless Plaid keys are configured): connected accounts' transactions
+  pair with existing entries, and the rest wait in an inbox with a guess at name, category and accounts, learned
+  from the entries already paired. Card payments pair across both accounts. An audit per account lists bank rows
+  missing from Tally, entries the bank never saw and the balance gap. Bank data lives in its own `bank.db`.
+
 ## 3.7.0 (2026-11-22)
 A pass over how the app feels in daily use, from reviewers using it the way it gets used: logging single purchases,
 the weekly catch-up, finding and fixing old entries, checking where money stands, and keeping settings up.
