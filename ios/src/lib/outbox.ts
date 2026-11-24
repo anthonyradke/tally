@@ -5,8 +5,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { create } from 'zustand'
 import { api, ApiError, locked, unreachable, type Txn, type TxnInput } from './api'
 import { invalidateAll } from './data'
+import { getServer, scoped } from './server'
 
-export interface Queued { cid: string; lines: TxnInput[]; label: string; at: string; error?: string }
+/** `url`: the server it was saved for. It only ever goes there (Tally and Tally Lab keep separate outboxes, too). */
+export interface Queued { cid: string; lines: TxnInput[]; label: string; at: string; error?: string; url?: string }
 
 const KEY = 'tally.outbox'
 
@@ -15,13 +17,13 @@ export const useOutbox = create<OutboxState>(() => ({ items: [] }))
 
 function write(next: Queued[]) {
   useOutbox.setState({ items: next })
-  AsyncStorage.setItem(KEY, JSON.stringify(next)).catch(() => {})
+  AsyncStorage.setItem(scoped(KEY), JSON.stringify(next)).catch(() => {})
 }
 
 export async function loadOutbox() {
   try {
-    const v = JSON.parse((await AsyncStorage.getItem(KEY)) ?? '[]')
-    if (Array.isArray(v)) useOutbox.setState({ items: v })
+    const v = JSON.parse((await AsyncStorage.getItem(scoped(KEY))) ?? '[]')
+    useOutbox.setState({ items: Array.isArray(v) ? v : [] })
   } catch { /* corrupt queue: start empty */ }
 }
 
@@ -31,7 +33,7 @@ export const newClientId = (): string =>
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
 
 const items = () => useOutbox.getState().items
-export const enqueue = (q: Omit<Queued, 'at'>) => write([...items().filter((x) => x.cid !== q.cid), { ...q, at: new Date().toISOString() }])
+export const enqueue = (q: Omit<Queued, 'at' | 'url'>) => write([...items().filter((x) => x.cid !== q.cid), { ...q, at: new Date().toISOString(), url: getServer() }])
 export const discard = (cid: string) => write(items().filter((x) => x.cid !== cid))
 
 export const send = (lines: TxnInput[], cid: string) =>
@@ -65,6 +67,7 @@ export function flush(retry = false): Promise<number> {
     for (const q of [...items()]) {
       if (!items().some((x) => x.cid === q.cid)) continue // discarded while an earlier one was sending
       if (q.error && !retry) continue
+      if (q.url && q.url !== getServer()) continue // saved for another address: never sent anywhere else
       try {
         await send(q.lines, q.cid)
         discard(q.cid); sent++

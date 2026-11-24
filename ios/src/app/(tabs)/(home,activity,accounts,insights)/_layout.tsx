@@ -1,4 +1,6 @@
 import { Stack, useRoute } from 'expo-router'
+import { LabBadge } from '@/components/LabBadge'
+import { useServer } from '@/lib/server'
 import { useTheme } from '@/theme'
 
 // One stack per tab. Detail screens (an account, a category, Settings) are shared routes, so they push inside
@@ -12,6 +14,8 @@ export const unstable_settings = {
 
 export default function TabStack() {
   const { c } = useTheme()
+  const lab = useServer((s) => s.profile === 'lab')
+  const left = lab ? () => <LabBadge /> : undefined
   // Listing the screens below fixes their order, and then the Stack starts on the first one (Home) in every tab
   // unless it's told otherwise, so pass this tab's anchor explicitly. The route here is the tab, e.g. '(activity)'.
   const group = useRoute().name.replace(/^\(|\)$/g, '') as keyof typeof unstable_settings
@@ -28,10 +32,10 @@ export default function TabStack() {
       headerTintColor: c.ink,
       headerBackButtonDisplayMode: 'minimal',
     }}>
-      <Stack.Screen name="index" options={{ title: 'Home' }} />
-      <Stack.Screen name="activity" options={{ title: 'Activity' }} />
-      <Stack.Screen name="accounts" options={{ title: 'Accounts' }} />
-      <Stack.Screen name="insights" options={{ title: 'Insights' }} />
+      <Stack.Screen name="index" options={{ title: 'Home', headerLeft: left }} />
+      <Stack.Screen name="activity" options={{ title: 'Activity', headerLeft: left }} />
+      <Stack.Screen name="accounts" options={{ title: 'Accounts', headerLeft: left }} />
+      <Stack.Screen name="insights" options={{ title: 'Insights', headerLeft: left }} />
     </Stack>
   )
 }

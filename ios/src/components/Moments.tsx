@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { View } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { scoped } from '@/lib/server'
 import Animated, { FadeOut, ZoomIn } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
 import type { Bootstrap } from '@/lib/api'
@@ -32,18 +33,18 @@ export function Moments({ b }: { b: Bootstrap }) {
     if (!today.data || worth == null) return
     let live = true
     ;(async () => {
-      const seen: number[] = JSON.parse((await AsyncStorage.getItem(PAID)) ?? '[]')
-      const last = await AsyncStorage.getItem(WORTH)
+      const seen: number[] = JSON.parse((await AsyncStorage.getItem(scoped(PAID))) ?? '[]')
+      const last = await AsyncStorage.getItem(scoped(WORTH))
       const paid = paydays(b, today.data.items, seen)
       // One moment at a time: a payday that pushes net worth past a milestone leaves the milestone for next time.
-      if (!paid.length) await AsyncStorage.setItem(WORTH, String(worth))
+      if (!paid.length) await AsyncStorage.setItem(scoped(WORTH), String(worth))
       const passed = milestone(last == null ? null : Number(last), worth)
       let say: string | null = null
       if (paid.length) {
         const top = paid.reduce((x, y) => (y.amount > x.amount ? y : x))
         const where = top.to_id ? t.acct.get(top.to_id)?.name : null
         say = `Payday! ${formatCents(top.amount, { cents: top.amount % 100 !== 0 })} landed${where ? ` in ${where}` : ''}.`
-        await AsyncStorage.setItem(PAID, JSON.stringify([...seen, ...paid.map((x) => x.id)].slice(-100)))
+        await AsyncStorage.setItem(scoped(PAID), JSON.stringify([...seen, ...paid.map((x) => x.id)].slice(-100)))
       } else if (passed != null) {
         say = passed === 0 ? 'Net worth is out of the red.' : passed > 0 ? `Net worth passed ${formatCents(passed, { cents: false })}.` : `Net worth climbed past ${formatCents(passed, { cents: false })}.`
       }

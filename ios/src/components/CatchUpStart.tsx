@@ -2,8 +2,10 @@
 // to it. Once entries go in, the first page says how far the account is caught up, with Tally's balance to check
 // against the bank's in one tap.
 import { ScrollView, View } from 'react-native'
+import { router } from 'expo-router'
 import type { Account, Txn } from '@/lib/api'
 import { balanceWords } from '@/lib/balances'
+import { useBank } from '@/lib/bank'
 import { midSentence } from '@/lib/catchup'
 import { daysSince, suggestCatchUp, useCaughtUp } from '@/lib/caughtUp'
 import { dayLabel, fromISO } from '@/lib/dates'
@@ -73,6 +75,7 @@ export function LeftOff({ accounts, acct, onAcct, rows, loading, added, session,
   const t = useTally()
   const at = useCaughtUp((s) => s.at[String(acct.id)])
   const off = useCaughtUp((s) => !!s.off[String(acct.id)]) // "Not for this account" on Home's nudge
+  const waiting = useBank().data?.waiting ?? 0 // Tally Lab: bank rows not in Tally yet
   if (!t.b) return null
   const today = t.today
   const since = at ? daysSince(at) : null
@@ -93,6 +96,13 @@ export function LeftOff({ accounts, acct, onAcct, rows, loading, added, session,
         </Txt>
         {since != null && !caught && (
           <Txt variant="callout" tone="label2">{`Last caught up ${since === 0 ? 'today' : since === 1 ? 'yesterday' : `${since} days ago`}.`}</Txt>
+        )}
+        {waiting > 0 && (
+          <Tap feedback="opacity" onPress={() => router.push('/bank')} hitSlop={8} accessibilityLabel={`${waiting} waiting from the bank`}>
+            <Txt variant="callout" tone="label2">
+              {`${waiting === 1 ? '1 entry is' : `${waiting} entries are`} waiting from the bank. `}<Txt variant="callout" style={{ fontWeight: '600' }}>Review them</Txt>
+            </Txt>
+          </Tap>
         )}
         {off && (
           <Tap feedback="opacity" onPress={() => suggestCatchUp(acct.id, true)} hitSlop={8} accessibilityLabel={`Home doesn't suggest catching up ${acct.name}. Suggest it again`}>

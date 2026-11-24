@@ -5,6 +5,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import Animated, { Easing, LinearTransition, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming, ZoomIn } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { scoped } from '@/lib/server'
 import * as Haptics from 'expo-haptics'
 import { Bar } from '@/components/Bar'
 import { Commitments } from '@/components/Commitments'
@@ -92,13 +93,13 @@ function UnderBudget({ month, by }: { month: string; by: number }) {
   const [fire, setFire] = useState(0)
   useEffect(() => {
     let live = true
-    AsyncStorage.getItem(CELEBRATED).then((v) => {
+    AsyncStorage.getItem(scoped(CELEBRATED)).then((v) => {
       const seen: string[] = v ? JSON.parse(v) : []
       if (!live || seen.includes(month)) return
       setFire((n) => n + 1)
       play('success')
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
-      return AsyncStorage.setItem(CELEBRATED, JSON.stringify([...seen, month].slice(-36)))
+      return AsyncStorage.setItem(scoped(CELEBRATED), JSON.stringify([...seen, month].slice(-36)))
     }).catch(() => {})
     return () => { live = false }
   }, [month])

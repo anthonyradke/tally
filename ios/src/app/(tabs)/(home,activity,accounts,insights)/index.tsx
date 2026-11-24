@@ -4,6 +4,7 @@ import { router, Stack } from 'expo-router'
 import Animated, { FadeIn, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { scoped } from '@/lib/server'
 import { closeSwipes } from '@/components/SwipeRow'
 import { Bar } from '@/components/Bar'
 import { Chip } from '@/components/Chip'
@@ -155,9 +156,9 @@ function Hero({ b }: { b: Bootstrap }) {
   useEffect(() => {
     if (now == null) return
     let live = true
-    AsyncStorage.getItem(SEEN).then((v) => {
+    AsyncStorage.getItem(scoped(SEEN)).then((v) => {
       if (live && v != null && now > Number(v)) setRose(true)
-      return AsyncStorage.setItem(SEEN, String(now))
+      return AsyncStorage.setItem(scoped(SEEN), String(now))
     }).catch(() => {})
     return () => { live = false }
   }, [now])

@@ -14,6 +14,12 @@ Added
   pair with existing entries, and the rest wait in an inbox with a guess at name, category and accounts, learned
   from the entries already paired. Card payments pair across both accounts. An audit per account lists bank rows
   missing from Tally, entries the bank never saw and the balance gap. Bank data lives in its own `bank.db`.
+- The app can switch between Tally and Tally Lab (Settings, Server). Each keeps its own address, token, offline
+  outbox and saved cache, and a Lab badge sits on every tab while Lab is in use.
+- Where the server has bank sync: From the bank (Activity's toolbar and Catch up) lists bank transactions not in
+  Tally yet with a guess for each, one tap to add, a sheet to change the name, category or accounts, and "Add all"
+  for the ones Tally is sure about. Settings, Banks connects banks through Plaid Link, sets which Tally account each
+  bank account is, repairs a lapsed connection in place, and checks an account against its bank.
 
 ## 3.7.0 (2026-11-22)
 A pass over how the app feels in daily use, from reviewers using it the way it gets used: logging single purchases,

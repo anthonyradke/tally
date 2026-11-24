@@ -13,6 +13,7 @@ import { Group, Row } from '@/components/Row'
 import { StateView } from '@/components/StateView'
 import { AppIconPicker } from '@/components/AppIconPicker'
 import { FilterBarSettings } from '@/components/FilterBarSettings'
+import { Banks } from '@/components/settings/Banks'
 import { Budgets } from '@/components/settings/Budgets'
 import { Deleted } from '@/components/settings/Deleted'
 import { General, MonthEnd } from '@/components/settings/Goals'
@@ -28,7 +29,8 @@ import { invalidateAll, queryClient } from '@/lib/data'
 import { dayLabel, fromISO, monthBefore, toISO } from '@/lib/dates'
 import { formatCents } from '@/lib/money'
 import { discard, flush, useOutbox } from '@/lib/outbox'
-import { cleanServer, defaultServer, useServer } from '@/lib/server'
+import { switchProfile } from '@/lib/profile'
+import { cleanServer, defaultServer, PROFILE_NAME, PROFILES, useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
 import { toast } from '@/lib/toast'
 import { radius, space, useTheme } from '@/theme'
@@ -36,7 +38,7 @@ import { radius, space, useTheme } from '@/theme'
 const TITLES: Record<string, string> = {
   accounts: 'Accounts', categories: 'Categories', quick: 'Quick actions', recurring: 'Recurring', views: 'Saved views',
   budgets: 'Budgets', general: 'Goals', monthend: 'Month end', home: 'Home screen', activity: 'Activity filters', server: 'Server', theme: 'Theme', icon: 'App icon',
-  capture: 'Add from Wallet', deleted: 'Recently deleted',
+  capture: 'Add from Wallet', deleted: 'Recently deleted', banks: 'Banks',
 }
 
 export default function SettingsSection() {
@@ -64,7 +66,7 @@ export default function SettingsSection() {
       {header}
       <DragScrollView contentInsetAdjustmentBehavior="automatic" keyboardDismissMode="interactive" onScrollBeginDrag={closeSwipes} style={{ backgroundColor: c.bg }}
         contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 100 }}>
-        {section === 'activity' ? <FilterBarSettings reorder={reorder} /> : section === 'capture' ? <Capture /> : section === 'deleted' ? <Deleted /> : section === 'server' ? <Server /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
+        {section === 'activity' ? <FilterBarSettings reorder={reorder} /> : section === 'capture' ? <Capture /> : section === 'deleted' ? <Deleted /> : section === 'server' ? <Server /> : section === 'banks' ? <Banks /> : section === 'theme' ? <Themes /> : section === 'icon' ? <AppIconPicker /> : !admin.data ? <StateView q={admin} shape="list" /> : (
           <>
             {section === 'accounts' && <Accounts a={admin.data} reorder={reorder} />}
             {section === 'categories' && <Categories a={admin.data} reorder={reorder} />}
@@ -242,7 +244,28 @@ function Themes() {
 
 function Server() {
   const { c } = useTheme()
-  const { url, set, token, setToken } = useServer()
+  const profile = useServer((s) => s.profile)
+  return (
+    <>
+      <Group header="Which Tally" footer={profile === 'lab'
+        ? 'Lab is a copy of your ledger with bank sync, for trying it out. Nothing you do in Lab reaches your real Tally, and nothing waiting to send in one goes to the other.'
+        : 'Lab is a copy of your ledger with bank sync, for trying it out. It keeps its own address, token and entries.'}>
+        {PROFILES.map((p) => (
+          <Row key={p} label={PROFILE_NAME[p]} sub={p === 'lab' ? 'Bank sync, on a copy of your ledger' : 'Your real ledger'} chevron={false}
+            sf={p === 'lab' ? 'testtube.2' : 'house'} md={p === 'lab' ? 'science' : 'home'}
+            trailing={profile === p ? <Icon sf="checkmark" md="check" size={17} color={c.ink} /> : undefined}
+            onPress={() => { if (p !== profile) { Haptics.selectionAsync().catch(() => {}); switchProfile(p).then(() => toast({ text: `Now on ${PROFILE_NAME[p]}` })) } }} />
+        ))}
+      </Group>
+      <Address key={profile} />
+    </>
+  )
+}
+
+function Address() {
+  const { c } = useTheme()
+  const { url, set, token, setToken, profile } = useServer()
+  const fallback = defaultServer(profile)
   const [val, setVal] = useState(url)
   const [tok, setTok] = useState(token)
   const [state, setState] = useState<'idle' | 'checking' | 'ok' | 'fail' | 'token'>('idle')
@@ -271,7 +294,7 @@ function Server() {
   }
   return (
     <>
-      <Group header="Tally's address" footer="Tally runs on your own server and is reachable only over Tailscale, so keep the Tailscale app connected on this phone. The token is in /etc/tally/env on the server.">
+      <Group header={profile === 'lab' ? "Lab's address" : "Tally's address"} footer={`Tally runs on your own server and is reachable only over Tailscale, so keep the Tailscale app connected on this phone. The token is in ${profile === 'lab' ? '/etc/tally-lab/env' : '/etc/tally/env'} on the server.`}>
         <View style={{ padding: space.l, gap: space.m }}>
           <TextInput value={val} onChangeText={setVal} autoCapitalize="none" autoCorrect={false} keyboardType="url" placeholder="https://…"
             placeholderTextColor={c.label3} style={{ fontSize: 17, color: c.label }} />
@@ -279,7 +302,7 @@ function Server() {
             placeholderTextColor={c.label3} style={{ fontSize: 17, color: c.label }} />
           <View style={{ flexDirection: 'row', gap: space.s, alignItems: 'center' }}>
             <Button label={state === 'checking' ? 'Checking…' : 'Save and test'} onPress={test} style={{ flex: 1 }} />
-            {defaultServer && val !== defaultServer && <Button label="Reset" secondary onPress={() => setVal(defaultServer)} />}
+            {fallback && val !== fallback && <Button label="Reset" secondary onPress={() => setVal(fallback)} />}
           </View>
           {state === 'ok' && <Txt variant="callout" tone="pos">Connected.</Txt>}
           {state === 'token' && <Txt variant="callout" tone="neg">Tally answered but refused the token, so it kept the old one. Copy it again from the server.</Txt>}

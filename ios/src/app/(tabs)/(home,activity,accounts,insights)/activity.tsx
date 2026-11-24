@@ -20,6 +20,7 @@ import { Tap } from '@/components/Tap'
 import { TxnRow } from '@/components/TxnRow'
 import { Txt } from '@/components/Txt'
 import { api, type TxnQuery } from '@/lib/api'
+import { useBank } from '@/lib/bank'
 import { balanceWords, useAllTxns } from '@/lib/balances'
 import { dayLabel, lastOfMonth } from '@/lib/dates'
 import { queryClient } from '@/lib/data'
@@ -292,6 +293,9 @@ export default function Activity() {
 
   // Kept from one render to the next: a new one rebuilds the header's buttons, and a tap in between was lost.
   const live = useLatest({ startSelect, endSelect, account: f.account })
+  const bank = useBank().data // Tally Lab: an inbox of bank rows not in Tally yet
+  const hasBank = !!bank
+  const waiting = (bank?.waiting ?? 0) > 0
   const toolbar = useMemo(() => (
     <>
       {process.env.EXPO_OS !== 'web' && (
@@ -309,10 +313,12 @@ export default function Activity() {
           <Stack.Toolbar.Button key="select" icon="checkmark.circle" accessibilityLabel="Select entries" onPress={() => live.current.startSelect()} />,
           <Stack.Toolbar.Button key="catchup" icon="text.badge.plus" accessibilityLabel="Catch up an account"
             onPress={() => router.push({ pathname: '/catchup', params: live.current.account != null ? { account: String(live.current.account) } : {} })} />,
+          ...(hasBank ? [<Stack.Toolbar.Button key="bank" icon={waiting ? 'tray.full' : 'tray'} accessibilityLabel={waiting ? 'From the bank, some waiting' : 'From the bank'}
+            onPress={() => router.push('/bank')} />] : []),
         ]}
       </Stack.Toolbar>
     </>
-  ), [selecting, extra]) // eslint-disable-line react-hooks/exhaustive-deps
+  ), [selecting, extra, hasBank, waiting]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>

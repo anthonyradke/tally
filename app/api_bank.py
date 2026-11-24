@@ -23,10 +23,12 @@ Bank = Annotated[sqlite3.Connection, Depends(bank.session)]
 
 
 def _plaid(fn, *a):
+    """Plaid's refusals come back as 424, not 502: the app treats 502 and up as "Tally unreachable" and would queue or
+    retry instead of showing Plaid's message."""
     try:
         return fn(*a)
     except plaid.PlaidError as e:
-        raise HTTPException(502, {"errors": [e.message], "code": e.code})
+        raise HTTPException(424, {"errors": [e.message], "code": e.code})
 
 
 @router.get("")
@@ -83,7 +85,7 @@ def disconnect(iid: int, b: Bank):
         plaid.remove(row[0])
     except plaid.PlaidError as e:
         if e.code not in ("ITEM_NOT_FOUND", "INVALID_ACCESS_TOKEN"):
-            raise HTTPException(502, {"errors": [e.message], "code": e.code})
+            raise HTTPException(424, {"errors": [e.message], "code": e.code})
     b.execute("DELETE FROM items WHERE id=?", (iid,))
     b.commit()
 

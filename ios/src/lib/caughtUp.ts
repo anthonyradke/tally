@@ -3,6 +3,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { create } from 'zustand'
 import { addDays, fromISO } from './dates'
+import { scoped } from './server'
 
 const KEY = 'tally.caughtUp'
 const OFF_KEY = 'tally.catchUpOff'
@@ -22,18 +23,18 @@ export const useCaughtUp = create<S>(() => ({ at: {}, off: {} }))
 const record = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null)
 export async function loadCaughtUp() {
   try {
-    const at = record(JSON.parse((await AsyncStorage.getItem(KEY)) ?? '{}'))
-    if (at) useCaughtUp.setState({ at: at as S['at'] })
+    const at = record(JSON.parse((await AsyncStorage.getItem(scoped(KEY))) ?? '{}'))
+    useCaughtUp.setState({ at: (at ?? {}) as S['at'] })
   } catch { /* unreadable: start over */ }
   try {
-    const off = record(JSON.parse((await AsyncStorage.getItem(OFF_KEY)) ?? '{}'))
-    if (off) useCaughtUp.setState({ off: off as S['off'] })
+    const off = record(JSON.parse((await AsyncStorage.getItem(scoped(OFF_KEY))) ?? '{}'))
+    useCaughtUp.setState({ off: (off ?? {}) as S['off'] })
   } catch { /* unreadable: every account is suggested again */ }
 }
 
 const saveOff = (off: S['off']) => {
   useCaughtUp.setState({ off })
-  AsyncStorage.setItem(OFF_KEY, JSON.stringify(off)).catch(() => {})
+  AsyncStorage.setItem(scoped(OFF_KEY), JSON.stringify(off)).catch(() => {})
 }
 /** Home stops (`on` false) or starts again suggesting catching an account up. */
 export function suggestCatchUp(accountId: number, on: boolean) {
@@ -45,7 +46,7 @@ export function suggestCatchUp(accountId: number, on: boolean) {
 
 const save = (at: Record<string, string>) => {
   useCaughtUp.setState({ at })
-  AsyncStorage.setItem(KEY, JSON.stringify(at)).catch(() => {})
+  AsyncStorage.setItem(scoped(KEY), JSON.stringify(at)).catch(() => {})
 }
 
 /** Marks an account caught up (entries added in Catch up, a look through it with nothing to add, a reconcile that

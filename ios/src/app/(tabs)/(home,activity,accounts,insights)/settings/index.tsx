@@ -15,7 +15,8 @@ import { setLockEnabled, useLock } from '@/lib/lock'
 import { toast } from '@/lib/toast'
 import { shareCsv } from '@/lib/exportCsv'
 import { useBusy } from '@/lib/nav'
-import { useServer } from '@/lib/server'
+import { useBank } from '@/lib/bank'
+import { PROFILE_NAME, useServer } from '@/lib/server'
 import { useTally } from '@/lib/tally'
 import { space, themeById, useTheme } from '@/theme'
 
@@ -48,6 +49,8 @@ export default function Settings() {
   const { c, theme } = useTheme()
   const { b } = useTally()
   const url = useServer((s) => s.url)
+  const profile = useServer((s) => s.profile)
+  const bank = useBank().data
   const queued = useOutbox((s) => s.items)
   const icon = useAppIcon((s) => s.name)
   const hidden = usePrivacy((s) => s.hidden)
@@ -81,6 +84,7 @@ export default function Settings() {
           <Row label="Budgets" value={budgets ? `${budgets} set` : 'None'} sf="gauge.with.needle" md="speed" href="/settings/budgets" />
           <Row label="Goals" sub="Emergency fund and Roth IRA" sf="target" md="flag" href="/settings/general" />
           <Row label="Month end" sub="Where savings interest is logged" sf="calendar.badge.checkmark" md="event_available" href="/settings/monthend" />
+          {bank && <Row label="Banks" value={bank.items.length ? String(bank.items.length) : 'None'} sf="link" md="link" href="/settings/banks" />}
         </Group>
         <Group header="App">
           <Row label="Theme" value={themeById(theme).name} sf="paintpalette" md="palette" href="/settings/theme" />
@@ -93,7 +97,7 @@ export default function Settings() {
             trailing={<Switch value={sounds} onValueChange={(v) => { useSounds.getState().set(v); if (v) play('toggle') }} />} />
           <Row label="Lock with Face ID" sub="Asks when Tally opens, and when you come back after a minute away." sf="faceid" md="lock" chevron={false}
             trailing={<Switch value={locking} onValueChange={(v) => setLockEnabled(v).then((ok) => { if (!ok) toast({ text: "Face ID isn't available, or it didn't match. Tally stays unlocked.", tone: 'error' }) })} />} />
-          <Row label="Server" value={url ? url.replace(/^https?:\/\//, '').split('.')[0] : process.env.EXPO_OS === 'web' ? 'This site' : 'Not set'} sf="server.rack" md="dns" href="/settings/server" />
+          <Row label="Server" value={profile !== 'tally' ? PROFILE_NAME[profile] : url ? url.replace(/^https?:\/\//, '').split('.')[0] : process.env.EXPO_OS === 'web' ? 'This site' : 'Not set'} sf="server.rack" md="dns" href="/settings/server" />
           {queued.length > 0 && <Row label="Waiting to send" value={String(queued.length)} sf="icloud.and.arrow.up" md="cloud_upload" href="/settings/server" />}
         </Group>
         <Group header="Backups" footer={backupNote(h)}>

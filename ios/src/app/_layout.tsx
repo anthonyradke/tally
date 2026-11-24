@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AppState, useColorScheme } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router'
@@ -14,7 +14,7 @@ import { Toaster } from '@/components/Toaster'
 import { keepOnPhone, queryClient } from '@/lib/data'
 import { flush, loadOutbox } from '@/lib/outbox'
 import { loadPrivacy } from '@/lib/privacy'
-import { loadServer } from '@/lib/server'
+import { keyFor, loadServer, useServer, type Profile } from '@/lib/server'
 import { loadSounds } from '@/lib/sound'
 import { loadLock } from '@/lib/lock'
 import { loadCaughtUp } from '@/lib/caughtUp'
@@ -31,8 +31,9 @@ focusManager.setEventListener((handle) => {
   return () => sub.remove()
 })
 
-// Last good data is kept on the phone, so a cold start paints instantly (and offline) while fresh data loads.
-const persister = createAsyncStoragePersister({ storage: AsyncStorage, key: 'tally.cache', throttleTime: 1500 })
+// Last good data is kept on the phone, so a cold start paints instantly (and offline) while fresh data loads. Each
+// server (Tally, Tally Lab) has its own copy.
+const persisterFor = (p: Profile) => createAsyncStoragePersister({ storage: AsyncStorage, key: keyFor('tally.cache', p), throttleTime: 1500 })
 
 /** Posts queued offline entries on launch, on foregrounding and every 20 s while open (not the ones Tally refused:
  *  those wait for Send now in Settings). */
@@ -67,6 +68,13 @@ function RootStack() {
       {/* A modal, not a form sheet: inside a form sheet the rolling amount never moved as you typed. */}
       <Stack.Screen name="reconcile/[id]" options={{ presentation: 'modal', headerShown: false, contentStyle: { backgroundColor: c.bg } }} />
       <Stack.Screen name="story" options={{ presentation: 'fullScreenModal', headerShown: false, contentStyle: { backgroundColor: '#000000' } }} />
+      {/* Bank sync (Tally Lab): the inbox, one row's sheet, and an account checked against its bank. */}
+      <Stack.Screen name="bank" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
+      <Stack.Screen name="bank-item" options={{
+        presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true, headerShown: false,
+        contentStyle: { backgroundColor: c.bg },
+      }} />
+      <Stack.Screen name="bank-audit" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
       <Stack.Screen name="edit" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
     </Stack>
   )
@@ -78,13 +86,16 @@ export default function RootLayout() {
   const nav = scheme === 'dark' ? DarkTheme : DefaultTheme
   const [ready, setReady] = useState(false)
   const [launching, setLaunching] = useState(true)
+  const profile = useServer((s) => s.profile)
+  const persister = useMemo(() => persisterFor(profile), [profile])
   useEffect(() => {
     Promise.all([loadServer(), loadOutbox(), loadTheme(), loadPrivacy(), loadSounds(), loadLock(), loadCaughtUp()]).finally(() => setReady(true))
   }, [])
   if (!ready) return null
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <PersistQueryClientProvider client={queryClient}
+      {/* Keyed by server: switching between Tally and Lab remounts everything on the new server's own cache. */}
+      <PersistQueryClientProvider key={profile} client={queryClient}
         persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 7, buster: Constants.expoConfig?.version ?? 'v1',
           dehydrateOptions: { shouldDehydrateQuery: (q) => q.state.status === 'success' && keepOnPhone(q.queryKey) } }}>
         <ThemeProvider value={{ ...nav, colors: { ...nav.colors, primary: c.ink, background: c.bg, card: c.bg } }}>

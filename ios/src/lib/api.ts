@@ -52,6 +52,21 @@ export type AdminCategory = Omit<Category, 'active'> & { sort: number; active: n
 export type AdminRecurring = Recurring & { next_due?: string; next_slot?: string }
 export interface AdminData { accounts: AdminAccount[]; categories: AdminCategory[]; favorites: Favorite[]; recurring: AdminRecurring[]; saved_views: SavedView[]; budgets: Budget[]; skips: Skip[]; settings: Record<string, string> }
 
+/** Bank sync (Tally Lab, app/api_bank.py). Amounts in cents; a bank row's `amount` is signed the way Plaid signs it:
+ *  positive is money leaving the account (a purchase, a charge on a card), negative is money arriving. */
+export interface BankAccount { id: number; name: string; official_name: string | null; mask: string | null; type: string | null; subtype: string | null; tally_account_id: number | null; current: number | null; available: number | null; balance_at: string | null }
+export interface BankItem { id: number; institution: string | null; error: string | null; synced_at: string | null; created_at: string; accounts: BankAccount[] }
+/** `waiting`: posted bank rows on connected accounts that no entry stands for yet. */
+export interface BankStatus { env: 'sandbox' | 'production'; items: BankItem[]; waiting: number }
+export type Confidence = 'sure' | 'likely' | 'guess' | 'unknown'
+/** Tally's best guess at the entry a bank row stands for, shaped like an entry (`amount` signed as the entry). */
+export interface BankGuess { what: string; category_id: number | null; from_id: number | null; to_id: number | null; amount: number; confidence: Confidence; source: 'history' | 'transfer' | 'plaid' | 'none'; why: string; pair_id: number | null }
+/** `account_id`: the Tally account it's on. Pending rows come without a guess: the bank can still change them. */
+export interface BankRow { id: number; date: string; authorized_date: string | null; raw: string; merchant: string | null; logo: string | null; amount: number; pending: boolean; account_id: number; bank_account: string; guess: BankGuess | null }
+export interface BankAccept { what?: string; category_id?: number; from_id?: number | null; to_id?: number | null; amount?: number; date?: string; note?: string }
+export interface BankAudit { account_id: number; bank_account: string; first: string; bank_balance: number | null; tally_balance: number | null; gap: number | null; pending: number; balance_at: string | null; matched: number; missing: { id: number; date: string; raw: string; merchant: string | null; amount: number }[]; extra: { id: number; date: string; what: string; amount: number }[] }
+export interface BankSynced { synced: Record<string, { added?: number; modified?: number; removed?: number; error?: string; message?: string }>; paired: number }
+
 export class ApiError extends Error {
   constructor(public status: number, public errors: string[]) { super(errors.join(' ')) }
 }
@@ -167,6 +182,24 @@ export const api = {
   unskipRecurring: (id: number, date: string) => call<void>('DELETE', `/recurring/${id}/skip/${date}`),
   statement: (accountId: number, csv: string) => call<StatementMatch>('POST', `/reconcile/${accountId}/statement`, { csv }, 30_000),
   putSettings: (body: Record<string, unknown>) => call<Record<string, string>>('PUT', '/settings', body),
+  bank: {
+    /** 404 when the server has no Plaid keys (the real Tally, for now): bank sync is off there. */
+    status: () => call<BankStatus>('GET', '/bank'),
+    inbox: () => call<BankRow[]>('GET', '/bank/inbox', undefined, 30_000),
+    sync: () => call<BankSynced>('POST', '/bank/sync', undefined, 90_000),
+    linkToken: (itemId?: number) => call<{ link_token: string }>('POST', '/bank/link-token', itemId ? { item_id: itemId } : {}),
+    connect: (publicToken: string) => call<BankSynced & { item_id: number }>('POST', '/bank/connect', { public_token: publicToken }, 120_000),
+    sandbox: () => call<BankSynced & { item_id: number }>('POST', '/bank/sandbox/connect', undefined, 120_000),
+    disconnect: (itemId: number) => call<void>('DELETE', `/bank/items/${itemId}`),
+    mapAccount: (bankAccountId: number, tallyAccountId: number | null) => call<{ paired: number }>('PUT', `/bank/accounts/${bankAccountId}`, { tally_account_id: tallyAccountId }),
+    /** Adds the entry a bank row stands for: the guess, with anything in `over` instead (`amount` in cents here). */
+    accept: (id: number, over: BankAccept = {}) => call<Txn>('POST', `/bank/inbox/${id}/accept`, over.amount === undefined ? over : { ...over, amount: over.amount / 100 }),
+    acceptSure: () => call<Txn[]>('POST', '/bank/inbox/accept-sure', undefined, 60_000),
+    pair: (id: number, txnId: number) => call<{ ok: true }>('POST', `/bank/inbox/${id}/pair`, { txn_id: txnId }),
+    ignore: (id: number) => call<{ ok: true }>('POST', `/bank/inbox/${id}/ignore`),
+    reset: (id: number) => call<{ ok: true }>('POST', `/bank/txns/${id}/reset`),
+    audit: (bankAccountId: number) => call<BankAudit>('GET', `/bank/audit/${bankAccountId}`, undefined, 30_000),
+  },
 }
 
 /** A file from the server as text (the CSV exports), with the token: opening the URL in Safari sent none. */

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { router } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { scoped } from '@/lib/server'
 import * as Haptics from 'expo-haptics'
 import { categoryVisual } from '@/icons/categories'
 import type { Bootstrap } from '@/lib/api'
@@ -28,7 +29,7 @@ export function RepeatSuggestions({ b, folded }: { b: Bootstrap; folded?: boolea
   const [hidden, setHidden] = useState<string[] | null>(null)
   const [open, setOpen] = useState(!folded)
   useEffect(() => {
-    AsyncStorage.getItem(HIDDEN).then((v) => setHidden(v ? JSON.parse(v) : [])).catch(() => setHidden([]))
+    AsyncStorage.getItem(scoped(HIDDEN)).then((v) => setHidden(v ? JSON.parse(v) : [])).catch(() => setHidden([]))
   }, [])
   const found = useMemo(() => (all.data ? findRepeats(all.data.items, b.recurring, b.today) : []), [all.data, b.recurring, b.today])
   if (!hidden) return null
@@ -38,7 +39,7 @@ export function RepeatSuggestions({ b, folded }: { b: Bootstrap; folded?: boolea
     Haptics.selectionAsync().catch(() => {})
     const next = [...hidden, keyOf(r)]
     setHidden(next)
-    AsyncStorage.setItem(HIDDEN, JSON.stringify(next.slice(-200))).catch(() => {})
+    AsyncStorage.setItem(scoped(HIDDEN), JSON.stringify(next.slice(-200))).catch(() => {})
   }
   // A hidden account in the suggestion is swapped or left to pick, and the editor says so (lib/repeats.ts).
   const setUp = (r: Repeat) => {
