@@ -2,6 +2,7 @@
 import { useEffect } from 'react'
 import { View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
+import { leaveWelcome } from '@/next/setup'
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { success } from '@/next/haptics'
@@ -35,7 +36,7 @@ export default function Done() {
           </Section>
         </Animated.View>
       </View>
-      <Button label="Get Started" onPress={() => { router.dismissAll(); if (Number(waiting)) setTimeout(() => router.push('/next/check-in'), 450) }} />
+      <Button label="Get Started" onPress={() => { leaveWelcome(); if (Number(waiting)) setTimeout(() => router.push('/next/check-in'), 450) }} />
     </View>
   )
 }

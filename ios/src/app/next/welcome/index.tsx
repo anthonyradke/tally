@@ -4,6 +4,7 @@ import { router } from 'expo-router'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { SFSymbol } from 'expo-symbols'
+import { useLeaveIfSetUp } from '@/next/setup'
 import { space, usePalette } from '@/next/theme'
 import { Button } from '@/next/ui/Button'
 import { SF } from '@/next/ui/SF'
@@ -19,6 +20,7 @@ const rise = (i: number) => FadeInDown.delay(120 + i * 110).springify().damping(
 export default function Welcome() {
   const p = usePalette()
   const insets = useSafeAreaInsets()
+  useLeaveIfSetUp()
   return (
     <View style={{ flex: 1, backgroundColor: p.bg, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, space.l) }}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.xxl, paddingTop: 72, gap: 44 }}>

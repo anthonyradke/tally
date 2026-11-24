@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { api, ApiError } from '@/lib/api'
 import { openPlaidLink } from '@/lib/bank'
 import { failure, success } from '@/next/haptics'
-import { useSetupStatus } from '@/next/setup'
+import { useLeaveIfSetUp, useSetupStatus } from '@/next/setup'
 import { space, usePalette } from '@/next/theme'
 import { Button } from '@/next/ui/Button'
 import { Card } from '@/next/ui/List'
@@ -19,6 +19,7 @@ import { Txt } from '@/next/ui/Txt'
 export default function Connect() {
   const p = usePalette()
   const insets = useSafeAreaInsets()
+  useLeaveIfSetUp()
   const s = useSetupStatus()
   const [busy, setBusy] = useState<'link' | 'test' | null>(null)
   const items = s.data?.items ?? []

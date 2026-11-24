@@ -10,7 +10,7 @@ import { fromISO } from '@/lib/dates'
 import { formatCents } from '@/lib/money'
 import { failure, success, tick } from '@/next/haptics'
 import { KIND_LOOK } from '@/next/look'
-import { useChoices, useSetupStatus } from '@/next/setup'
+import { leaveWelcome, useChoices, useSetupStatus } from '@/next/setup'
 import { space, usePalette } from '@/next/theme'
 import { Button } from '@/next/ui/Button'
 import { Row, Section } from '@/next/ui/List'
@@ -46,7 +46,14 @@ export default function Accounts() {
       await queryClient.invalidateQueries()
       router.replace({ pathname: '/next/welcome/done', params: { accounts: String(r.accounts.length), added: String(r.added), waiting: String(r.waiting) } })
     } catch (e) {
-      failure(); setBusy(false)
+      setBusy(false)
+      if (e instanceof ApiError && e.status === 409) { // already set up (a second tap, or the flow came back): just go in
+        queryClient.setQueriesData({ queryKey: ['setup'] }, false)
+        await queryClient.invalidateQueries()
+        leaveWelcome()
+        return
+      }
+      failure()
       notify({ text: e instanceof ApiError ? e.errors.join(' ') : "Couldn't finish setup", symbol: 'exclamationmark.triangle.fill', hue: 'orange' })
     }
   }
