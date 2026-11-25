@@ -1,6 +1,7 @@
 """Glue between the database and the engine: one loaded state object per request."""
 from __future__ import annotations
 from dataclasses import dataclass
+from functools import cached_property
 from datetime import date
 from typing import Optional
 from . import db
@@ -21,11 +22,12 @@ class State:
     rows: list
     hidden: frozenset = frozenset()  # ids of accounts switched off in Settings: still counted, left off checklists
 
-    @property
+    # Built once per state: callers look them up per row, and a property rebuilt both dicts on every access.
+    @cached_property
     def acct(self) -> dict[int, Account]:
         return {a.id: a for a in self.accounts}
 
-    @property
+    @cached_property
     def cat(self) -> dict[int, Category]:
         return {c.id: c for c in self.categories}
 
