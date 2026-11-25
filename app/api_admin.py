@@ -195,7 +195,12 @@ def _uses(con, id: int) -> str:
 @router.delete("/accounts/{id}", status_code=204)
 def delete_account(id: int, con: Con):
     # Saved reconciliations are a log of checks, not entries: they go with the account (they used to block it forever).
-    return _delete(con, "accounts", id, lambda: con.execute("DELETE FROM reconciliations WHERE account_id=?", (id,)))
+    # So does its card picture: ids are reused, and the next account made would have shown it. The receipts sweep
+    # removes the file once nothing points at it. There is no Undo for an account delete.
+    def before():
+        con.execute("DELETE FROM reconciliations WHERE account_id=?", (id,))
+        con.execute("DELETE FROM settings WHERE key=?", (f"card_art:{id}",))
+    return _delete(con, "accounts", id, before)
 
 
 # ---------- categories ----------
