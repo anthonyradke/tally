@@ -68,3 +68,13 @@ test('compactCents rounds up into the next unit instead of showing $1000', () =>
   assert.equal(compactCents(99_995_000), '$1M')
   assert.equal(compactCents(-99_995_000), '−$1M')
 })
+
+test('a figure that rounds to zero carries no sign', () => {
+  assert.equal(formatCents(-40, { cents: false }), '$0')
+  assert.equal(formatCents(40, { cents: false, sign: 'always' }), '$0')
+  assert.equal(formatCents(-60, { cents: false }), '−$1')
+  assert.equal(formatCentsW(-40, false), '$0')
+  assert.equal(formatCentsW(-40), '−$0.40')
+  assert.equal(compactCents(-40), '$0')
+  assert.equal(compactCents(-60), '−$1')
+})

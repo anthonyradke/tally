@@ -8,8 +8,17 @@ export function formatCents(c: number, { cents = true, sign = 'auto' }: { cents?
     minimumFractionDigits: cents ? 2 : 0,
     maximumFractionDigits: cents ? 2 : 0,
   })
-  const s = sign === 'never' ? '' : c < 0 ? '−' : sign === 'always' && c > 0 ? '+' : ''
-  return `${s}$${body}`
+  return `${signOf(c, body, sign)}$${body}`
+}
+
+/** The sign in front of a figure. One that reads as zero ("$0", "$0.00") has none: −40¢ in whole dollars read "−$0". */
+function signOf(c: number, shown: string, sign: Sign): string {
+  'worklet'
+  if (sign === 'never') return ''
+  let zero = true
+  for (let i = 0; i < shown.length; i++) if (shown[i] >= '1' && shown[i] <= '9') { zero = false; break }
+  if (zero) return ''
+  return c < 0 ? '−' : sign === 'always' && c > 0 ? '+' : ''
 }
 
 /** A change in whole dollars, or with cents when whole dollars would round it to $0: a 40¢ change read "$0" beside an
@@ -42,14 +51,13 @@ export function formatCentsW(c: number, cents = true, sign: Sign = 'auto'): stri
   while (int.length > 3) { out = ',' + int.slice(-3) + out; int = int.slice(0, -3) }
   out = int + out
   if (cents) out += '.' + String(abs % 100).padStart(2, '0')
-  const s = sign === 'never' ? '' : c < 0 ? '−' : sign === 'always' && c > 0 ? '+' : ''
-  return `${s}$${out}`
+  return `${signOf(c, out, sign)}$${out}`
 }
 
 /** Compact money for axes and chips: $1.4k, $12k, $1.2M. */
 export function compactCents(c: number): string {
   const d = Math.abs(c) / 100
-  const s = c < 0 ? '−' : ''
+  const s = c < 0 && Math.round(d) > 0 ? '−' : ''
   const short = (v: number) => v.toFixed(v >= 10 ? 0 : 1).replace(/\.0$/, '')
   // Pick the unit after rounding, so $999.60 reads $1k (not $1000) and $999,950 reads $1M (not $1000k).
   if (Math.round(d) < 1e3) return `${s}$${Math.round(d)}`
