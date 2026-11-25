@@ -3,7 +3,8 @@ import { beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
 import storage from '@react-native-async-storage/async-storage'
 import { api, ApiError, unreachable, type TxnInput } from '@/lib/api'
-import { discard, enqueue, flush, loadOutbox, newClientId, useOutbox } from '@/lib/outbox'
+import { blockedText, discard, enqueue, flush, loadOutbox, newClientId, outboxEntry, QUEUED, QUEUED_TOKEN, queuedText, sendNow, sendOrQueue, useOutbox } from '@/lib/outbox'
+import { useServer } from '@/lib/server'
 
 const line = (amount: number): TxnInput => ({ date: '2026-09-24', what: 'x', category_id: 2, from_id: 1, to_id: null, amount })
 const offline = () => new TypeError('Network request failed')
@@ -12,7 +13,7 @@ let answer: (cid: string) => unknown
 
 beforeEach(() => {
   ;(storage as unknown as { clear(): void }).clear()
-  useOutbox.setState({ items: [] })
+  useOutbox.setState({ items: [], blocked: null })
   sent = []
   answer = () => ({})
   api.createTxn = async (_t, cid) => { sent.push({ cid: cid!, lines: 1 }); const a = answer(cid!); if (a instanceof Error) throw a; return a as never }
@@ -126,4 +127,64 @@ test('a refused entry waits for Send now; a refused token keeps everything queue
   answer = () => new ApiError(401, ['Tally wants its token.'])
   assert.equal(await flush(), 0)
   assert.deepEqual(useOutbox.getState().items.map((q) => [q.cid, q.error]), [['b', undefined]])
+})
+
+test('why entries wait: a refused token is told apart from being offline', async () => {
+  enqueue({ cid: 'a', lines: [line(1)], label: 'A' })
+  answer = () => new ApiError(403, ['Not this login.'])
+  await flush()
+  assert.equal(useOutbox.getState().blocked, 'token')
+  assert.match(blockedText('token')!, /token/i)
+  answer = () => offline()
+  await flush()
+  assert.equal(useOutbox.getState().blocked, 'offline')
+  answer = () => ({})
+  await flush()
+  assert.equal(useOutbox.getState().blocked, null)
+  assert.equal(blockedText(null), null)
+})
+
+test('sendOrQueue keeps an entry on a refused token and says to check it', async () => {
+  answer = () => new ApiError(401, ['Tally wants its token.'])
+  assert.equal(await sendOrQueue([line(5)], 'Tea'), null)
+  assert.equal(queuedText(), QUEUED_TOKEN)
+  answer = () => offline()
+  assert.equal(await sendOrQueue([line(5)], 'Tea'), null)
+  assert.equal(queuedText(), QUEUED)
+  assert.equal(useOutbox.getState().items.length, 2)
+  answer = () => new ApiError(422, ['Pick a category.'])
+  await assert.rejects(sendOrQueue([line(5)], 'Tea'))
+})
+
+test('outbox entries for Settings: amounts, dates, reasons, and ones for another address', () => {
+  useServer.setState({ url: 'https://a.test' })
+  enqueue({ cid: 'a', lines: [{ ...line(1200), date: '2026-11-20', what: 'Lunch' }, line(300)], label: 'Lunch' })
+  const [q] = useOutbox.getState().items
+  assert.deepEqual(outboxEntry({ ...q, error: 'Pick a category.' }, 'https://a.test'),
+    { cid: 'a', what: 'Lunch', amount: 1500, date: '2026-11-20', saved: q.at, lines: 2, error: 'Pick a category.', elsewhere: false })
+  assert.equal(outboxEntry(q, 'https://b.test').elsewhere, true)
+  useServer.setState({ url: '' })
+})
+
+test('Send now retries refused entries and reports what happened', async () => {
+  enqueue({ cid: 'a', lines: [line(1)], label: 'A' })
+  enqueue({ cid: 'b', lines: [line(2)], label: 'B' })
+  answer = (cid) => (cid === 'a' ? new ApiError(422, ['Pick a category.']) : new ApiError(422, ['Too big.']))
+  await flush()
+  answer = (cid) => (cid === 'a' ? {} : new ApiError(422, ['Too big.']))
+  assert.deepEqual(await sendNow(), { sent: 1, failed: 1, blocked: null })
+  assert.deepEqual(useOutbox.getState().items.map((q) => [q.cid, q.error]), [['b', 'Too big.']])
+})
+
+test('Send now during a running flush still retries refused entries', async () => {
+  enqueue({ cid: 'a', lines: [line(1)], label: 'A' })
+  answer = () => new ApiError(422, ['Pick a category.'])
+  await flush()
+  answer = () => ({})
+  enqueue({ cid: 'b', lines: [line(2)], label: 'B' })
+  const auto = flush()
+  const now = sendNow()
+  assert.equal(await auto, 1)
+  assert.deepEqual(await now, { sent: 1, failed: 0, blocked: null })
+  assert.deepEqual(useOutbox.getState().items, [])
 })
