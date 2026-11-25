@@ -29,17 +29,29 @@ atm fee fees tax taxes tip tips gift gifts groceries grocery gas fuel charging d
 parking toll tolls utilities utility bill bills insurance mortgage loan loans savings saving checking credit debit
 card home phone internet water sewer trash electric power haircut doctor dentist vet pharmacy medicine misc other
 mom dad lex reimbursement repayment paid back owed lent borrowed allowance bonus contract freelance liquor store
+mobile dining out online to autopay pmt eleven
 """.split())
 # The name a ledger or a bank uses, where the brand's site isn't simply the name with ".com".
 DOMAINS = {
     "amex": "americanexpress.com", "american express": "americanexpress.com", "wells": "wellsfargo.com",
     "wells fargo": "wellsfargo.com", "schwab": "schwab.com", "charles schwab": "schwab.com", "x": "x.com",
     "x money": "x.com", "steam": "steampowered.com", "xcel": "xcelenergy.com", "vasa": "vasafitness.com",
-    "uber eats": "ubereats.com", "apple": "apple.com", "icloud": "apple.com", "app store": "apple.com",
+    "apple": "apple.com", "icloud": "apple.com", "app store": "apple.com", "walmart": "walmart.com",
+    "whole foods": "wholefoodsmarket.com", "whole foods market": "wholefoodsmarket.com", "home depot": "homedepot.com",
+    "apple cash": "apple.com", "cash app": "cash.app", "h&m": "hm.com",
     "betr": "betr.app", "empower": "empower.com", "alight": "alight.com", "mohela": "mohela.com",
     "bank of america": "bankofamerica.com", "capital one": "capitalone.com", "us bank": "usbank.com",
 }
 WALLETS = ("venmo", "zelle", "paypal", "cash app", "apple cash")
+# How banks shorten a brand, matched as the name or its start ("AMZN Mktp US*1A2B", "UBER *TRIP HELP.UBER.COM").
+PREFIXES = {
+    "amzn": "amazon.com", "amzn mktp": "amazon.com", "amazon mktp": "amazon.com", "wm supercenter": "walmart.com",
+    "walmart supercenter": "walmart.com", "wal-mart": "walmart.com", "wholefds": "wholefoodsmarket.com",
+    "costco whse": "costco.com", "uber trip": "uber.com", "uber eats": "uber.com", "apple com bill": "apple.com",
+    "spotify": "spotify.com", "shell oil": "shell.com", "tesla supercharger": "tesla.com", "7-eleven": "7-eleven.com",
+    "7 eleven": "7-eleven.com", "7eleven": "7-eleven.com",
+}
+TLDS = set("com net org co io app us me tv ai gov edu shop store ca uk de".split())
 # Words that only say what kind of thing it was at a place: "Tesla Insurance" is Tesla's, "Chase CC payment" Chase's.
 # The first word stands for the name only when everything after it is one of these ("First Platypus" is not first.com).
 DESCRIBES = set("""
@@ -69,17 +81,33 @@ def _slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s.replace("&", "and") if len(s) > 4 else s)
 
 
+def _site(word: str) -> Optional[str]:
+    """A word that is already a website ("amazon.com", "www.target.com"), as its domain."""
+    w = word.removeprefix("www.")
+    return w if re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", w) and w.rsplit(".", 1)[1] in TLDS else None
+
+
 def domains_for(name: str) -> list[str]:
     """Websites a name could be, best first; none for a word that only describes."""
     n = norm(name)
     if not n:
         return []
+    if site := _site(n.split()[0]):  # "Amazon.com" was amazoncom.com
+        return [site]
+    words = n.split()
+    if len(words) > 1 and words[0] == "the":  # "The Home Depot"
+        words = words[1:]
+    if len(words) > 1 and words[-1] in ("usa", "us"):  # "Spotify USA", "AMZN Mktp US"
+        words = words[:-1]
+    n = " ".join(words)
     for w in WALLETS:  # "Venmo to Lex", "Zelle from Jon": the logo is the wallet's
         if n == w or n.startswith(w + " "):
             return [DOMAINS.get(w, _slug(w) + ".com")]
     if n in DOMAINS:
         return [DOMAINS[n]]
-    words = n.split()
+    for k in sorted(PREFIXES, key=len, reverse=True):
+        if n == k or n.startswith(k + " "):
+            return [PREFIXES[k]]
     if all(w in GENERIC for w in words) or len(_slug(n)) < 3:
         return []
     out = [_slug(n) + ".com"]
