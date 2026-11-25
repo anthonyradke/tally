@@ -5,6 +5,7 @@ it, or this month), adds every row it's sure about, and holds each account at th
 The banks are connected first with the usual /api/bank/link-token and /api/bank/connect. Nothing here runs on a
 ledger that already has accounts."""
 from __future__ import annotations
+import asyncio
 import re
 import sqlite3
 from datetime import date
@@ -69,9 +70,18 @@ def status(b: Bank, con: Con):
 async def finish(request: Request, b: Bank, con: Con):
     """Body: {"accounts": [{"id": bank account id, "name": str, "include": bool}], "history": "all" | "month"}.
     Bank accounts left out are marked not tracked. Returns what it made."""
+    raw = await body(request)
+    return await asyncio.to_thread(_finish_locked, b, con, raw)
+
+
+def _finish_locked(b, con, raw: dict) -> dict:
+    with bank.settling:  # one setup at a time, and no settle in between its writes
+        return _finish(b, con, raw)
+
+
+def _finish(b, con, raw: dict) -> dict:
     if not _needed(con):
         raise HTTPException(409, {"errors": ["Tally is already set up."]})
-    raw = await body(request)
     history = raw.get("history", "all")
     if history not in ("all", "month"):
         bad("history is all or month.")

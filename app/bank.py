@@ -69,9 +69,14 @@ MIGRATIONS = (("accounts", "since", "TEXT"), ("accounts", "skip", "INTEGER NOT N
 
 
 _setup = threading.Lock()
+_wal: set[str] = set()
 # One sync at a time: a webhook, the timer and the app can all ask at once, and two runs of one connection would
-# race on its cursor.
+# race on its cursor. Held while Plaid is asked, which can take a while.
 syncing = threading.RLock()
+# One writer of bank decisions at a time: storing a sync's rows, pairing, adding entries (by itself or on a tap),
+# skipping and anchoring. Two settles at once both saw the same row waiting and both added it. Held only for the
+# database work, so a tap doesn't wait for the banks to answer.
+settling = threading.RLock()
 
 
 def connect(path: Optional[str] = None) -> sqlite3.Connection:
@@ -88,8 +93,12 @@ def connect(path: Optional[str] = None) -> sqlite3.Connection:
             if col not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
                 con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
         con.commit()
-    if fresh:
-        os.chmod(path, 0o600)  # it holds the access tokens
+        if fresh:
+            os.chmod(path, 0o600)  # it holds the access tokens; the WAL files SQLite makes next copy this mode
+        if path != ":memory:" and path not in _wal:
+            # Readers don't wait for a writer, and a writer doesn't hold the whole file while the app reads.
+            con.execute("PRAGMA journal_mode=WAL")
+            _wal.add(path)
     return con
 
 
@@ -237,28 +246,33 @@ def sync_item(bcon, iid: int) -> dict:
         except plaid.PlaidError as e:
             if e.code == "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION":
                 continue
-            bcon.execute("UPDATE items SET error=? WHERE id=?", (e.code, iid))
-            bcon.commit()
+            with settling:
+                bcon.execute("UPDATE items SET error=? WHERE id=?", (e.code, iid))
+                bcon.commit()
             raise
         break
     else:
         raise plaid.PlaidError("SYNC_RETRIES", "The bank kept changing during sync; try again shortly.")
     try:
-        _store_accounts(bcon, iid, plaid.accounts(it["access_token"]))
+        accounts = plaid.accounts(it["access_token"])
     except plaid.PlaidError:
-        pass  # balances are a bonus; the transactions are in
-    accts = {r["plaid_id"]: r["id"] for r in bcon.execute("SELECT id, plaid_id FROM accounts WHERE item_id=?", (iid,))}
-    for page in pages:
-        for kind in ("added", "modified"):
-            for t in page.get(kind, []):
-                _upsert(bcon, t, accts)
-                counts[kind] += 1
-        for t in page.get("removed", []):
-            # A removed row that was already paired keeps its entry; the entry is the user's.
-            counts["removed"] += bcon.execute("DELETE FROM txns WHERE plaid_id=? AND status='new'",
-                                              (t["transaction_id"],)).rowcount
-    bcon.execute("UPDATE items SET cursor=?, error=NULL, synced_at=? WHERE id=?", (cursor, _now(), iid))
-    bcon.commit()
+        accounts = None  # balances are a bonus; the transactions are in
+    with settling:
+        if accounts is not None:
+            _store_accounts(bcon, iid, accounts)
+        accts = {r["plaid_id"]: r["id"] for r in bcon.execute("SELECT id, plaid_id FROM accounts WHERE item_id=?",
+                                                              (iid,))}
+        for page in pages:
+            for kind in ("added", "modified"):
+                for t in page.get(kind, []):
+                    _upsert(bcon, t, accts)
+                    counts[kind] += 1
+            for t in page.get("removed", []):
+                # A removed row that was already paired keeps its entry; the entry is the user's.
+                counts["removed"] += bcon.execute("DELETE FROM txns WHERE plaid_id=? AND status='new'",
+                                                  (t["transaction_id"],)).rowcount
+        bcon.execute("UPDATE items SET cursor=?, error=NULL, synced_at=? WHERE id=?", (cursor, _now(), iid))
+        bcon.commit()
     return dict(counts)
 
 
@@ -393,15 +407,20 @@ def link(bcon, st) -> int:
         "SELECT account_id, txn_id FROM txns WHERE status='linked'")}
     fresh = [r for r in bcon.execute("SELECT * FROM txns WHERE status='new' AND pending=0 ORDER BY date, id")
              if r["account_id"] in mapped]
+    # Entries by (account, size), oldest first: each row looks only at the few entries of its own size.
+    index: dict[tuple[int, int], list[Txn]] = {}
+    if fresh:
+        for t in sorted(entries.values(), key=lambda t: (t.date, t.id)):
+            for a in {t.from_id, t.to_id} - {None}:
+                index.setdefault((a, abs(t.amount)), []).append(t)
     n, done = 0, set()
     for gap in range(WINDOW + 1):  # exact dates first, so a daily $4.50 coffee pairs with its own day
         for r in fresh:
             if r["id"] in done:
                 continue
             acct, day = mapped[r["account_id"]], _day(r)
-            hit = next((t for t in sorted(entries.values(), key=lambda t: (t.date, t.id))
-                        if acct in (t.from_id, t.to_id) and (r["account_id"], t.id) not in taken
-                        and abs(t.amount) == abs(r["amount"]) and _out(t, acct) == (r["amount"] > 0)
+            hit = next((t for t in index.get((acct, abs(r["amount"])), ())
+                        if (r["account_id"], t.id) not in taken and _out(t, acct) == (r["amount"] > 0)
                         and abs((t.date - day).days) == gap), None)
             if hit:
                 bcon.execute("UPDATE txns SET status='linked', txn_id=?, how='matched', decided_at=? WHERE id=?",

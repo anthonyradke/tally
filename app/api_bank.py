@@ -51,13 +51,17 @@ async def link_token(request: Request, b: Bank):
     """Body: {"item_id"?: id} to repair that connection in place instead of adding one. A new connection's token lets
     one session add several banks where Plaid allows it (`multi`); the phone then hands the token back to /connect."""
     raw = await body(request)
+    return await asyncio.to_thread(_link_token, b, opt_id(raw.get("item_id"), "Connection"))
+
+
+def _link_token(b, iid: Optional[int]) -> dict:
     token = None
-    if (iid := opt_id(raw.get("item_id"), "Connection")) is not None:
+    if iid is not None:
         row = b.execute("SELECT access_token FROM items WHERE id=?", (iid,)).fetchone()
         if not row:
             raise HTTPException(404)
         token = row[0]
-    user = None if token else await asyncio.to_thread(bank.plaid_user, b)
+    user = None if token else bank.plaid_user(b)
     try:
         lt = plaid.link_token(token, user)
     except plaid.PlaidError as e:
@@ -127,10 +131,19 @@ def _settle(b, con) -> int:
     bank's. Returns how many were added."""
     if not _auto(con):
         return 0
-    _reach_back(b, con)
-    n = auto_add(b, con)
-    bank.anchor(b, con, service.load(con))
+    with bank.settling:  # a sync, a tap and setup can all get here at once
+        _reach_back(b, con)
+        n = auto_add(b, con)
+        bank.anchor(b, con, service.load(con))
     return n
+
+
+def _link(b, con):
+    """Pair what can be paired, under the lock every writer of bank decisions takes. Returns the loaded state."""
+    with bank.settling:
+        st = service.load(con)
+        bank.link(b, st)
+    return st
 
 
 def _refresh(b, con, items: Optional[list[int]] = None) -> dict:
@@ -144,19 +157,20 @@ def _refresh(b, con, items: Optional[list[int]] = None) -> dict:
                     counts[iid] = bank.sync_item(b, iid)
                 except plaid.PlaidError as e:
                     counts[iid] = {"error": e.code, "message": e.message}
-        st = service.load(con)
-        paired = bank.link(b, st)
+    with bank.settling:
+        paired = bank.link(b, service.load(con))
         return {"synced": counts, "paired": paired, "added": _settle(b, con)}
 
 
 def _connected(b, con, access: str, item_id: str) -> dict:
     """A new connection: store it, match its accounts to the ledger's where that's clear, then pull its history."""
     iid = _plaid(bank.add_item, b, access, item_id)
-    matched = bank.automap(b, service.load(con), iid)
-    made: list[dict] = []
-    if _auto(con):  # a ledger built from the banks takes a new bank's accounts as setup would have
-        from .api_setup import adopt
-        made = adopt(b, con, iid)
+    with bank.settling:
+        matched = bank.automap(b, service.load(con), iid)
+        made: list[dict] = []
+        if _auto(con):  # a ledger built from the banks takes a new bank's accounts as setup would have
+            from .api_setup import adopt
+            made = adopt(b, con, iid)
     return {"item_id": iid, "matched": matched, "made": made, **_refresh(b, con, [iid])}
 
 
@@ -218,6 +232,10 @@ async def map_account(aid: int, request: Request, b: Bank, con: Con):
     """Body: {"tally_account_id": id or null}: which ledger account this bank account is."""
     raw = await body(request)
     target = opt_id(raw.get("tally_account_id"), "Account")
+    return await asyncio.to_thread(_map_account, b, con, aid, target)
+
+
+def _map_account(b, con, aid: int, target: Optional[int]) -> dict:
     st = service.load(con)
     if target is not None and target not in st.acct:
         bad("Unknown account.")
@@ -226,9 +244,10 @@ async def map_account(aid: int, request: Request, b: Bank, con: Con):
         bad(f"Another bank account is already {st.acct[target].name}.")
     if not b.execute("SELECT 1 FROM accounts WHERE id=?", (aid,)).fetchone():
         raise HTTPException(404)
-    bank.assign(b, st, aid, target)
-    b.commit()
-    return {"paired": bank.link(b, st)}
+    with bank.settling:
+        bank.assign(b, st, aid, target)
+        b.commit()
+        return {"paired": bank.link(b, st)}
 
 
 @router.post("/sync")
@@ -236,7 +255,8 @@ def sync(b: Bank, con: Con, max_age: Optional[int] = None):
     """`max_age` (seconds): skip asking the banks when every connection was checked more recently than that (the app
     asks on every open; the banks only change a few times a day)."""
     if max_age is not None and bank.fresh(b, max_age):
-        return {"synced": {}, "paired": bank.link(b, service.load(con))}
+        with bank.settling:
+            return {"synced": {}, "paired": bank.link(b, service.load(con))}
     return _refresh(b, con)
 
 
@@ -335,9 +355,8 @@ async def webhook(key: str, request: Request, tasks: BackgroundTasks):
 
 @router.get("/inbox")
 def inbox(b: Bank, con: Con):
-    st = service.load(con)
-    bank.link(b, st)
-    return bank.inbox(b, st)
+    with bank.settling:
+        return bank.inbox(b, _link(b, con))
 
 
 def _bank_row(b, bid: int):
@@ -376,14 +395,19 @@ def _accept(b, st, r, over: dict) -> int:
 async def accept(bid: int, request: Request, b: Bank, con: Con):
     """Body (all optional): what, category_id, from_id, to_id, amount (dollars), date, note."""
     over = await body(request)
-    r = _bank_row(b, bid)
-    st = service.load(con)
-    tid = _accept(b, st, r, over)
-    con.commit()
-    bank.decide(b, bid, tid, "added")
-    b.commit()
-    bank.link(b, service.load(con))  # the other side of a transfer pairs with the same entry
-    _settle(b, con)
+    return await asyncio.to_thread(_accept_one, b, con, bid, over)
+
+
+def _accept_one(b, con, bid: int, over: dict) -> dict:
+    with bank.settling:  # checked and written under the lock: a settle running now can't add it as well
+        r = _bank_row(b, bid)
+        st = service.load(con)
+        tid = _accept(b, st, r, over)
+        con.commit()
+        bank.decide(b, bid, tid, "added")
+        b.commit()
+        bank.link(b, service.load(con))  # the other side of a transfer pairs with the same entry
+        _settle(b, con)
     return _full(con, [tid])[0]
 
 
@@ -395,9 +419,18 @@ async def accept_many(request: Request, b: Bank, con: Con):
     ids = raw.get("ids")
     if not isinstance(ids, list) or not ids:
         bad("Pick some to add.")
+    return await asyncio.to_thread(_accept_many, b, con, [whole(i, "Bank row") for i in ids][:500])
+
+
+def _accept_many(b, con, ids: list[int]) -> list:
+    with bank.settling:
+        return _accept_rows(b, con, ids)
+
+
+def _accept_rows(b, con, ids: list[int]) -> list:
     st = service.load(con)
     done = []
-    for bid in [whole(i, "Bank row") for i in ids][:500]:
+    for bid in ids:
         r = b.execute("SELECT * FROM txns WHERE id=?", (bid,)).fetchone()
         if not r or r["status"] != "new" or r["pending"] or bank.guess(b, st, r).category_id is None:
             continue
@@ -418,6 +451,11 @@ async def accept_many(request: Request, b: Bank, con: Con):
 @router.post("/inbox/accept-sure")
 def accept_sure(b: Bank, con: Con):
     """Add every posted row whose guess is "sure", each as its own entry. Returns the new entries."""
+    with bank.settling:
+        return _accept_sure(b, con)
+
+
+def _accept_sure(b, con) -> list:
     st = service.load(con)
     done = []
     for item in bank.inbox(b, st):
@@ -440,22 +478,28 @@ async def pair(bid: int, request: Request, b: Bank, con: Con):
     """Body: {"txn_id": id}: this bank row is that entry, already in Tally."""
     raw = await body(request)
     tid = whole(raw.get("txn_id"), "Entry")
-    _bank_row(b, bid)
-    if not con.execute("SELECT 1 FROM transactions WHERE id=?", (tid,)).fetchone():
-        raise HTTPException(404)
-    bank.decide(b, bid, tid, "manual")
-    b.commit()
+    return await asyncio.to_thread(_pair, b, con, bid, tid)
+
+
+def _pair(b, con, bid: int, tid: int) -> dict:
+    with bank.settling:
+        _bank_row(b, bid)
+        if not con.execute("SELECT 1 FROM transactions WHERE id=?", (tid,)).fetchone():
+            raise HTTPException(404)
+        bank.decide(b, bid, tid, "manual")
+        b.commit()
     return {"ok": True}
 
 
 @router.post("/inbox/{bid}/ignore")
 def ignore(bid: int, b: Bank, con: Con):
-    r = b.execute("SELECT status FROM txns WHERE id=?", (bid,)).fetchone()
-    if not r:
-        raise HTTPException(404)
-    bank.decide(b, bid, None, "ignored")
-    b.commit()
-    _settle(b, con)
+    with bank.settling:
+        r = b.execute("SELECT status FROM txns WHERE id=?", (bid,)).fetchone()
+        if not r:
+            raise HTTPException(404)
+        bank.decide(b, bid, None, "ignored")
+        b.commit()
+        _settle(b, con)
     return {"ok": True}
 
 
@@ -480,18 +524,17 @@ def recent(b: Bank, con: Con, days: int = 7):
 @router.post("/txns/{bid}/reset")
 def reset(bid: int, b: Bank):
     """Undo a pairing or an ignore. The entry itself stays; delete it in Tally if it shouldn't be there."""
-    if not b.execute("UPDATE txns SET status='new', txn_id=NULL, how=NULL, decided_at=NULL WHERE id=?",
-                     (bid,)).rowcount:
-        raise HTTPException(404)
-    b.commit()
+    with bank.settling:
+        if not b.execute("UPDATE txns SET status='new', txn_id=NULL, how=NULL, decided_at=NULL WHERE id=?",
+                         (bid,)).rowcount:
+            raise HTTPException(404)
+        b.commit()
     return {"ok": True}
 
 
 @router.get("/audit/{aid}")
 def audit(aid: int, b: Bank, con: Con):
-    st = service.load(con)
-    bank.link(b, st)
-    r = bank.audit(b, st, aid)
+    r = bank.audit(b, _link(b, con), aid)
     if "error" in r:
         bad(r["error"])
     return r

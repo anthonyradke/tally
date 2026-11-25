@@ -9,6 +9,7 @@ import pytest
 from app import bank, plaid
 from tests.conftest import freeze
 from tests.test_bank import FakePlaid
+from tests.test_setup import prow
 
 
 @pytest.fixture
@@ -72,3 +73,42 @@ def test_sync_all_carries_on_past_a_failing_bank(client, fake, monkeypatch):
     out = bank.sync_all(b)
     assert out[1]["error"] == "SYNC_FAILED" and "error" not in out[2]
     assert b.execute("SELECT error FROM items WHERE id=1").fetchone()[0] == "SYNC_FAILED"
+
+
+# ---------- one writer at a time ----------
+
+def test_two_settles_at_once_add_a_row_once(client, fake, monkeypatch):
+    """A webhook's sync and a tap settling together: the second waits, then finds the row done."""
+    import threading
+    from app import api_bank, db
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[prow("x", "acc-chk", 5.0, "2026-09-01", "SQ *THING")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    fake.push(added=[prow("gas", "acc-card", 40.00, "2026-09-20", "SHELL OIL 5544", "Shell", "TRANSPORTATION_GAS",
+                          "VERY_HIGH")])
+    b = bank.connect()
+    bank.sync_all(b)
+    b.close()
+    gate = threading.Barrier(2)
+    real = bank.inbox
+
+    def slow_inbox(bcon, st):
+        out = real(bcon, st)
+        try:
+            gate.wait(timeout=1)  # without the lock both runs have read the inbox before either writes
+        except threading.BrokenBarrierError:
+            pass
+        return out
+    monkeypatch.setattr(bank, "inbox", slow_inbox)
+    runs = [threading.Thread(target=lambda: api_bank._settle(bank.connect(), db.connect())) for _ in range(2)]
+    for t in runs:
+        t.start()
+    for t in runs:
+        t.join()
+    assert len([t for t in entries(client) if t["what"] == "Shell"]) == 1
+
+
+def test_bank_db_uses_wal(client, fake):
+    client.post("/api/bank/sandbox/connect")
+    assert bank.connect().execute("PRAGMA journal_mode").fetchone()[0] == "wal"
