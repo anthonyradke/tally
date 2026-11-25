@@ -1,15 +1,16 @@
 // From Your Bank: what the banks brought that Tally wasn't sure of (pick a category, it's added), bank accounts it
-// doesn't know yet, and what it added by itself this week, to look over or take back.
-import { useState } from 'react'
+// doesn't know yet, and what it added by itself this week, to look over or take back. Like Mail, a row swipes right
+// to add it as shown and left to skip it.
+import { useRef, useState } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
 import Animated, { FadeOut } from 'react-native-reanimated'
-import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
+import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { useQuery } from '@tanstack/react-query'
 import { api, ApiError, type BankAsk, type BankRecent, type BankRow, type CatType } from '@/lib/api'
 import { refreshBank, useBank, useBankInbox } from '@/lib/bank'
 import { dayLabel } from '@/lib/dates'
 import { deleteEntry } from '@/design/actions'
-import { failure, success } from '@/design/haptics'
+import { failure, success, thump } from '@/design/haptics'
 import { useLedger } from '@/design/ledger'
 import { SETTLE } from '@/design/motion'
 import { amountLook, categoryLook, KIND_LOOK, wantsLogo } from '@/design/look'
@@ -21,6 +22,7 @@ import { Money } from '@/design/ui/Money'
 import { Choice } from '@/design/ui/native/Choice'
 import { notify } from '@/design/ui/Notice'
 import { Press } from '@/design/ui/Press'
+import { SF } from '@/design/ui/SF'
 import { SheetHeader } from '@/design/ui/SheetHeader'
 import { Txt } from '@/design/ui/Txt'
 
@@ -47,8 +49,20 @@ function Waiting({ r }: { r: BankRow }) {
   const accounts: [number, string][] = (L.b?.accounts ?? []).filter((x) => x.active && x.id !== r.account_id).map((x) => [x.id, x.name])
   const name = g?.what || r.merchant || r.raw
   const ready = cat !== null && (!needsOther || other !== null)
+  const sw = useRef<SwipeableMethods>(null)
+  const skip = async () => {
+    setBusy(true)
+    try {
+      await api.bank.ignore(r.id)
+      success()
+      await refreshBank()
+      notify({ text: `Skipped ${name}`, symbol: 'eye.slash.fill', hue: 'gray', action: { label: 'Undo', run: async () => { await api.bank.reset(r.id); await refreshBank() } } })
+    } catch {
+      failure(); setBusy(false); sw.current?.close()
+    }
+  }
   const add = async () => {
-    if (!ready) return
+    if (!ready) { failure(); sw.current?.close(); return }
     setBusy(true)
     const sides = moving ? (out ? { from_id: r.account_id, to_id: other } : { from_id: other, to_id: r.account_id }) : {}
     try {
@@ -58,13 +72,19 @@ function Waiting({ r }: { r: BankRow }) {
       await refreshBank()
       notify({ text: `Added ${e.what}`, symbol: 'checkmark.circle.fill', action: { label: 'Undo', run: async () => { await api.deleteTxn(e.id); await api.bank.reset(r.id); await refreshBank() } } })
     } catch (err) {
-      failure(); setBusy(false)
+      failure(); setBusy(false); sw.current?.close()
       notify({ text: err instanceof ApiError ? err.errors.join(' ') : "Couldn't add it", symbol: 'exclamationmark.triangle.fill', hue: 'orange' })
     }
   }
   const amt = amountLook(out ? 'Spending' : 'Money in', out ? r.amount : -r.amount)
   return (
-    <Animated.View exiting={FadeOut.duration(180)} layout={LEAVE} style={{ paddingHorizontal: space.l, paddingVertical: space.m, gap: space.m }}>
+    <Animated.View exiting={FadeOut.duration(180)} layout={LEAVE}>
+      <ReanimatedSwipeable ref={sw} friction={1.4} leftThreshold={90} rightThreshold={90} overshootLeft={false} overshootRight={false}
+        onSwipeableWillOpen={() => thump()}
+        onSwipeableOpen={(d) => { if (d === 'left') add(); else skip() }}
+        renderLeftActions={() => <SwipeAction label="Add" symbol="checkmark" color={ready ? p.green : p.gray} align="flex-start" />}
+        renderRightActions={() => <SwipeAction label="Skip" symbol="eye.slash.fill" color={p.gray} align="flex-end" />}>
+      <View style={{ paddingHorizontal: space.l, paddingVertical: space.m, gap: space.m, backgroundColor: p.card }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
         <Logo name={wantsLogo(c?.type ?? 'Spending') ? (r.merchant || name) : undefined} symbol={look.symbol} color={c ? p[look.hue] : p.gray} size={42} />
         <View style={{ flex: 1, gap: 2 }}>
@@ -83,7 +103,21 @@ function Waiting({ r }: { r: BankRow }) {
           <Txt v="subhead" weight="600" color={ready ? '#FFFFFF' : p.label3}>Add</Txt>
         </Press>
       </View>
+      </View>
+      </ReanimatedSwipeable>
     </Animated.View>
+  )
+}
+
+/** What shows under a row as it's swiped: the action's color with its symbol and name at the edge. */
+function SwipeAction({ label, symbol, color, align }: { label: string; symbol: 'checkmark' | 'eye.slash.fill'; color: string; align: 'flex-start' | 'flex-end' }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: color, justifyContent: 'center', alignItems: align, paddingHorizontal: 28 }}>
+      <View style={{ alignItems: 'center', gap: 2 }}>
+        <SF name={symbol} size={20} color="#FFFFFF" weight="semibold" />
+        <Txt v="footnote" weight="600" color="#FFFFFF">{label}</Txt>
+      </View>
+    </View>
   )
 }
 
@@ -168,7 +202,7 @@ export default function CheckIn() {
         <View style={{ paddingHorizontal: space.l, gap: space.xxl }}>
           {done && <Empty symbol="checkmark.circle" title="You're All Caught Up" body="Everything from your banks is in Tally." />}
           {posted.length > 0 && (
-            <Section title="To Review" compact inset={70} footer={pending ? `${pending} pending at the bank.` : undefined}>
+            <Section title="To Review" compact inset={70} footer={`Swipe right to add, left to skip.${pending ? ` ${pending} pending at the bank.` : ''}`}>
               {posted.map((r) => <Waiting key={r.id} r={r} />)}
             </Section>
           )}

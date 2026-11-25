@@ -483,7 +483,7 @@ DEFAULT_CATEGORIES = (
     ("Investing", "Saving"),
 )
 PFC_DEFAULT = {
-    "INCOME_WAGES": "Paycheck", "INCOME_INTEREST_EARNED": "Interest", "INCOME_DIVIDENDS": "Interest",
+    "INCOME_WAGES": "Paycheck", "INCOME_SALARY": "Paycheck", "INCOME_INTEREST_EARNED": "Interest", "INCOME_DIVIDENDS": "Interest",
     "INCOME": "Other Income", "FOOD_AND_DRINK_GROCERIES": "Groceries", "FOOD_AND_DRINK": "Dining",
     "TRANSPORTATION": "Transportation", "GENERAL_MERCHANDISE": "Shopping", "HOME_IMPROVEMENT": "Shopping",
     "RENT_AND_UTILITIES": "Bills & Utilities", "GENERAL_SERVICES_INSURANCE": "Bills & Utilities",
