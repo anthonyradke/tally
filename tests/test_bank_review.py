@@ -366,3 +366,42 @@ def test_a_loan_with_interest_lands_on_the_banks_balance_in_one_sync(client, fak
     start = _account(client, "loan")["start_balance"]
     client.post("/api/bank/sync")
     assert _account(client, "loan")["start_balance"] == start
+
+
+# ---------- the bank's changes reach entries Tally made ----------
+
+SHELL = ("acc-card", "2026-09-20", "SHELL OIL 5544", "Shell", "TRANSPORTATION_GAS", "VERY_HIGH")
+
+
+def _shell(amount, day="2026-09-20"):
+    a, _, raw, m, pfc, conf = SHELL
+    return prow("gas", a, amount, day, raw, m, pfc, conf)
+
+
+def test_a_tip_settling_changes_the_entry_tally_added(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[_shell(40.00)])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    start = _account(client, "card")["start_balance"]
+    fake.accounts[1]["balances"]["current"] = 55.0
+    fake.push(modified=[_shell(45.00, "2026-09-21")])
+    client.post("/api/bank/sync")
+    shell = [(t["amount"], t["date"]) for t in entries(client) if t["what"] == "Shell"]
+    assert shell == [(4500, "2026-09-21")]
+    assert _account(client, "card")["start_balance"] == start  # the entry explains it; the anchor didn't move
+
+
+def test_an_entry_you_edited_keeps_your_amount(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[_shell(40.00)])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    e = next(t for t in entries(client) if t["what"] == "Shell")
+    r = client.put(f"/api/transactions/{e['id']}", json={"date": e["date"], "what": "Gas", "category_id": e["category_id"],
+                                                         "from_id": e["from_id"], "amount": 38})
+    assert r.status_code == 200, r.text
+    fake.push(modified=[_shell(45.00)])
+    client.post("/api/bank/sync")
+    assert [t["amount"] for t in entries(client) if t["what"] == "Gas"] == [3800]
+    assert bank.connect().execute("SELECT COUNT(*) FROM txns WHERE was_amount IS NOT NULL").fetchone()[0] == 0

@@ -168,6 +168,7 @@ def _refresh(b, con, items: Optional[list[int]] = None) -> dict:
                 except plaid.PlaidError as e:
                     counts[iid] = {"error": e.code, "message": e.message}
     with bank.settling:
+        bank.follow(b, con, service.load(con))  # the bank changed a row Tally made an entry from
         paired = bank.link(b, service.load(con))
         return {"synced": counts, "paired": paired, "added": _settle(b, con)}
 

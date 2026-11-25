@@ -66,7 +66,9 @@ CREATE INDEX IF NOT EXISTS txns_txn ON txns(txn_id);
 MIGRATIONS = (("accounts", "since", "TEXT"), ("accounts", "skip", "INTEGER NOT NULL DEFAULT 0"),
               ("accounts", "anchor", "INTEGER NOT NULL DEFAULT 0"), ("items", "website", "TEXT"),
               ("items", "logo", "TEXT"), ("items", "color", "TEXT"), ("txns", "website", "TEXT"),
-              ("txns", "pfc_conf", "TEXT"), ("items", "webhook", "TEXT"))
+              ("txns", "pfc_conf", "TEXT"), ("items", "webhook", "TEXT"),
+              # 2026-11-25: a paired row the bank changed (amount or date), as it was, until `follow` has looked
+              ("txns", "was_amount", "INTEGER"), ("txns", "was_day", "TEXT"))
 
 
 _setup = threading.Lock()
@@ -213,6 +215,8 @@ def _upsert(bcon, t: dict, accounts: dict[str, int]) -> None:
     if aid is None:
         return
     r = _row(t)
+    old = bcon.execute("SELECT status, amount, date, authorized_date, was_amount FROM txns WHERE plaid_id=?",
+                       (t["transaction_id"],)).fetchone()
     bcon.execute(
         "INSERT INTO txns(plaid_id, date, authorized_date, raw, merchant, entity, counterparty, amount, pending,"
         " pending_id, pfc, pfc_detail, logo, website, pfc_conf, account_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
@@ -220,6 +224,11 @@ def _upsert(bcon, t: dict, accounts: dict[str, int]) -> None:
         " raw=excluded.raw, merchant=excluded.merchant, entity=excluded.entity, counterparty=excluded.counterparty,"
         " amount=excluded.amount, pending=excluded.pending, pfc=excluded.pfc, pfc_detail=excluded.pfc_detail,"
         " logo=excluded.logo, website=excluded.website, pfc_conf=excluded.pfc_conf", (*r, aid))
+    if old and old["status"] == "linked" and old["was_amount"] is None:
+        was_day = old["authorized_date"] or old["date"]
+        if old["amount"] != r[7] or was_day != (r[2] or r[1]):  # a tip added, a date corrected
+            bcon.execute("UPDATE txns SET was_amount=?, was_day=? WHERE plaid_id=?",
+                         (old["amount"], was_day, t["transaction_id"]))
     pend = t.get("pending_transaction_id")
     if pend and not t.get("pending"):
         # The posted copy of a charge seen while pending: keep what was decided about it.
@@ -741,6 +750,32 @@ def waiting(bcon, st) -> int:
     since = {r["id"]: r["since"] for r in bcon.execute("SELECT id, since FROM accounts")}
     return sum(1 for r in bcon.execute("SELECT account_id, date, authorized_date FROM txns WHERE status='new' AND "
                                        "pending=0") if r["account_id"] in mapped and not _before(r, since[r["account_id"]]))
+
+
+def follow(bcon, con, st) -> int:
+    """Carry the bank's changes to a posted row (a $40 charge that becomes $45 once the tip settles, a corrected
+    date) to the entry Tally made from it: one it added by itself or you added from the inbox, that stands for that
+    row alone and still has the amount and date the row had. Anything else (an entry you typed or edited, a transfer)
+    is left as it is and the anchor absorbs the difference. Returns how many entries changed."""
+    entries = {t.id: t for t in st.txns}
+    n = 0
+    for r in bcon.execute("SELECT * FROM txns WHERE was_amount IS NOT NULL").fetchall():
+        bcon.execute("UPDATE txns SET was_amount=NULL, was_day=NULL WHERE id=?", (r["id"],))
+        t = entries.get(r["txn_id"])
+        if r["status"] != "linked" or r["how"] not in ("auto", "added") or t is None or not r["amount"]:
+            continue
+        if bcon.execute("SELECT COUNT(*) FROM txns WHERE txn_id=? AND status='linked'", (t.id,)).fetchone()[0] > 1:
+            continue
+        sign = 1 if t.amount == r["was_amount"] else -1 if t.amount == -r["was_amount"] else 0
+        if not sign or t.date.isoformat() != r["was_day"]:
+            continue  # edited since: yours now
+        day = _day(r)
+        when = day if day >= st.start else t.date
+        con.execute("UPDATE transactions SET amount=?, date=? WHERE id=?", (sign * r["amount"], when.isoformat(), t.id))
+        n += 1
+    con.commit()
+    bcon.commit()
+    return n
 
 
 def anchor(bcon, con, st) -> int:
