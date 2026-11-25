@@ -1,67 +1,68 @@
 // Activity: every entry, newest first, a day to a card. The Mail-style switcher narrows it to spending, income or
-// moves between accounts; the search field in the title bar finds anything by name, note or amount.
-import { useEffect, useMemo, useState } from 'react'
+// moves between accounts (transfers, saving and loan payments); the search field in the title bar finds anything by
+// name, note or amount.
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, RefreshControl, SectionList, View } from 'react-native'
 import { router, Stack } from 'expo-router'
-import { keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
-import { api, type CatType, type Txn } from '@/lib/api'
-import { refreshBank } from '@/lib/bank'
+import { useQueryClient } from '@tanstack/react-query'
+import type { Txn, TxnQuery } from '@/lib/api'
 import { dayLabel } from '@/lib/dates'
 import { formatCents } from '@/lib/money'
-import { useLedger } from '@/design/ledger'
+import { pagedQuery, usePaged, useRefresh } from '@/design/feed'
+import { byDay, loadOf, searchLine, useLedger, type Filter } from '@/design/ledger'
 import { radius, space, usePalette } from '@/design/theme'
 import { Empty } from '@/design/ui/List'
+import { Blocked, loadGate } from '@/design/ui/LoadState'
 import { Switcher, type SwitchOption } from '@/design/ui/Switcher'
 import { Txt } from '@/design/ui/Txt'
 import { TxnRow } from '@/design/ui/TxnRow'
 
-type Filter = 'all' | 'Spending' | 'Money in' | 'Transfer'
 const FILTERS: SwitchOption<Filter>[] = [
   { key: 'all', label: 'All', symbol: 'tray.fill', hue: 'tint' },
   { key: 'Spending', label: 'Spending', symbol: 'bag.fill', hue: 'pink' },
   { key: 'Money in', label: 'Income', symbol: 'arrow.down.circle.fill', hue: 'green' },
   { key: 'Transfer', label: 'Transfers', symbol: 'arrow.left.arrow.right', hue: 'indigo' },
 ]
-const PAGE = 60
+const TYPES: Record<Filter, TxnQuery['type']> = { all: undefined, Spending: 'Spending', 'Money in': 'Money in', Transfer: 'Transfer,Loan,Saving' }
+// Newest first, and a search's exact-amount matches kept in date order, so a day never splits in two.
+const feedQuery = (q: string | undefined, filter: Filter): TxnQuery => ({ q, type: TYPES[filter], sort: 'date', dir: 'desc', exact_first: 0 })
 
-const feedQuery = (query: { q?: string; type?: CatType }) => ({
-  queryKey: ['transactions', 'feed', query],
-  queryFn: ({ pageParam }: { pageParam: number }) => api.transactions({ ...query, sort: 'date', dir: 'desc', limit: PAGE, offset: pageParam }),
-  initialPageParam: 0,
-  getNextPageParam: (last: { total: number }, pages: { items: Txn[] }[]) => { const n = pages.reduce((k, x) => k + x.items.length, 0); return n < last.total ? n : undefined },
-  staleTime: 30_000,
-})
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value)
+  useEffect(() => { const id = setTimeout(() => setV(value), ms); return () => clearTimeout(id) }, [value, ms])
+  return v
+}
 
 export default function Activity() {
   const p = usePalette()
   const L = useLedger()
+  const gate = loadGate(L.q)
   const [filter, setFilter] = useState<Filter>('all')
-  const [q, setQ] = useState('')
-  const [refreshing, setRefreshing] = useState(false)
-  const query = { q: q.trim() || undefined, type: filter === 'all' ? undefined : (filter as CatType) }
-  const feed = useInfiniteQuery({ ...feedQuery(query), placeholderData: keepPreviousData })
+  const [typed, setTyped] = useState('')
+  const q = useDebounced(typed.trim(), 250) || undefined
+  const { refreshing, refresh } = useRefresh()
+  const feed = usePaged(feedQuery(q, filter), { keep: true })
   // Every filter's first page is fetched up front, so switching is instant instead of waiting on the server.
   const client = useQueryClient()
   useEffect(() => {
-    for (const f of FILTERS) client.prefetchInfiniteQuery(feedQuery({ q: undefined, type: f.key === 'all' ? undefined : (f.key as CatType) })).catch(() => {})
+    for (const f of FILTERS) client.prefetchInfiniteQuery(pagedQuery(feedQuery(undefined, f.key))).catch(() => {})
   }, [client])
-  const first = feed.data?.pages[0]
   const { today, typeOf } = L
-  const sections = useMemo(() => {
-    const out: { title: string; spent: number; data: Txn[] }[] = []
-    let at = ''
-    for (const t of feed.data?.pages.flatMap((x) => x.items) ?? []) {
-      if (t.date !== at) { at = t.date; out.push({ title: dayLabel(t.date, today), spent: 0, data: [] }) }
-      const s = out[out.length - 1]
-      s.data.push(t)
-      if (typeOf(t) === 'Spending') s.spent += t.amount
-    }
-    return out
-  }, [feed.data, today, typeOf])
+  const sections = useMemo(() => byDay(feed.rows, (t) => typeOf(t) === 'Spending')
+    .map((d) => ({ title: dayLabel(d.date, today), spent: d.spent, data: d.data })), [feed.rows, today, typeOf])
+
+  // A new filter starts at the top of its list, as Mail does.
+  const list = useRef<SectionList<Txn, { title: string; spent: number }>>(null)
+  const top = useRef<number | null>(null)
+  const y = useRef(0)
+  const choose = (f: Filter) => {
+    setFilter(f)
+    if (top.current !== null && y.current > top.current + 4) list.current?.getScrollResponder()?.scrollTo({ y: top.current, animated: false })
+  }
 
   const header = useMemo(() => (
     <Stack.Screen options={{
-      headerSearchBarOptions: { placeholder: 'Search', autoCapitalize: 'none', onChangeText: (e) => setQ(e.nativeEvent.text), onCancelButtonPress: () => setQ('') },
+      headerSearchBarOptions: { placeholder: 'Search', autoCapitalize: 'none', onChangeText: (e) => setTyped(e.nativeEvent.text), onCancelButtonPress: () => setTyped('') },
     }} />
   ), [])
   const toolbar = useMemo(() => (
@@ -69,17 +70,15 @@ export default function Activity() {
       <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add a transaction" onPress={() => router.push('/add')} />
     </Stack.Toolbar>
   ), [])
-
-  const refresh = async () => {
-    setRefreshing(true)
-    try { await api.bank.sync(0).catch(() => {}); await refreshBank() } finally { setRefreshing(false) }
-  }
+  const line = q && feed.first ? searchLine(feed.first, filter) : null
+  const failed = loadOf(feed.q)
 
   return (
     <>
       {header}
       {toolbar}
       <SectionList
+        ref={list}
         sections={sections}
         keyExtractor={(t) => String(t.id)}
         contentInsetAdjustmentBehavior="automatic"
@@ -91,15 +90,17 @@ export default function Activity() {
         windowSize={9}
         removeClippedSubviews={process.env.EXPO_OS === 'ios'}
         keyboardDismissMode="on-drag"
+        scrollEventThrottle={64}
+        onScrollBeginDrag={(e) => { top.current ??= e.nativeEvent.contentOffset.y }}
+        onScroll={(e) => { y.current = e.nativeEvent.contentOffset.y }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
         onEndReachedThreshold={0.6}
-        onEndReached={() => { if (feed.hasNextPage && !feed.isFetchingNextPage) feed.fetchNextPage() }}
+        onEndReached={feed.more}
         ListHeaderComponent={
           <View style={{ paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: space.s, gap: space.m }}>
-            <Switcher options={FILTERS} value={filter} onChange={setFilter} />
-            {query.q && first ? (
-              <Txt v="subhead" tone="label2">{first.total === 1 ? '1 result' : `${first.total} results`}{first.total ? ` · ${formatCents(Math.abs(first.sum))}` : ''}</Txt>
-            ) : null}
+            {gate.note}
+            <Switcher options={FILTERS} value={filter} onChange={choose} />
+            {line ? <Txt v="subhead" tone="label2">{line}</Txt> : null}
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -109,20 +110,20 @@ export default function Activity() {
           </View>
         )}
         renderItem={({ item, index, section }) => {
-          const top = index === 0, bottom = index === section.data.length - 1
+          const first = index === 0, last = index === section.data.length - 1
           return (
             <View style={{ marginHorizontal: space.l, overflow: 'hidden', backgroundColor: p.card, borderCurve: 'continuous',
-              borderTopLeftRadius: top ? radius.card : 0, borderTopRightRadius: top ? radius.card : 0,
-              borderBottomLeftRadius: bottom ? radius.card : 0, borderBottomRightRadius: bottom ? radius.card : 0 }}>
-              {!top && <View style={{ height: 0.5, backgroundColor: p.separator, marginLeft: 70 }} />}
+              borderTopLeftRadius: first ? radius.card : 0, borderTopRightRadius: first ? radius.card : 0,
+              borderBottomLeftRadius: last ? radius.card : 0, borderBottomRightRadius: last ? radius.card : 0 }}>
+              {!first && <View style={{ height: 0.5, backgroundColor: p.separator, marginLeft: 70 }} />}
               <TxnRow t={item} />
             </View>
           )
         }}
-        ListEmptyComponent={feed.isPending ? <ActivityIndicator style={{ marginTop: 60 }} /> : query.q
-          ? <Empty symbol="magnifyingglass" title={`No Results for “${query.q}”`} body="Check the spelling or try a new search." />
+        ListEmptyComponent={failed.kind !== 'ready' ? <Blocked kind={failed.kind} onRetry={feed.q.refetch} /> : q
+          ? <Empty symbol="magnifyingglass" title={`No Results for “${q}”`} body="Check the spelling or try a new search." />
           : <Empty symbol="list.bullet.rectangle" title="No Transactions" />}
-        ListFooterComponent={feed.isFetchingNextPage ? <ActivityIndicator style={{ marginVertical: space.xl }} /> : null}
+        ListFooterComponent={feed.q.isFetchingNextPage ? <ActivityIndicator style={{ marginVertical: space.xl }} /> : null}
       />
     </>
   )

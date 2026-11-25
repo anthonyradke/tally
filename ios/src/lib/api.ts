@@ -26,7 +26,9 @@ export interface Bootstrap { today: string; start: string; accounts: Account[]; 
 export interface BulkBefore { id: number; category_id: number; tags: string[]; from_id?: number | null; to_id?: number | null }
 /** `exact`: how many of the first rows have the very amount a search typed (they come first). */
 export interface TxnPage { total: number; sum: number; by_type: Partial<Record<CatType, number>>; exact: number; items: Txn[] }
-export interface TxnQuery { q?: string; category?: number; account?: number; type?: CatType | ''; start?: string; end?: string; amount_min?: number; amount_max?: number; tag?: string; group?: string; sort?: 'date' | 'amount'; dir?: 'asc' | 'desc'; limit?: number; offset?: number }
+/** `type`: one type, or several joined by commas ("Transfer,Loan,Saving"); `what`: entries with exactly this name;
+ *  `exact_first: 0` keeps a search's exact-amount matches in date order. */
+export interface TxnQuery { q?: string; what?: string; exact_first?: 0 | 1; category?: number; account?: number; type?: CatType | `${CatType},${string}` | ''; start?: string; end?: string; amount_min?: number; amount_max?: number; tag?: string; group?: string; sort?: 'date' | 'amount'; dir?: 'asc' | 'desc'; limit?: number; offset?: number }
 /** `id`: the reconciliation saved (with `save`), for Undo. */
 export interface Diagnosis { expected: number; actual: number; gap: number; saved: boolean; id: number | null; doubled: Txn[]; single: Txn[]; future: Txn[] }
 /** `loans`: each loan's balance for the month as Tally works it out, and the statement balance typed over it, if any. */
