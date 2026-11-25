@@ -17,6 +17,7 @@ How a row becomes an entry, best first:
   4. Plaid's own category, mapped onto yours by what your history did with it, else by name.
 """
 from __future__ import annotations
+import logging
 import os
 import re
 import sqlite3
@@ -28,6 +29,8 @@ from typing import Optional
 
 from . import plaid
 from .engine import Txn
+
+log = logging.getLogger(__name__)
 
 WINDOW = 3  # days between the bank's date and the entry's
 PAIR_DAYS = 5  # days between the two sides of a transfer
@@ -267,12 +270,20 @@ def fresh(bcon, max_age: int) -> bool:
 
 
 def sync_all(bcon) -> dict:
+    """Sync every connection; one that fails (Plaid's refusal, the network, anything else) is marked and the rest
+    still run."""
     out = {}
     for it in bcon.execute("SELECT id, institution FROM items").fetchall():
         try:
             out[it["id"]] = sync_item(bcon, it["id"])
         except plaid.PlaidError as e:
             out[it["id"]] = {"error": e.code, "message": e.message}
+        except Exception:  # noqa: BLE001 - one bank's surprise mustn't stop the others
+            log.exception("bank sync of connection %s failed", it["id"])
+            bcon.rollback()
+            bcon.execute("UPDATE items SET error='SYNC_FAILED' WHERE id=?", (it["id"],))
+            bcon.commit()
+            out[it["id"]] = {"error": "SYNC_FAILED", "message": "Syncing this bank failed; it will be tried again."}
     return out
 
 

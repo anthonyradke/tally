@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import http.client
 import json
 import os
 import threading
@@ -53,6 +54,10 @@ def call(path: str, body: dict, timeout: float = 30) -> dict:
                          or "Plaid refused the request", e.code)
     except urllib.error.URLError as e:
         raise PlaidError("NETWORK", f"Couldn't reach Plaid ({e.reason})")
+    except (OSError, http.client.HTTPException, ValueError) as e:
+        # A timeout or reset while reading the answer, a broken response, or one that isn't JSON: the same to the
+        # caller as not reaching Plaid at all.
+        raise PlaidError("NETWORK", f"Couldn't reach Plaid ({e.__class__.__name__})")
 
 
 def webhook_url() -> str | None:
