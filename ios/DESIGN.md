@@ -20,8 +20,10 @@ anything below get written here first.
 - Brand colors where a brand is the subject: a wash at the top of an entry's page, and each account's card.
 
 ## Signatures
-- **Rings** on Summary: spending against the budget (or last month) outside, the share of the month gone inside.
-  Outer ahead of inner means spending faster than the plan; the outer ring turns orange, then red past a full lap.
+- **Rings** on Summary: this month's spending against a usual month outside, and inside where a usual month is by
+  today (what earlier months had spent by the same day, so rent on the 1st is in both). Outer ahead of inner means
+  spending faster than usual; the outer ring turns orange, then red past a full lap. With no earlier month, the
+  inner ring is the share of the month gone.
 - **Wallet** on Accounts: cards and bank accounts stacked as cards in their banks' colors, the account name and
   last four digits on the face, or a picture of the real card. A card zooms open into its page (iOS 18 zoom).
 - **Trends** on Insights, after Health: a grid with its scale on the right, a dashed average, bars that dim

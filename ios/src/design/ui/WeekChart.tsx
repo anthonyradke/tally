@@ -8,7 +8,8 @@ import { EASE } from '../motion'
 import { usePalette } from '../theme'
 import { Txt } from './Txt'
 
-export interface Day { date: string; letter: string; total: number; parts: { color: string; cents: number }[]; today?: boolean }
+/** `future`: a day still to come, which can't be picked; `a11y`: what VoiceOver reads for it ("Tuesday, $12.00"). */
+export interface Day { date: string; letter: string; total: number; parts: { color: string; cents: number }[]; today?: boolean; future?: boolean; a11y?: string }
 
 const H = 132
 
@@ -19,13 +20,13 @@ function Bar({ d, max, i, dim, onPress }: { d: Day; max: number; i: number; dim:
   useEffect(() => { h.set(withDelay(i * 30, withTiming(target, { duration: 650, easing: EASE }))) }, [target, i, h])
   const anim = useAnimatedStyle(() => ({ height: h.value }))
   return (
-    <Pressable onPress={onPress} style={{ flex: 1, alignItems: 'center', gap: 8 }} accessibilityLabel={`${d.letter}: ${(d.total / 100).toFixed(2)} dollars`}>
+    <Pressable onPress={onPress} disabled={d.future} style={{ flex: 1, alignItems: 'center', gap: 8 }} accessibilityLabel={d.a11y ?? `${d.letter}: ${(d.total / 100).toFixed(2)} dollars`}>
       <View style={{ height: H, justifyContent: 'flex-end' }}>
         <Animated.View style={[{ width: 22, borderRadius: 11, overflow: 'hidden', backgroundColor: p.fill3, opacity: dim ? 0.3 : 1, flexDirection: 'column-reverse' }, anim]}>
           {d.parts.map((x, k) => <View key={k} style={{ flex: x.cents, backgroundColor: x.color }} />)}
         </Animated.View>
       </View>
-      <Txt v="caption" weight={d.today ? '700' : '500'} tone={d.today ? 'label' : 'label2'}>{d.letter}</Txt>
+      <Txt v="caption" weight={d.today ? '700' : '500'} tone={d.today ? 'label' : d.future ? 'label3' : 'label2'}>{d.letter}</Txt>
     </Pressable>
   )
 }

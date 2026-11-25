@@ -10,7 +10,7 @@ export type Metric = 'spent' | 'money_in'
 const SHORT = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
 const mon = (iso: string, style: 'short' | 'long' = 'short') => fromISO(iso).toLocaleDateString('en-US', { month: style })
 const year = (iso: string) => iso.slice(0, 4)
-const addMonths = (iso: string, n: number) => {
+export const addMonths = (iso: string, n: number) => {
   const d = fromISO(iso)
   return toISO(new Date(d.getFullYear(), d.getMonth() + n, 1))
 }
