@@ -1,5 +1,7 @@
 // The number pad for amounts, like Apple Cash's: big numerals with no keys drawn, a soft circle that blooms under
-// the finger, and a tick for every press.
+// the finger, and a tick for every press. Holding delete keeps deleting, faster the longer it's held, like the
+// keyboard's.
+import { useEffect, useRef } from 'react'
 import { Pressable, View } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { tick } from '../haptics'
@@ -13,14 +15,27 @@ function Key({ k, onKey }: { k: string; onKey: (k: string) => void }) {
   const p = usePalette()
   const down = useSharedValue(0)
   const bloom = useAnimatedStyle(() => ({ opacity: down.value, transform: [{ scale: 0.85 + down.value * 0.15 }] }))
+  const del = k === '⌫'
+  // The latest handler, for the repeat: each delete re-renders the screen with a new one.
+  const latest = useRef(onKey)
+  useEffect(() => { latest.current = onKey }, [onKey])
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const stop = () => { if (timer.current) clearTimeout(timer.current); timer.current = null }
+  useEffect(() => stop, [])
+  const repeat = (n: number) => {
+    timer.current = setTimeout(() => { tick(); latest.current('⌫'); repeat(n + 1) }, n < 8 ? 95 : 45)
+  }
   return (
     <Pressable style={{ flex: 1, height: 58, alignItems: 'center', justifyContent: 'center' }}
-      accessibilityLabel={k === '⌫' ? 'Delete' : k === '.' ? 'Decimal point' : k}
-      onPressIn={() => { down.set(withTiming(1, { duration: 60 })); tick() }}
-      onPressOut={() => { down.set(withTiming(0, { duration: 320 })) }}
-      onPress={() => onKey(k)}>
+      accessibilityLabel={del ? 'Delete' : k === '.' ? 'Decimal point' : k}
+      onPressIn={() => {
+        down.set(withTiming(1, { duration: 60 })); tick()
+        if (del) { onKey(k); stop(); timer.current = setTimeout(() => repeat(0), 420) }
+      }}
+      onPressOut={() => { down.set(withTiming(0, { duration: 320 })); stop() }}
+      onPress={del ? undefined : () => onKey(k)}>
       <Animated.View style={[{ position: 'absolute', width: 64, height: 54, borderRadius: 27, backgroundColor: p.fill3 }, bloom]} />
-      {k === '⌫' ? <SF name="delete.left" size={24} color={p.label} /> : <Txt v="title1" weight="500" style={{ fontFamily: 'ui-rounded' }}>{k}</Txt>}
+      {del ? <SF name="delete.left" size={24} color={p.label} /> : <Txt v="title1" weight="500" style={{ fontFamily: 'ui-rounded' }}>{k}</Txt>}
     </Pressable>
   )
 }

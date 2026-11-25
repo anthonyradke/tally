@@ -1,9 +1,9 @@
 // Activity: every entry, newest first, a day to a card. The Mail-style switcher narrows it to spending, income or
 // moves between accounts; the search field in the title bar finds anything by name, note or amount.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, RefreshControl, SectionList, View } from 'react-native'
 import { router, Stack } from 'expo-router'
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type CatType, type Txn } from '@/lib/api'
 import { refreshBank } from '@/lib/bank'
 import { dayLabel } from '@/lib/dates'
@@ -24,6 +24,14 @@ const FILTERS: SwitchOption<Filter>[] = [
 ]
 const PAGE = 60
 
+const feedQuery = (query: { q?: string; type?: CatType }) => ({
+  queryKey: ['transactions', 'feed', query],
+  queryFn: ({ pageParam }: { pageParam: number }) => api.transactions({ ...query, sort: 'date', dir: 'desc', limit: PAGE, offset: pageParam }),
+  initialPageParam: 0,
+  getNextPageParam: (last: { total: number }, pages: { items: Txn[] }[]) => { const n = pages.reduce((k, x) => k + x.items.length, 0); return n < last.total ? n : undefined },
+  staleTime: 30_000,
+})
+
 export default function Activity() {
   const p = usePalette()
   const L = useLedger()
@@ -31,12 +39,12 @@ export default function Activity() {
   const [q, setQ] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const query = { q: q.trim() || undefined, type: filter === 'all' ? undefined : (filter as CatType) }
-  const feed = useInfiniteQuery({
-    queryKey: ['transactions', 'feed', query],
-    queryFn: ({ pageParam }) => api.transactions({ ...query, sort: 'date', dir: 'desc', limit: PAGE, offset: pageParam }),
-    initialPageParam: 0,
-    getNextPageParam: (last, pages) => { const n = pages.reduce((k, x) => k + x.items.length, 0); return n < last.total ? n : undefined },
-  })
+  const feed = useInfiniteQuery({ ...feedQuery(query), placeholderData: keepPreviousData })
+  // Every filter's first page is fetched up front, so switching is instant instead of waiting on the server.
+  const client = useQueryClient()
+  useEffect(() => {
+    for (const f of FILTERS) client.prefetchInfiniteQuery(feedQuery({ q: undefined, type: f.key === 'all' ? undefined : (f.key as CatType) })).catch(() => {})
+  }, [client])
   const first = feed.data?.pages[0]
   const { today, typeOf } = L
   const sections = useMemo(() => {

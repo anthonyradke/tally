@@ -2,7 +2,7 @@
 // yet, and connecting a bank through Plaid Link. The server does the work (app/bank.py); this asks and shows.
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useQuery } from '@tanstack/react-query'
-import { api, ApiError, type Account, type BankRow, type BankStatus } from './api'
+import { api, ApiError, type Account, type BankConnected, type BankRow, type BankStatus } from './api'
 import { invalidateAll, queryClient } from './data'
 
 /** The server's bank sync, or null when it has none (404: no Plaid keys, as on the real Tally). */
@@ -41,8 +41,9 @@ export const CONFIDENCE: Record<string, string> = { sure: 'Sure', likely: 'Likel
 
 type PlaidModule = typeof import('react-native-plaid-link-sdk')
 
-/** Opens Plaid Link with a token from the server and resolves with the public token, or null if it was closed.
- *  The native module is loaded only here, so the web preview (which has no Plaid Link) still runs. */
+/** Opens Plaid Link with a token from the server and resolves with the public token ('' when a session that can
+ *  add several banks ends: they're collected by link token instead), or null if it was closed. The native module is
+ *  loaded only here, so the web preview (which has no Plaid Link) still runs. */
 export async function openPlaidLink(linkToken: string): Promise<string | null> {
   if (process.env.EXPO_OS !== 'ios' && process.env.EXPO_OS !== 'android') throw new Error('Connect a bank from the phone.')
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -50,11 +51,32 @@ export async function openPlaidLink(linkToken: string): Promise<string | null> {
   return new Promise((resolve, reject) => {
     plaid.createPlaidLinkSession({
       token: linkToken,
-      onSuccess: (s) => resolve(s.publicToken),
+      onSuccess: (s) => resolve(s.publicToken ?? ''),
       onExit: (x) => (x.error ? reject(new Error(x.error.displayMessage || x.error.errorMessage || 'Plaid closed with an error.')) : resolve(null)),
       onEvent: () => {},
     }).then((session) => session.open(true)).catch(reject)
   })
+}
+
+/** Adds banks through Plaid Link: as many as you sign in to in one go where Plaid allows it, else one. Resolves
+ *  with what was connected, or null when nothing was. */
+export async function linkBanks(): Promise<BankConnected | null> {
+  const { link_token, multi } = await api.bank.linkToken()
+  let pt: string | null = null
+  let failed: unknown = null
+  try {
+    pt = await openPlaidLink(link_token)
+  } catch (e) {
+    if (!multi) throw e
+    failed = e // a multi-bank session that errors late may still have added some
+  }
+  if (multi) {
+    const r = await api.bank.connect({ link_token })
+    if (r.items.length) return r
+    if (failed) throw failed
+    return null
+  }
+  return pt ? api.bank.connect({ public_token: pt }) : null
 }
 
 /** What the check-in last showed: the day, and the newest bank row in it. */

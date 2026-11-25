@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Alert, ScrollView, View } from 'react-native'
 import { api, ApiError, type BankItem } from '@/lib/api'
-import { openPlaidLink, refreshBank, useBank } from '@/lib/bank'
+import { linkBanks, openPlaidLink, refreshBank, useBank } from '@/lib/bank'
 import { formatCents } from '@/lib/money'
 import { failure, success, warning } from '@/design/haptics'
 import { useLedger } from '@/design/ledger'
@@ -68,12 +68,11 @@ export default function Banks() {
     try { await fn() } catch (e) { failure(); notify({ text: why(e, `${label} failed`), symbol: 'exclamationmark.triangle.fill', hue: 'orange' }) } finally { setBusy(null) }
   }
   const connect = () => run('Connect', async () => {
-    const { link_token } = await api.bank.linkToken()
-    const pt = await openPlaidLink(link_token)
-    if (!pt) return
-    const r = await api.bank.connect(pt)
+    const r = await linkBanks()
+    if (!r) return
     success(); await refreshBank()
-    notify({ text: `Connected · ${Object.values(r.synced)[0]?.added ?? 0} transactions`, symbol: 'checkmark.circle.fill' })
+    const rows = Object.values(r.synced).reduce<number>((n, x) => n + (x.added ?? 0), 0)
+    notify({ text: `${r.items.length === 1 ? 'Bank' : `${r.items.length} banks`} connected · ${rows} transactions`, symbol: 'checkmark.circle.fill' })
   })
   const sync = () => run('Check', async () => {
     const r = await api.bank.sync()

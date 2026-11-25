@@ -191,7 +191,7 @@ async def connect(request: Request, b: Bank, con: Con):
     made = await asyncio.to_thread(connect_tokens, b, con, tokens)
     if pt and not made:
         bad("That bank is already connected.")
-    first = made[0] if made else {"item_id": None, "matched": 0, "synced": {}, "paired": 0, "added": 0}
+    first = made[0] if made else {"item_id": None, "matched": [], "synced": {}, "paired": 0, "added": 0}
     return {**first, "items": [m["item_id"] for m in made]}
 
 

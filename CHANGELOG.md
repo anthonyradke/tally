@@ -14,6 +14,10 @@ Changed
   Lab server choice are removed, and a phone left on Lab moves back to Tally's own address and token. The app
   switcher and Face ID cover is the system material blur with the current app icon; the glowing t is the default
   icon, and Settings has an App Icon picker.
+- Activity's switcher is larger, answers before the list redraws, keeps showing the last list while a filter loads
+  (each filter's first page is fetched up front), and a swipe across it jumps to the first or last filter as in
+  Mail. Holding delete on the keypad keeps deleting, faster the longer it's held. Setup lists Add Another Bank as
+  the last row of the banks instead of a button under them, and Plaid Link adds several banks in one session.
 
 Fixed
 - Logos are saved under Plaid's id for a bank and under the account's name and bank, never a bare row number, so a

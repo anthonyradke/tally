@@ -1,11 +1,11 @@
 // Setup, step one: sign in to each bank through Plaid. Each one drops into the list with its logo as it links.
 import { useState } from 'react'
-import { ScrollView, View } from 'react-native'
+import { ActivityIndicator, ScrollView, View } from 'react-native'
 import { router } from 'expo-router'
 import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { api, ApiError } from '@/lib/api'
-import { openPlaidLink } from '@/lib/bank'
+import { linkBanks } from '@/lib/bank'
 import { failure, success } from '@/design/haptics'
 import { rise } from '@/design/motion'
 import { useLeaveIfSetUp, useSetupStatus } from '@/design/setup'
@@ -13,6 +13,7 @@ import { space, usePalette } from '@/design/theme'
 import { Button } from '@/design/ui/Button'
 import { Card } from '@/design/ui/List'
 import { Logo } from '@/design/ui/Logo'
+import { Press } from '@/design/ui/Press'
 import { notify } from '@/design/ui/Notice'
 import { SF } from '@/design/ui/SF'
 import { Txt } from '@/design/ui/Txt'
@@ -28,12 +29,7 @@ export default function Connect() {
     setBusy(kind)
     try {
       if (kind === 'test') await api.bank.sandbox()
-      else {
-        const { link_token } = await api.bank.linkToken()
-        const pt = await openPlaidLink(link_token)
-        if (!pt) return
-        await api.bank.connect(pt)
-      }
+      else if (!(await linkBanks())) return
       success()
       await s.refetch()
     } catch (e) {
@@ -43,11 +39,11 @@ export default function Connect() {
   }
   return (
     <View style={{ flex: 1, backgroundColor: p.bg, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, space.l) }}>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: space.xl, paddingTop: 56, gap: space.xxl }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: space.xl, paddingTop: 56, paddingBottom: space.xl, gap: space.xxl }}>
         <View style={{ alignItems: 'center', gap: space.m }}>
           <SF name="building.columns.fill" size={52} color={p.blue} />
           <Txt v="largeTitle" center>Add Your Banks</Txt>
-          <Txt v="body" tone="label2" center>Sign in to each bank you use. You can add more later in Settings.</Txt>
+          <Txt v="body" tone="label2" center>Sign in to the banks you use. You can add more later in Settings.</Txt>
         </View>
         {items.length > 0 && (
           <Card>
@@ -64,11 +60,20 @@ export default function Connect() {
                 </View>
               </Animated.View>
             ))}
+            <View style={{ height: 0.5, backgroundColor: p.separator, marginLeft: 68 }} />
+            <Press feel="highlight" haptic={false} onPress={() => run('link')} disabled={!!busy}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.l }}>
+                <View style={{ width: 40, alignItems: 'center' }}>
+                  {busy === 'link' ? <ActivityIndicator color={p.blue} /> : <SF name="plus.circle.fill" size={28} color={p.blue} />}
+                </View>
+                <Txt v="body" tone="blue">Add Another Bank</Txt>
+              </View>
+            </Press>
           </Card>
         )}
       </ScrollView>
-      <View style={{ paddingHorizontal: space.xl, gap: space.m }}>
-        <Button label={items.length ? 'Add Another Bank' : 'Add a Bank'} symbol="plus" kind={items.length ? 'tinted' : 'filled'} onPress={() => run('link')} busy={busy === 'link'} />
+      <View style={{ paddingHorizontal: space.xl, paddingTop: space.m, gap: space.m }}>
+        {!items.length && <Button label="Add a Bank" symbol="plus" onPress={() => run('link')} busy={busy === 'link'} />}
         {s.data?.env === 'sandbox' && <Button label="Add a Test Bank" kind="plain" onPress={() => run('test')} busy={busy === 'test'} />}
         {items.length > 0 && <Button label="Continue" onPress={() => router.push('/welcome/accounts')} />}
       </View>

@@ -78,7 +78,8 @@ export interface SetupItem { id: number; institution: string | null; brand: stri
 export interface SetupStatus { needed: boolean; env: 'sandbox' | 'production'; items: SetupItem[] }
 export interface SetupDone { accounts: { id: number; name: string; kind: Kind }[]; start: string; added: number; waiting: number }
 /** A new connection: the accounts Tally matched to its own by name. */
-export type BankConnected = BankSynced & { item_id: number; matched: { bank_account: string; account_id: number }[] }
+/** `items`: every bank the session added (one Plaid Link session can add several); `item_id` is the first. */
+export type BankConnected = BankSynced & { item_id: number | null; items: number[]; matched: { bank_account: string; account_id: number }[] }
 
 export class ApiError extends Error {
   constructor(public status: number, public errors: string[]) { super(errors.join(' ')) }
@@ -213,8 +214,9 @@ export const api = {
     inbox: () => call<BankRow[]>('GET', '/bank/inbox', undefined, 30_000),
     /** `maxAge` (seconds): the server skips the banks when it checked them all more recently than that. */
     sync: (maxAge?: number) => call<BankSynced>('POST', maxAge === undefined ? '/bank/sync' : `/bank/sync?max_age=${maxAge}`, undefined, 90_000),
-    linkToken: (itemId?: number) => call<{ link_token: string }>('POST', '/bank/link-token', itemId ? { item_id: itemId } : {}),
-    connect: (publicToken: string) => call<BankConnected>('POST', '/bank/connect', { public_token: publicToken }, 120_000),
+    linkToken: (itemId?: number) => call<{ link_token: string; multi?: boolean }>('POST', '/bank/link-token', itemId ? { item_id: itemId } : {}),
+    /** One bank by its public token, or every bank a multi-bank session added, by the session's link token. */
+    connect: (by: { public_token: string } | { link_token: string }) => call<BankConnected>('POST', '/bank/connect', by, 180_000),
     sandbox: () => call<BankConnected>('POST', '/bank/sandbox/connect', undefined, 120_000),
     disconnect: (itemId: number) => call<void>('DELETE', `/bank/items/${itemId}`),
     mapAccount: (bankAccountId: number, tallyAccountId: number | null) => call<{ paired: number }>('PUT', `/bank/accounts/${bankAccountId}`, { tally_account_id: tallyAccountId }),
