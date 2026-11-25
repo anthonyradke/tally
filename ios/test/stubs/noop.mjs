@@ -5,5 +5,5 @@ export const NotificationFeedbackType = {}, ImpactFeedbackStyle = {}
 export const router = { push: noop, back: noop, replace: noop, canGoBack: () => false }
 export const Platform = { OS: 'ios' }
 export const AppState = { addEventListener: () => ({ remove() {} }) }
-export const useFocusEffect = () => {}, useRoute = () => ({ key: 'screen' })
+export const useFocusEffect = () => {}, useRoute = () => ({ key: 'screen' }), useColorScheme = () => 'light'
 export default {}
