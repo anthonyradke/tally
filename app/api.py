@@ -202,8 +202,14 @@ def create_split(b: Body, con: Con):
         raise HTTPException(422, {"errors": sorted(set(errs))})
     for t, _ in lines:
         _in_range(st, t.date)
-    ids = [_write(st, t, {**m, "split_group": group, "client_id": f"{cid}:{i}" if cid else None})
-           for i, (t, m) in enumerate(lines)]
+    try:
+        ids = [_write(st, t, {**m, "split_group": group, "client_id": f"{cid}:{i}" if cid else None})
+               for i, (t, m) in enumerate(lines)]
+    except sqlite3.IntegrityError:  # the same split arrived twice at once and the other one won
+        con.rollback()
+        if cid and (done := _landed(con, f"{cid}:%")):
+            return done
+        raise
     con.commit()
     rows = {r["id"]: r for r in _full(con, ids)}
     return [rows[i] for i in ids]
