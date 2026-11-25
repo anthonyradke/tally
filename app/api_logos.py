@@ -135,7 +135,9 @@ def get_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None
 
 @router.get("/color")
 def get_color(con: Con, name: Optional[str] = None, account: Optional[int] = None, item: Optional[int] = None):
-    """The brand's color as #RRGGBB, or null: Plaid's color for a bank where it has one, else the logo's own."""
+    """The brand's color as #RRGGBB, or null: Plaid's color for a bank where it has one, else the logo's own.
+    For a `name` (only the wash behind an entry's page asks by name) a black, white or gray color is null: a logo
+    drawn in black washed the page in a gray smudge. A bank or account keeps it (a black card is a real card)."""
     kind, ident = _ident(con, name, account, item)
     plaid_color = None
     if item is not None:
@@ -146,7 +148,10 @@ def get_color(con: Con, name: Optional[str] = None, account: Optional[int] = Non
     if plaid_color and re.fullmatch(r"#?[0-9a-fA-F]{6}", plaid_color):
         return {"color": "#" + plaid_color.lstrip("#").upper()}
     path = logos.resolve(kind, ident, _sources(con, name, account, item))
-    return {"color": logos.color_of(kind, ident, path) if path else None}
+    color = logos.color_of(kind, ident, path) if path else None
+    if kind == "name" and not logos.washes(color):
+        color = None
+    return {"color": color}
 
 
 @router.delete("", status_code=204)
