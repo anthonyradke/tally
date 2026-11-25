@@ -22,11 +22,9 @@ copy of the database.
 These run on every push to `main` (`.github/workflows/check.yml`) and should pass before a commit:
 
 ```sh
-uv run ruff check . && uv run pytest -q      # backend, including tests/test_contract.py (needs ios/node_modules)
+uv run ruff check . && uv run pytest -q      # backend
 cd ios && npm test && npm run typecheck && npx expo lint
 ```
-
-`tests/test_contract.py` seeds a demo database and checks every API answer against the types in `ios/src/lib/api.ts`.
 
 ## Releases
 

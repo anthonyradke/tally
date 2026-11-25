@@ -23,43 +23,38 @@ The repo has two halves:
 - `ios/`, the iPhone app: Expo (React Native), SDK 57. It stores nothing of its own and talks to the backend over a
   private network (Tailscale).
 
-<p align="center">
-  <img src="docs/screens.png" width="860" alt="Home, Activity and Accounts screens">
-</p>
-
 ## Features
 
-- Home shows the month's net change, spending drawn against last month's pace (drag across the chart to read any
-  day), quick actions, budgets, goals, upcoming entries and recent activity.
-- Activity lists every entry by day, with search shortcuts (`>50`, `aug`, `#trip`), filters, saved views, a
-  long-press menu (edit, duplicate, delete with undo) and multi-select for recategorizing, tagging or deleting.
-- Adding an entry uses a large keypad, merchant memory (a known name fills in its category and account), date
-  shortcuts, refunds, splits, notes, tags and receipt photos.
-- Catch up adds a backlog for one account at a time: it shows the account's newest entries as the place to resume,
-  keeps the account and day from one entry to the next, flags a same-amount entry already in Tally, and shows the
-  balance after each line to compare with the bank's running balance. Home points out an account not caught up for
-  nine days.
-- Entries made without a connection wait on the phone and send themselves later, exactly once.
-- Entries can start from a link, `tally://new?amount=6.50&what=Starbucks&card=Amex`, so an iOS Shortcuts automation
-  can open a prefilled entry after every tap to pay.
-- Accounts shows assets against debts, a balance chart per account, and reconciliation against the bank with a
-  diagnosis when the numbers don't match, or line by line against a statement CSV exported from the bank. Loans show
-  a payoff date and what extra monthly payments would save.
-- Deleted entries stay in Recently deleted for 30 days, after their Undo toast has gone.
-- Insights has a month-by-month spending donut, budgets, cash flow, net worth, a month-end checklist and CSV export.
-- Recurring entries (with suggestions from repeating ones, and skipping a single date), budgets suggested from past
-  spending, goals, a configurable Home layout, eight color themes in light and dark, and the server's backup status
-  in Settings.
-
-<p align="center">
-  <img src="docs/themes.png" width="860" alt="Insights, New entry and Home in three other themes">
-</p>
+- Bank sync through Plaid: connected accounts' transactions arrive minutes after Plaid has them (a signed webhook,
+  with a check every four hours as a fallback). Rows Tally is sure of are added on their own, and each account is
+  held at the bank's balance.
+- First-time setup connects banks in one Plaid Link session, proposes an account for each bank account, and builds
+  the ledger from up to two years of history with a starter set of categories.
+- The check-in opens on its own the first time each day, or when new rows arrive. It lists what Tally wasn't sure
+  of; a swipe right adds a row as guessed, a swipe left skips it, and a category menu changes it. New bank accounts
+  are placed in one tap, and the week's automatic additions can be swiped away.
+- Guesses come from history: the name and category of the same merchant's earlier entries, card payments paired
+  across both accounts, then Plaid's own category mapped onto the ledger's.
+- Summary shows the month's spending with two rings, spending against the budget (or last month) and how much of
+  the month has gone, plus the week day by day and the latest entries.
+- Activity groups entries by day, with search and a switcher for spending, income and transfers that swipes to
+  either end.
+- Accounts shows net worth over time (drag across the line to read a month) and cards and bank accounts stacked as
+  cards in their banks' colors, or with a picture of the real card. A card zooms open into its account page.
+- Entries show the merchant's or bank's logo (from Plaid, else logo.dev by website), and an entry's page is tinted
+  with the brand's color.
+- Adding by hand, for cash and money between people, uses a keypad, and entries made offline wait on the phone and
+  send themselves later, exactly once.
+- Face ID lock, a blurred app-switcher cover, and a choice of app icons.
 
 ## Requirements
 
 - A machine to run the backend: Python 3.13 and [uv](https://docs.astral.sh/uv/). SQLite is the only datastore.
 - An iPhone with Expo Go, or a Mac with Xcode for a standalone build. There is no App Store or TestFlight build.
 - A private network between the two. The setup below uses Tailscale.
+- For bank sync, Plaid API keys (`PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`), and for the webhook a public HTTPS
+  path to `/api/bank/webhook/<secret>` (`PLAID_WEBHOOK_URL`). Without the keys the bank routes answer 404 and entries
+  are added by hand. `LOGO_DEV_KEY` (a logo.dev publishable key) adds logos for names Plaid doesn't know.
 
 ## Install
 
@@ -80,6 +75,8 @@ flowchart LR
   app["iPhone app<br/>Expo Router"] -- "HTTPS, bearer token" --> serve["Tailscale Serve<br/>adds Tailscale-User-Login"]
   outbox["Outbox<br/>offline entries"] --> app
   serve --> api["FastAPI<br/>validates every entry"]
+  plaid["Plaid<br/>signed webhook"] -- "public path, one route" --> api
+  api -- "/transactions/sync" --> plaid
   api --> db[("SQLite<br/>entries in integer cents")]
   db --> engine["engine.py<br/>derives balances on read"]
   engine --> api
@@ -101,6 +98,13 @@ as integer cents everywhere. Dollars only appear in request bodies and are conve
 
 When the spreadsheet was retired, `app/importer.py` imported it and checked that every account balance matched to
 the cent.
+
+### Bank sync
+
+Bank rows live in their own database (`bank.db`, which holds the access tokens), never in the ledger. A row points
+at the entry it became, and every sync re-checks those pointers, so the ledger can be replaced without the two
+drifting apart. The webhook route skips the API login and proves itself instead: the URL carries a secret, and each
+message must carry Plaid's ES256 signature over its exact body, under five minutes old.
 
 ### The app
 
@@ -131,16 +135,18 @@ On a phone with Expo Go and Tailscale on, open `exp://<server's Tailscale IP>:80
 | `app/recurring.py`, `app/search.py` | Recurring entries and search shortcuts (`>50`, `aug`, `#trip`) |
 | `app/statement.py` | Reading bank statement CSVs and pairing their lines with entries |
 | `app/importer.py` | Spreadsheet import |
+| `app/bank.py`, `app/plaid.py`, `app/api_bank.py` | Bank sync: Plaid client, webhook, guesses, automatic adds |
+| `app/api_setup.py` | First-time setup from connected banks |
+| `app/logos.py`, `app/api_logos.py` | Logos, brand colors and card faces |
 | `app/main.py` | App setup and CSV export |
 | `tests/` | Backend tests, each against a throwaway database |
 | `scripts/` | Demo data and backups |
 | `.github/workflows/` | The checks that run on every push |
 | `ios/src/app` | Screens, one file per route |
-| `ios/src/components` | Rolling digits, the scrub chart, rows, panels, the keypad |
-| `ios/src/lib` | API client, outbox and the money rules the screens need |
-| `ios/src/theme` | Colors, type, spacing and the eight themes |
+| `ios/src/design` | System colors, type, motion and haptics, and the shared views (rows, cards, rings, keypad) |
+| `ios/src/lib` | API client, outbox, bank check-in timing and lock |
 
-Design notes are in `ios/DESIGN.md` and release notes in `CHANGELOG.md`.
+Design notes are in `ios/DESIGN.md`, development notes in `docs/development.md` and release notes in `CHANGELOG.md`.
 
 ## Known limitations
 
@@ -149,7 +155,10 @@ Design notes are in `ios/DESIGN.md` and release notes in `CHANGELOG.md`.
 - Single user and single currency (USD).
 - Apps signed with a free Apple ID expire after 7 days and have to be reinstalled from Xcode. A paid developer
   account would allow `eas build` and TestFlight instead.
-- No bank sync. Entries are added by hand, by link or by Shortcuts automation, and balances are reconciled manually.
+- Plaid's Trial plan allows ten connections in total, ever; a repaired connection keeps its slot, a removed one
+  doesn't come back.
+- Plaid checks most banks one to four times a day, so a purchase can take hours to appear even with the webhook.
+- Investment and loan accounts take their balances from the bank but not their transactions.
 
 ## License
 

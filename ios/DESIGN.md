@@ -1,164 +1,39 @@
 # Design: Tally for iPhone
 
-**Date:** 2026-09-23. **Goal:** feel like a first-party iOS finance app that happens to know my money: the grammar of
-the top-grossing finance apps (Apple Card and Wallet, Copilot, Monarch, Robinhood, Cash App), built from native parts.
-Changes to anything below get written here first.
+**Since 4.0 (2026-11-25).** Tally should feel like an app Apple made that happens to know your money: system
+colors, text styles and controls, inset grouped lists, Liquid Glass bars, and one signature per screen. Changes to
+anything below get written here first.
 
-## What the category agrees on (and this app does)
-- **One number first.** Every root screen opens on a single large figure (how far ahead this month is, net worth, a
-  balance) with its change underneath in green or red. Everything else is supporting detail. Home opens on the
-  month: money in, less spending and loan payments, green when it's up and red when it's down. Tapping the figure
-  swaps it for net worth and back; net worth is also the figure on Accounts.
-- **Charts you can touch.** Trend lines have no axes; dragging reads a day, and the figure above follows the finger.
-  Past the finger the line dims. Releasing goes back to now.
-- **Merchants, not rows.** Every entry leads with a round mark: the brand's own glyph where one exists, a
-  brand-colored monogram otherwise, the category symbol as a fallback. Category symbols sit white on a solid tint. A tagged entry shows its tag after the
-  category, as a label (a second tap target inside the row caught taps meant for the entry); the row's long-press
-  menu lists that tag's entries.
-- **Grouped by day, inset panels.** Activity reads like a statement: day headers with the day's spending, entries on
-  rounded panels, the account under each amount. One account's rows (its page, Catch up, Activity filtered to it)
-  read like that account's own statement: on a cash account + for money in and − for money out; on a card or a loan,
-  charges plain as spending is everywhere, and payments and refunds onto it as green + credits; Activity filtered to just that
-  cash account or card, by date, also shows the balance each day ended on in its day header, to check against the
-  bank line by line.
-- **What's coming, drawn ahead.** Scheduled entries carry a cash account's line past today as a dashed path (red
-  if it dips below zero); Home's Next 30 days shows each account's path as a small line, all on one scale so a small charge stays a small
-  step; with Coming up also on Home they form one section. Only what's on the books
-  counts, never a guess at everyday spending.
-- **Budgets as bars with a pace notch.** The notch marks how much of the month has gone by; a bar past its notch is
-  on pace to go over, and says by how much. Home's month panel and Insights say in one line how the whole month
-  stands against its budgets, by the same pace rule. A fixed bill that has used its budget reads "Paid".
-- **A keypad for money.** Entering an amount is a full-width keypad with the figure rolling as you type (Cash App),
-  never the system number pad. Digits shift in from the right like a till (1 5 0 reads $1.50); 00 replaces the
-  decimal point. Small + − keys above it add amounts up, with the sum written under the figure. In a new entry the keypad is the whole first screen; editing an entry, it springs up as its own
-  raised panel with Done and slides back down over the save button. An amount already there opens selected, like
-  text: the first digit types over it and the first delete clears it. − on an empty Spending keypad marks a refund, shown as a green +amount with
-  "Refund" under it.
-- **A new entry is a few questions, one at a time.** Amount and type, what it was, category, the accounts the type
-  uses, then a review with the date and Add. Tapping an answer moves on; Back and Next are always there, and dots at
-  the top show where you are. Picking a past entry under "What was it?" (of any type; picking one switches the
-  type), a quick action chip, or typing a past place in full and pressing Return or Next fills in what it knows, including
-  the category and accounts it answers. Next goes one page on, or to the review once nothing after it is left to
-  answer; a page opened from the review says Done, and Done or Back goes back there. A chip tapped after typing an
-  amount keeps the amount; a chip that only names a category leaves the place to "What was it?", with that
-  category's usual places first. The figure is signed as Activity signs the row. A day other than today shows as a
-  pill above the figure. The date is the past week as a row of days (entries often get caught up at the end of the
-  week) plus the calendar, and "Add another" in the toast starts the next entry on the same day; tapping the toast's
-  message opens the entry just added (a split, its lines together in Activity). A new entry starts empty (no guessed category or account); tapping a quick
-  action again takes it back out, keeping the type and any amount you typed. Splitting hands the draft to the full
-  form. The editor uses the same row of days. Splitting hides the type and quick actions; line 1 takes whatever the
-  other lines leave until it's typed into. The steps move like pages in a stack: the next one slides in from the right over
-  the last, Back slides it away again, each question sits at the top of its page, and the header stays "New entry".
-  The dots stretch and fill as you go, Back grows in beside Next, and the full form for a split slides in as one
-  more page.
-- **Catching up, one account at a time.** For a week's entries at once there's Catch up (Activity's toolbar, an
-  account's page, or the top of a new entry). Its first page is the account picked from a row of chips and its newest
-  entries under "Where you left off", which is where to resume in the bank's app. Each entry is then two pages: the
-  day strip and "What was it?" with this account's usual places, then the keypad with the account's usual categories
-  as chips (and the other account for a transfer, with a button to turn it around). The account and day carry over,
-  Add saves at once and slides the next entry in, and a line at the top says what was added, with Undo. A same-amount
-  entry on the account within three days (one still waiting on the phone too) shows as a gentle "Already in Tally?" under the figure, never a refusal,
-  with "Skip, it's already in". The first entry on an account starts on the day of its newest entry (the day strip
-  stretches back to it); a past place fills in its last amount as a lighter suggestion the first key replaces. The
-  Added line shows the balance after it, and "N added" opens the session's entries. Once entries are in, the first
-  page says "Caught up through …" with Tally's balance and "Bank says the same", which reconciles in one tap with
-  Undo. In Reconcile a match saves at once with Undo; a gap offers the missing entry and a list to tick off.
-- **Swipe rows like Mail (iOS 26).** Right: Duplicate. Left: Category, Edit, Delete. The actions come up as circles
-  that grow with the swipe; keep going and the edge one (Duplicate, Delete) stretches into a capsule with a tick, and
-  letting go runs it (Delete slides the row away, then it folds shut). A half swipe rests open; tapping the row,
-  swiping another or scrolling closes it. Long press has the same actions in a menu, lifted as a rounded rectangle. Recurring rows in Settings swipe left for
-  Pause (or Resume), Skip and Delete, each with Undo.
-
-- **Drag to reorder.** Accounts, categories, quick actions and Activity's filter rows and chips in Settings reorder
-  the way Reminders does: hold a row and it lifts with a shadow, the rows it passes slide aside with a tick, and
-  letting go drops it and saves the order. Held near the top or bottom of the screen, the page scrolls along, faster
-  nearer the edge, and stops at the group's ends. The reorder button in the header shows grab handles that lift a
-  row at the first touch. Rows move within their own group (a Spending category stays under Spending).
-
-- **A month as a story.** A finished month can be played as full-screen pages (`app/story.tsx`): one fact per page
-  in big white type on a full-bleed gradient of its own, bars at the top that fill as it plays, tap sides to move,
-  hold to pause, swipe down to close. The only place the app leaves its grouped-panel look, on purpose: it's the
-  celebration, not the ledger.
-
-## Structure
-- Native tab bar (Liquid Glass on iOS 26): Home, Activity, +, Accounts, Insights. It stays full size (never
-  minimizes on scroll). The + in the middle opens the composer from anywhere; it's the only way in, so tab headers carry
-  no + of their own. Tabs are peers; re-tapping one pops to its root. Settings is a gear on Home, Accounts and Insights.
-- Each tab is a native stack with a large title. Detail screens (account, category, month end, settings) push.
-- Hide amounts (the eye on Home, or Settings) masks every figure as "$•••" where text is drawn (`Txt`, the rolling
-  figures, the scrub figure), keeping its sign. Screens where you type an amount wrap themselves in `Reveal`.
-- Adding an entry is a modal of short steps; editing one is a modal form with its own close and save. Short choices (category, account, date, bulk
-  actions, filters, reconcile) are form sheets with a grabber. Nothing uses a confirm dialog: deletes happen and
-  offer Undo, and closing an editor with unsaved changes shows "Changes not saved" with Restore. Settings lists save
-  as you change them and say Saved; money fields have a Done bar on the keypad. Activity's filters that have no lit
-  chip show as removable pills under the chip rows, so a filter is never on out of sight; a saved view that's on
-  leads them with its name, and once the filters move on from it, stays as a plain pill that puts it back. Tapping a toast's message
-  opens what it's about (the entry just added).
+## Principles
+- **The bank does the typing.** Bank rows arrive on their own; Tally adds what it's sure of and asks about the rest
+  in the check-in. The keypad is for cash and money between people.
+- **One number first.** Each root screen opens on a single large figure (the month's spending, net worth, a
+  balance) with what it means underneath in one short line.
+- **Short words.** Titles in title case, one-line footers, no explanations a person wouldn't need twice. Settings
+  lists use small gray headers.
+- **Real logos.** Every entry leads with its merchant's or bank's logo, or the category's symbol white on its color.
 
 ## Color
-- Themes (Settings → Theme, stored on the phone; palettes in `src/theme/themes.ts`). **Classic** is the original:
-  Apple's system grouped palette (`#F2F2F7` / true black; panels white / `#1C1C1E`) with black/white ink.
-  **Aurora, Sunset, Ocean, Citrus, Blossom, Forest, Midnight** each wash the background in their hue, put two soft pools of color
-  (the glow) behind the top of each tab, and use one vivid accent.
-- **Ink is the only accent**: the theme's accent (black/white in Classic). Primary buttons, selected chips, the tab
-  bar's +, checkmarks and the chart line. The tab bar tints with it too. The + images are drawn per theme by
-  `scripts/tab-icons.mjs`; rerun it after changing an ink.
-- One semantic pair, green and red, for money direction only, the same in every theme.
-- Category tints: Classic keeps the retired web app's validated eight-hue ring (converted from OKLCH exactly); the
-  other themes use the same eight hues at full chroma. Both have a cool grey. Bank marks use each bank's own color.
+- System colors for categories and states, light and dark (`src/design/theme.ts`).
+- Tally's own tint, a deep emerald (`TINT`), for everything tappable and for money coming in, the way Notes is
+  yellow and Health is pink.
+- Brand colors where a brand is the subject: a wash at the top of an entry's page, and each account's card.
 
-## Type
-- SF Pro (system). Hero 44/700 with tight tracking, titles 28 and 22, body 17, rows 16/500, captions 13 and 12.
-- Every amount in a list uses tabular figures so columns line up. No all-caps labels, no "A · B" strings.
-
-## Shape and space
-- Panels 24 with continuous corners, inputs 12, actions and chips are pills, marks are circles.
-- 4-point rhythm: 8 to 12 inside a panel, 28 between sections, 16 screen margins.
+## Signatures
+- **Rings** on Summary: spending against the budget (or last month) outside, the share of the month gone inside.
+  Outer ahead of inner means spending faster than the plan; the outer ring turns orange, then red past a full lap.
+- **Wallet** on Accounts: cards and bank accounts stacked as cards in their banks' colors, the account name and
+  last four digits on the face, or a picture of the real card. A card zooms open into its page (iOS 18 zoom).
+- **Brand wash** on an entry's page, fading from the merchant's color into the background.
+- **Mail's switcher** on Activity: the chosen filter widens into a colored capsule; a swipe across jumps to the
+  first or last.
 
 ## Motion
-- Navigation, sheets and the tab bar are the system's own.
-- Nothing inside a screen snaps. Content that replaces a loading skeleton fades up; a new filter or search keeps the
-  current list until its results land; switching months in Insights eases the month in from the side it came from
-  while its figures roll; trend charts draw in from the left once when they appear; toasts sink and fade when they
-  go; a switch or tick in Settings moves on tap and the save follows. The Back / Next bar in a new entry rides the
-  keyboard on the keyboard's own timing.
-- Rolling digits for figures that change (hero numbers, the keypad, month switches). Bars, rings and the donut draw
-  once when they appear. Toasts slide up from the tab bar; swipe one down to put it away.
-- Scrubbing runs on the UI thread (Reanimated worklets); a selection tick marks each day passed.
-- Press feedback runs on the UI thread: buttons and cards spring to 0.97, list rows highlight after a beat (so a
-  scroll doesn't flash them) and the highlight fades on release. Select mode slides a check circle into every row at
-  once. Reduce Motion turns rolls and draws into instant changes, and skips the moments below.
-- Small moments, each once and short (the pieces live in `components/`: CheckDraw, Confetti, Sheen, Shake,
-  ThemeWash; the state that triggers them in `lib/motion.ts`):
-  - Keypad labels pop on each press; a digit that won't fit, or saving $0, shakes the amount.
-  - Saving draws a check in the button before the sheet closes. The new rows unfold into the lists with a brief glow
-    in the accent; rows brought back by Undo do the same, and a deleted row folds shut before it goes.
-  - A quick action's mark hops when tapped, and once saved its amount floats up off the chip on Home.
-  - Reconcile to the cent draws its check and bursts confetti; so does the first look at a finished month that came
-    in under budget (Insights badge; early in a month, a pill points back to it).
-  - A budget bar ahead of its pace notch breathes three times after it fills.
-  - Net worth higher than when Home last showed it: a band of green light sweeps across the figure when you swap
-    to it.
-  - Launch: the t from the app icon writes itself on a cold start (the stem runs down into its curl, the bar strikes
-    across), a glow blooms behind it and it lifts away to show the app, about a second in all. It wears the colors
-    of the app icon picked in Settings, or the theme's when the icon is the app's own. The native splash is a plain
-    background, so no other mark shows first.
-  - The month chart's end dot (today) breathes while the chart is at rest.
-  - Changing theme fades the old background off and spreads a ripple of the new accent from the tapped card.
+After Face ID and Apple Pay: quick ease-out curves and critically damped springs, nothing overshoots or wobbles
+(`src/design/motion.ts`). Numbers change like SwiftUI's numeric text, rings draw in from the top, and setup ends on
+a drawn checkmark. Haptics mark taps (light), commits (success) and refusals (the passcode shake).
 
-## Haptics
-Selection ticks on the keypad, chips and scrubbing; success on save, reconcile and an under-budget month; warning when
-an entry is saved offline; error when a save is refused or a keypad digit won't fit; a light tap for the tab bar's +
-and a theme change.
-
-## Sound
-Sounds sit under the haptics and are never the only signal: quiet (peaks around half scale, clicks lower), short
-(under a second), tuned (marimba, glass bells, a tine, breathy noise; drawn by `scripts/sounds.mjs`). They follow the
-silent switch and mix with other audio. Keypad and chips click; adding an entry rises two notes; money in rings a
-till; delete breathes out and Undo breathes back in; a match to the cent or a month under budget is a rising
-arpeggio; a refusal is a low double knock. Settings → Sounds turns them off.
-
-## Open questions
-- Car and Entertainment share the blue tint, and Dining Out and Pets share orange. Worth giving one of each pair a
-  different default.
-- Net worth history only has month-end points; a daily line would need investment balances between month ends.
+## Gestures
+- Rows swipe like Mail: left to delete; in the check-in, right to add and left to skip.
+- Press and hold an entry for a preview and a menu.
+- Holding delete on the keypad keeps deleting, faster the longer it's held.
