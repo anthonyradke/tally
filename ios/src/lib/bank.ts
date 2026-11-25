@@ -4,7 +4,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useQuery } from '@tanstack/react-query'
 import { api, ApiError, type Account, type BankRow, type BankStatus } from './api'
 import { invalidateAll, queryClient } from './data'
-import { scoped } from './server'
 
 /** The server's bank sync, or null when it has none (404: no Plaid keys, as on the real Tally). */
 async function status(): Promise<BankStatus | null> {
@@ -72,7 +71,7 @@ export function shouldCheckIn(rows: Pick<BankRow, 'id' | 'pending'>[], asks: num
 
 export const newestId = (rows: Pick<BankRow, 'id' | 'pending'>[]) => rows.reduce((m, r) => (r.pending ? m : Math.max(m, r.id)), 0)
 
-const seenKey = () => scoped('tally.bankSeen')
+const seenKey = () => 'tally.bankSeen'
 
 export async function loadSeen(): Promise<Seen | null> {
   try { return JSON.parse((await AsyncStorage.getItem(seenKey())) ?? 'null') as Seen | null } catch { return null }

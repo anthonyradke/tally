@@ -1,44 +1,38 @@
-import { useEffect, useMemo, useState } from 'react'
+// The app's frame: data kept on the phone, the outbox, the bank check-in, notices and the lock cover around three
+// tabs and their sheets. A ledger with no accounts yet, on a server with bank sync, opens the welcome setup first.
+import { useEffect, useState } from 'react'
 import { AppState, useColorScheme } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router'
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
-import { focusManager } from '@tanstack/react-query'
+import { focusManager, useQuery } from '@tanstack/react-query'
 import Constants from 'expo-constants'
 import { BankCheckIn } from '@/components/BankCheckIn'
-import { Launch } from '@/components/Launch'
-import { ThemeWash } from '@/components/ThemeWash'
-import { Toaster } from '@/components/Toaster'
+import { api, ApiError } from '@/lib/api'
 import { keepOnPhone, queryClient } from '@/lib/data'
-import { flush, loadOutbox } from '@/lib/outbox'
-import { loadPrivacy } from '@/lib/privacy'
-import { keyFor, loadServer, useServer, type Profile } from '@/lib/server'
-import { loadSounds } from '@/lib/sound'
 import { loadLock } from '@/lib/lock'
-import { loadCaughtUp } from '@/lib/caughtUp'
-import { LockScreen } from '@/components/LockScreen'
-import { loadTheme, useTheme } from '@/theme'
-import { loadDesign, useDesign } from '@/next/design'
+import { flush, loadOutbox } from '@/lib/outbox'
+import { loadServer, useServer } from '@/lib/server'
+import { usePalette } from '@/design/theme'
+import { LockCover } from '@/design/ui/LockCover'
+import { NoticeHost } from '@/design/ui/Notice'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
 // Coming back to Tally counts as focus, so stale data (the bootstrap's "today" among it) refetches. React Query
-// listens for the browser's visibilitychange by default, which React Native never fires: data stayed as it was until
-// a screen mounted, and new entries were dated yesterday after a night in the background.
+// listens for the browser's visibilitychange by default, which React Native never fires.
 focusManager.setEventListener((handle) => {
   const sub = AppState.addEventListener('change', (s) => handle(s === 'active'))
   return () => sub.remove()
 })
 
-// Last good data is kept on the phone, so a cold start paints instantly (and offline) while fresh data loads. Each
-// server (Tally, Tally Lab) has its own copy.
-const persisterFor = (p: Profile) => createAsyncStoragePersister({ storage: AsyncStorage, key: keyFor('tally.cache', p), throttleTime: 1500 })
+// Last good data is kept on the phone, so a cold start paints instantly (and offline) while fresh data loads.
+const persister = createAsyncStoragePersister({ storage: AsyncStorage, key: 'tally.cache', throttleTime: 1500 })
 
-/** Posts queued offline entries on launch, on foregrounding and every 20 s while open (not the ones Tally refused:
- *  those wait for Send now in Settings). */
+/** Posts queued offline entries on launch, on foregrounding and every 20 s while open. */
 function OutboxSync() {
   useEffect(() => {
     flush().catch(() => {})
@@ -49,76 +43,59 @@ function OutboxSync() {
   return null
 }
 
-function RootStack() {
-  const { c } = useTheme()
+async function setupNeeded(): Promise<boolean> {
+  try {
+    return (await api.setup.status()).needed
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return false // no bank sync on this server
+    throw e
+  }
+}
+
+function Screens() {
+  const p = usePalette()
+  const server = useServer((s) => s.url)
+  const setup = useQuery({ queryKey: ['setup', server], queryFn: setupNeeded, staleTime: 60_000, retry: false })
+  useEffect(() => {
+    if (setup.data) router.push('/welcome')
+  }, [setup.data])
+  const sheet = { contentStyle: { backgroundColor: p.bg } }
   return (
-    <Stack screenOptions={{ contentStyle: { backgroundColor: c.bg } }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      {/* The New design (src/app/next), a separate set of screens over the same data. */}
-      <Stack.Screen name="next" options={{ headerShown: false, animation: 'fade' }} />
-      {/* The composer and editor show a header; it's on from the start, since switching it on from inside a modal
-          remounts the screen (and threw away the keypad's animation state). */}
-      <Stack.Screen name="entry" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
-      <Stack.Screen name="new" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
-      <Stack.Screen name="catchup" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
-      <Stack.Screen name="pick" options={{
-        presentation: 'formSheet', sheetAllowedDetents: [0.6, 1], sheetGrabberVisible: true, headerShown: false,
-        contentStyle: { backgroundColor: c.bg },
-      }} />
-      <Stack.Screen name="filters" options={{
-        presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true, headerShown: false,
-        contentStyle: { backgroundColor: c.bg },
-      }} />
-      {/* A modal, not a form sheet: inside a form sheet the rolling amount never moved as you typed. */}
-      <Stack.Screen name="reconcile/[id]" options={{ presentation: 'modal', headerShown: false, contentStyle: { backgroundColor: c.bg } }} />
-      <Stack.Screen name="story" options={{ presentation: 'fullScreenModal', headerShown: false, contentStyle: { backgroundColor: '#000000' } }} />
-      {/* Bank sync (Tally Lab): the inbox, what opening Tally brings up, one row's sheet, and an account checked
-          against its bank. */}
-      <Stack.Screen name="bank" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
-      <Stack.Screen name="bank-new" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
-      <Stack.Screen name="bank-item" options={{
-        presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true, headerShown: false,
-        contentStyle: { backgroundColor: c.bg },
-      }} />
-      <Stack.Screen name="bank-audit" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
-      <Stack.Screen name="edit" options={{ presentation: 'modal', headerShown: true, headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, contentStyle: { backgroundColor: c.bg } }} />
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: p.bg } }}>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="add" options={{ presentation: 'modal', ...sheet }} />
+      <Stack.Screen name="check-in" options={{ presentation: 'modal', ...sheet }} />
+      <Stack.Screen name="settings" options={{ presentation: 'modal', ...sheet }} />
+      <Stack.Screen name="welcome" options={{ presentation: 'fullScreenModal', gestureEnabled: false, ...sheet }} />
     </Stack>
   )
 }
 
 export default function RootLayout() {
   const scheme = useColorScheme()
-  const { c } = useTheme()
+  const p = usePalette()
   const nav = scheme === 'dark' ? DarkTheme : DefaultTheme
   const [ready, setReady] = useState(false)
-  const [launching, setLaunching] = useState(true)
-  const profile = useServer((s) => s.profile)
-  const design = useDesign((s) => s.design)
-  const persister = useMemo(() => persisterFor(profile), [profile])
   useEffect(() => {
-    Promise.all([loadServer(), loadOutbox(), loadTheme(), loadPrivacy(), loadSounds(), loadLock(), loadCaughtUp(), loadDesign()]).finally(() => setReady(true))
+    Promise.all([loadServer(), loadOutbox(), loadLock()]).finally(() => {
+      setReady(true)
+      SplashScreen.hideAsync().catch(() => {})
+    })
   }, [])
-  useEffect(() => {
-    if (ready && design === 'new') SplashScreen.hideAsync().catch(() => {}) // New has no launch animation of its own
-  }, [ready, design])
   if (!ready) return null
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* Keyed by server: switching between Tally and Lab remounts everything on the new server's own cache. */}
-      <PersistQueryClientProvider key={profile} client={queryClient}
+      <PersistQueryClientProvider client={queryClient}
         persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 7, buster: Constants.expoConfig?.version ?? 'v1',
           dehydrateOptions: { shouldDehydrateQuery: (q) => q.state.status === 'success' && keepOnPhone(q.queryKey) } }}>
-        <ThemeProvider value={{ ...nav, colors: { ...nav.colors, primary: c.ink, background: c.bg, card: c.bg } }}>
-          <RootStack />
+        <ThemeProvider value={{ ...nav, colors: { ...nav.colors, primary: p.blue, background: p.bg, card: p.bg } }}>
+          <Screens />
           <OutboxSync />
           <BankCheckIn />
-          <Toaster />
-          <ThemeWash />
-          <LockScreen />
+          <NoticeHost />
+          <LockCover />
         </ThemeProvider>
       </PersistQueryClientProvider>
-      {/* Takes over from the native splash (it hides it), then lifts off the app underneath. */}
-      {launching && design === 'classic' && <Launch onDone={() => setLaunching(false)} />}
     </GestureHandlerRootView>
   )
 }

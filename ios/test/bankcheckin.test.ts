@@ -1,10 +1,9 @@
 // When opening Tally brings up New from the bank: only when something waits, once on the first open of the day, and
-// again whenever a row has come in since the last look. Each server remembers its own last look.
+// again whenever a row has come in since the last look. The last look is kept on the phone.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import storage from '@react-native-async-storage/async-storage'
 import { loadSeen, newestId, saveSeen, shouldCheckIn } from '@/lib/bank'
-import { useServer } from '@/lib/server'
 
 const r = (id: number, pending = false) => ({ id, pending })
 
@@ -28,11 +27,9 @@ test('an account to place counts as waiting', () => {
   assert.equal(shouldCheckIn([], 1, { day: '2026-11-24', maxId: 0 }, '2026-11-24'), false)
 })
 
-test('Tally and Lab keep their own last look', async () => {
+test('the last look is kept', async () => {
   ;(storage as unknown as { clear(): void }).clear()
-  useServer.setState({ profile: 'lab' })
+  assert.equal(await loadSeen(), null)
   await saveSeen({ day: '2026-11-24', maxId: 40 })
   assert.deepEqual(await loadSeen(), { day: '2026-11-24', maxId: 40 })
-  useServer.setState({ profile: 'tally' })
-  assert.equal(await loadSeen(), null)
 })

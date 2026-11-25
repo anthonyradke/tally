@@ -30,7 +30,7 @@ export type AppIcon = { name: string | null; label: string; source: number }
 const pascal = (s: string) => s.replace(/(^|-)(\w)/g, (_, __, ch: string) => ch.toUpperCase())
 const alt = (file: string, label: string): AppIcon => ({ name: pascal(file), label, source: SOURCES[file] })
 
-export const DEFAULT_ICON: AppIcon = { name: null, label: 'Original', source: ORIGINAL }
+export const DEFAULT_ICON: AppIcon = { name: null, label: 'Classic', source: ORIGINAL }
 export const ICON_GROUPS: { title: string; icons: AppIcon[] }[] = [
   { title: 'On black', icons: THEMES.map((t) => alt(`${t}-black`, LABEL[t])) },
   { title: 'On white', icons: THEMES.map((t) => alt(`${t}-white`, LABEL[t])) },
@@ -54,4 +54,10 @@ export const iconLabel = (name: string | null) => {
   if (!name) return DEFAULT_ICON.label
   const hit = ICON_GROUPS.flatMap((g) => g.icons.map((i) => ({ ...i, g: g.title }))).find((i) => i.name === name)
   return hit ? `${hit.label}, ${hit.g.replace('On ', 'on ')}` : name
+}
+
+/** The icon on the home screen now, to draw it in the app (the lock cover, the welcome screen). */
+export function iconSource(name: string | null): number {
+  if (!name) return ORIGINAL
+  return ICON_GROUPS.flatMap((g) => g.icons).find((i) => i.name === name)?.source ?? ORIGINAL
 }

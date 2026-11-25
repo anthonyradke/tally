@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { create } from 'zustand'
 import { api, ApiError, locked, unreachable, type Txn, type TxnInput } from './api'
 import { invalidateAll } from './data'
-import { getServer, scoped } from './server'
+import { getServer } from './server'
 
 /** `url`: the server it was saved for. It only ever goes there (Tally and Tally Lab keep separate outboxes, too). */
 export interface Queued { cid: string; lines: TxnInput[]; label: string; at: string; error?: string; url?: string }
@@ -17,12 +17,12 @@ export const useOutbox = create<OutboxState>(() => ({ items: [] }))
 
 function write(next: Queued[]) {
   useOutbox.setState({ items: next })
-  AsyncStorage.setItem(scoped(KEY), JSON.stringify(next)).catch(() => {})
+  AsyncStorage.setItem(KEY, JSON.stringify(next)).catch(() => {})
 }
 
 export async function loadOutbox() {
   try {
-    const v = JSON.parse((await AsyncStorage.getItem(scoped(KEY))) ?? '[]')
+    const v = JSON.parse((await AsyncStorage.getItem(KEY)) ?? '[]')
     useOutbox.setState({ items: Array.isArray(v) ? v : [] })
   } catch { /* corrupt queue: start empty */ }
 }

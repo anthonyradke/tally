@@ -9,6 +9,12 @@ The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/packa
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
 ## Unreleased
+Changed
+- The new design is the app: the classic screens, their components and helpers, the design switch and the Tally
+  Lab server choice are removed, and a phone left on Lab moves back to Tally's own address and token. The app
+  switcher and Face ID cover is the system material blur with the current app icon; the glowing t is the default
+  icon, and Settings has an App Icon picker.
+
 Fixed
 - Logos are saved under Plaid's id for a bank and under the account's name and bank, never a bare row number, so a
   new ledger's account 1 no longer shows the old account 1's logo.

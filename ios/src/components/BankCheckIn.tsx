@@ -1,5 +1,5 @@
-// Opening Tally on a server with bank sync (Tally Lab for now) checks the banks and, when something is waiting,
-// brings up New from the bank: once on the first open of the day, and again whenever a new row has come in since.
+// Opening Tally on a server with bank sync checks the banks and, when something is waiting,
+// brings up the check-in: once on the first open of the day, and again whenever a new row has come in since.
 // It only interrupts from a tab's main screen, never over a sheet, the composer or the lock.
 import { useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
@@ -7,10 +7,8 @@ import { router, usePathname } from 'expo-router'
 import { freshBank, loadSeen, newestId, saveSeen, shouldCheckIn } from '@/lib/bank'
 import { todayISO } from '@/lib/dates'
 import { useLock } from '@/lib/lock'
-import { useDesign } from '@/next/design'
 
-const ROOTS = new Set(['/', '/activity', '/accounts', '/insights'])
-const NEXT_ROOTS = new Set(['/next', '/next/activity', '/next/accounts'])
+const ROOTS = new Set(['/', '/activity', '/accounts'])
 
 export function BankCheckIn() {
   const pathname = usePathname()
@@ -28,10 +26,9 @@ export function BankCheckIn() {
         if (!got) return
         const today = todayISO()
         if (!shouldCheckIn(got.rows, got.status.ask.length, await loadSeen(), today)) return
-        const next = useDesign.getState().design === 'new'
-        if (useLock.getState().locked || !(next ? NEXT_ROOTS : ROOTS).has(path.current)) return
+        if (useLock.getState().locked || !ROOTS.has(path.current)) return
         await saveSeen({ day: today, maxId: newestId(got.rows) })
-        router.push(next ? '/next/check-in' : '/bank-new')
+        router.push('/check-in')
       } catch {
         // offline or the server is down: the next open tries again
       } finally { running = false }
