@@ -13,7 +13,7 @@ from .api_bank import hook as bank_hook, router as bank_router, sync_loop
 from .api_logos import cards as cards_router, router as logos_router
 from .api_setup import router as setup_router
 from .api_deleted import router as deleted_router
-from .api_files import router as files_router
+from .api_files import oversize, router as files_router
 from .api_recurring import router as recurring_router
 from .engine import month_of
 
@@ -29,7 +29,7 @@ app = FastAPI(title="Tally", docs_url=None, redoc_url=None, openapi_url=None, li
 
 @app.middleware("http")
 async def _login(request: Request, call_next):
-    return auth.refuse(request) or await call_next(request)
+    return auth.refuse(request) or oversize(request) or await call_next(request)
 
 
 for r in (api_router, ops_router, admin_router, recurring_router, files_router, deleted_router, bank_router,

@@ -8,8 +8,8 @@ import time
 import uuid
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response
 from .api import Con
 
 router = APIRouter(prefix="/api")
@@ -20,6 +20,25 @@ MAX_BYTES = 12 * 1024 * 1024
 GRACE = 24 * 3600
 _swept = 0.0
 HEIF_BRANDS = {b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"hevm", b"hevs", b"mif1", b"msf1"}
+
+
+UPLOADS = re.compile(r"^/api/(transactions/\d+/receipt|accounts/\d+/art)$")
+FORM_SLACK = 64 * 1024  # the multipart wrapping around the file
+
+
+def oversize(request: Request) -> Optional[JSONResponse]:
+    """A 413 for an upload whose Content-Length is already past the cap, before Starlette spools the whole body to
+    disk to parse the form. The route still checks the file itself (and a body sent without a length)."""
+    if request.method not in ("POST", "PUT") or not UPLOADS.match(request.url.path):
+        return None
+    try:
+        size = int(request.headers.get("content-length", ""))
+    except ValueError:
+        return None
+    if size <= MAX_BYTES + FORM_SLACK:
+        return None
+    return JSONResponse({"detail": {"errors": ["That file is over 12 MB."]}}, status_code=413,
+                        headers={"Connection": "close"})
 
 
 def sniff(data: bytes) -> Optional[str]:
