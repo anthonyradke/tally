@@ -156,3 +156,32 @@ def test_logos_never_carry_over_to_a_new_database(client, fake, monkeypatch, tmp
     assert client.get("/api/bank").json()["items"][0]["id"] == iid  # the same number...
     client.get("/api/logo", params={"item": iid})
     assert len(asked) > n  # ...but not the same bank, so not the same logo
+
+
+class TwoBanks(HookPlaid):
+    """The test bank, then a student loan servicer on its own connection."""
+    def __call__(self, path, body, timeout=30):
+        if path == "/accounts/get" and body["access_token"] != "access-1":
+            return {"accounts": [{"account_id": "acc-loan", "name": "Direct Loan", "mask": "0042", "type": "loan",
+                                  "subtype": "student", "balances": {"current": 12000.0, "available": None}}]}
+        if path == "/institutions/get_by_id" and self.exchanged > 1:
+            return {"institution": {"name": "MOHELA"}}
+        return super().__call__(path, body, timeout)
+
+
+def test_a_bank_added_after_setup_brings_its_accounts(client, fake, monkeypatch):
+    f = TwoBanks()
+    monkeypatch.setattr(plaid, "call", f)
+    monkeypatch.setattr(api_bank, "_used", set())
+    freeze(monkeypatch, date(2026, 9, 30))
+    assert client.post("/api/bank/sandbox/connect").status_code == 201
+    accts = client.get("/api/setup").json()["items"][0]["accounts"]
+    assert client.post("/api/setup", json={"history": "all", "accounts": [{"id": a["id"]} for a in accts]}).status_code == 200
+    f.sessions["link-1"] = ["public-mohela"]
+    r = client.post("/api/bank/connect", json={"link_token": "link-1"})
+    assert r.status_code == 201, r.text
+    assert [(m["name"], m["kind"]) for m in r.json()["made"]] == [("MOHELA Direct Loan", "loan")]
+    b = client.get("/api/bootstrap").json()
+    loan = next(a for a in b["accounts"] if a["name"] == "MOHELA Direct Loan")
+    assert b["months"][-1]["balances"][str(loan["id"])] == 1200000  # held at the servicer's balance
+    assert client.get("/api/bank").json()["ask"] == []

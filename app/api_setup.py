@@ -127,3 +127,30 @@ async def finish(request: Request, b: Bank, con: Con):
     st = service.load(con)
     return {"accounts": made, "start": start.isoformat(), "added": added, "waiting": bank.waiting(b, st)}
 
+
+def adopt(b, con, iid: int) -> list[dict]:
+    """A bank connected after setup, on a ledger built from the banks (`bank_auto`): each of its accounts nobody has
+    placed becomes a ledger account the way setup makes them (named after the bank's, held at its balance, all its
+    history), so a new bank needs no answers. Accounts of a kind Tally doesn't keep are left alone."""
+    made = []
+    rows = b.execute("SELECT a.*, i.institution FROM accounts a JOIN items i ON i.id=a.item_id "
+                     "WHERE a.item_id=? AND a.tally_account_id IS NULL AND a.skip=0 ORDER BY a.id", (iid,)).fetchall()
+    taken = {r[0].lower() for r in con.execute("SELECT name FROM accounts")}
+    sort = (con.execute("SELECT MAX(sort) FROM accounts").fetchone()[0] or 0) + 1
+    for a in rows:
+        kind = KIND.get(a["type"] or "")
+        if kind is None:
+            continue
+        name = suggest(a["institution"], a)
+        if name.lower() in taken:
+            name = f"{name} {a['mask'] or a['id']}"
+        taken.add(name.lower())
+        tid = con.execute("INSERT INTO accounts(name, kind, bank, start_balance, sort) VALUES(?,?,?,0,?)",
+                          (name, kind, _brand(a["institution"]), sort)).lastrowid
+        sort += 1
+        b.execute("UPDATE accounts SET tally_account_id=?, since=NULL, skip=0, anchor=1 WHERE id=?", (tid, a["id"]))
+        made.append({"id": tid, "name": name, "kind": kind})
+    con.commit()
+    b.commit()
+    return made
+

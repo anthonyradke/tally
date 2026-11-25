@@ -153,7 +153,11 @@ def _connected(b, con, access: str, item_id: str) -> dict:
     """A new connection: store it, match its accounts to the ledger's where that's clear, then pull its history."""
     iid = _plaid(bank.add_item, b, access, item_id)
     matched = bank.automap(b, service.load(con), iid)
-    return {"item_id": iid, "matched": matched, **_refresh(b, con, [iid])}
+    made: list[dict] = []
+    if _auto(con):  # a ledger built from the banks takes a new bank's accounts as setup would have
+        from .api_setup import adopt
+        made = adopt(b, con, iid)
+    return {"item_id": iid, "matched": matched, "made": made, **_refresh(b, con, [iid])}
 
 
 _used: set[str] = set()  # public tokens already exchanged: the phone and Plaid's webhook both hand them over
