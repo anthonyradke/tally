@@ -321,3 +321,48 @@ def test_undo_of_added_in_the_check_in_still_works(client, fake, monkeypatch):
     assert client.post(f"/api/bank/txns/{row['id']}/reset").status_code == 200
     assert sorted(b["raw"] for b in client.get("/api/bank/inbox").json()) == ["REFUND STORE 9", "SQ *FARMSTAND"]
     assert entries(client) == []
+
+
+# ---------- anchoring settles ----------
+
+def _account(client, kind):
+    return next(a for a in client.get("/api/bootstrap").json()["accounts"] if a["kind"] == kind)
+
+
+def test_a_typed_month_end_balance_stops_the_anchor(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.accounts.append({"account_id": "acc-ira", "name": "IRA", "mask": "3333", "type": "investment",
+                          "subtype": "ira", "balances": {"current": 2000.0}})
+    fake.push(added=[prow("pay", "acc-chk", -2000.00, "2026-08-01", "ACME PAYROLL", "Acme", "INCOME_WAGES", "HIGH")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    ira = _account(client, "investment")
+    assert ira["start_balance"] == 200000
+    assert client.post("/api/month-end/2026-09/typed", json={str(ira["id"]): 2100}).status_code == 200
+    starts = []
+    for _ in range(3):
+        client.post("/api/bank/sync")
+        starts.append(_account(client, "investment")["start_balance"])
+    assert starts == [200000] * 3
+    aug = next(m for m in client.get("/api/bootstrap").json()["months"] if m["month"] == "2026-08-01")
+    assert aug["balances"][str(ira["id"])] == 200000
+
+
+def test_a_loan_with_interest_lands_on_the_banks_balance_in_one_sync(client, fake, monkeypatch):
+    from app import db
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.accounts.append({"account_id": "acc-loan", "name": "Car Loan", "mask": "4444", "type": "loan",
+                          "subtype": "auto", "balances": {"current": 8000.0}})
+    fake.push(added=[prow("old", "acc-chk", 5.00, "2026-03-02", "SQ *THING")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    loan = _account(client, "loan")
+    con = db.connect()
+    con.execute("UPDATE accounts SET loan_rate=0.12 WHERE id=?", (loan["id"],))
+    con.commit()
+    client.post("/api/bank/sync")
+    sep = next(m for m in client.get("/api/bootstrap").json()["months"] if m["month"] == "2026-09-01")
+    assert sep["balances"][str(loan["id"])] == 800000
+    start = _account(client, "loan")["start_balance"]
+    client.post("/api/bank/sync")
+    assert _account(client, "loan")["start_balance"] == start

@@ -24,13 +24,13 @@ import re
 import sqlite3
 import threading
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from . import plaid
 from .bank_moves import PAIR_DAYS, SURE_PFC, looks_like_move, pairs
-from .engine import Txn
+from .engine import Txn, balances
 
 log = logging.getLogger(__name__)
 
@@ -753,14 +753,41 @@ def anchor(bcon, con, st) -> int:
     for a in bcon.execute("SELECT tally_account_id, current FROM accounts WHERE anchor=1 AND current IS NOT NULL "
                           "AND tally_account_id IS NOT NULL"):
         acct = st.acct.get(a["tally_account_id"])
-        if not acct or acct.id not in row.balances:
+        if not acct or acct.id not in row.balances or a["current"] == row.balances[acct.id]:
             continue
-        gap = a["current"] - row.balances[acct.id]
-        if gap:
-            con.execute("UPDATE accounts SET start_balance=start_balance+? WHERE id=?", (gap, acct.id))
+        # A balance typed at a month end (investments, loans) is what the month carries from then on: the starting
+        # balance no longer reaches today, and moving it only rewrote the months before the typed one, every sync.
+        if any(aid == acct.id and m <= row.month for aid, m in st.typed):
+            continue
+        start = _solve(acct, [t for t in st.txns if t.date <= st.today and acct.id in (t.from_id, t.to_id)],
+                       st.typed, [m for m in st.months if m <= row.month], a["current"])
+        if start != acct.start_balance:
+            con.execute("UPDATE accounts SET start_balance=? WHERE id=?", (start, acct.id))
             n += 1
     con.commit()
     return n
+
+
+def _solve(acct, txns: list, typed: dict, months: list, target: int, passes: int = 12) -> int:
+    """The starting balance that brings `acct` to `target` in the last of `months`, worked out by the engine. Cash
+    and cards move one for one, so one step lands; a loan accrues interest every month and never goes below zero,
+    so it takes a few steps (each scaled by how far the last one moved it). Returns the closest one found."""
+    def balance(start: int) -> int:
+        return balances([replace(acct, start_balance=start)], txns, typed, months)[months[-1]][acct.id]
+
+    x = acct.start_balance
+    gap = target - balance(x)
+    best, slope = (abs(gap), x), 1.0
+    for _ in range(passes):
+        if gap == 0:
+            break
+        nx = x + (round(gap / slope) or (1 if gap > 0 else -1))
+        ngap = target - balance(nx)
+        if (step := (gap - ngap) / (nx - x)) > 0:  # flat where a loan sits at zero: keep the last slope
+            slope = step
+        x, gap = nx, ngap
+        best = min(best, (abs(gap), x))
+    return best[1]
 
 
 def decide(bcon, bank_id: int, txn_id: Optional[int], how: str) -> None:
