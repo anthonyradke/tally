@@ -8,6 +8,13 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## 4.0.1 (2026-11-25)
+Changed
+- Face ID is iOS's own app lock (touch and hold Tally's icon, Require Face ID); Tally's in-app lock and its
+  `expo-local-authentication` module are removed. The app-switcher cover stays.
+- Changing the server address or token in Settings clears what the app has loaded, so one server's figures never
+  show for another.
+
 ## 4.0.0 (2026-11-25)
 A new app design and bank sync. The previous design and its screens are removed; its last version is 3.7.0.
 

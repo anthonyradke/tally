@@ -13,7 +13,7 @@ import Constants from 'expo-constants'
 import { BankCheckIn } from '@/components/BankCheckIn'
 import { api, ApiError } from '@/lib/api'
 import { keepOnPhone, queryClient } from '@/lib/data'
-import { loadLock } from '@/lib/lock'
+import { watchCover } from '@/lib/lock'
 import { flush, loadOutbox } from '@/lib/outbox'
 import { loadServer, useServer } from '@/lib/server'
 import { usePalette } from '@/design/theme'
@@ -77,7 +77,8 @@ export default function RootLayout() {
   const nav = scheme === 'dark' ? DarkTheme : DefaultTheme
   const [ready, setReady] = useState(false)
   useEffect(() => {
-    Promise.all([loadServer(), loadOutbox(), loadLock()]).finally(() => {
+    watchCover()
+    Promise.all([loadServer(), loadOutbox()]).finally(() => {
       setReady(true)
       SplashScreen.hideAsync().catch(() => {})
     })

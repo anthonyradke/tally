@@ -1,13 +1,4 @@
-// Links into Tally (tally://new?amount=…, from a Wallet automation or anywhere) while Face ID lock is on: they wait
-// until Tally is unlocked (LockScreen opens them), since a sheet opened straight away sat above the lock.
-import { holdLink, lockedNow } from '@/lib/lock'
-
+// Links into Tally (tally://…) open as they come; iOS's own Face ID lock, when it's on, runs before Tally does.
 export function redirectSystemPath({ path }: { path: string; initial: boolean }): string | null {
-  try {
-    if (!lockedNow()) return path
-    holdLink(path)
-    return null
-  } catch {
-    return path
-  }
+  return path
 }

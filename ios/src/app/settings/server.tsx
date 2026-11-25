@@ -1,6 +1,7 @@
 // The server's address and token.
 import { useState } from 'react'
 import { ScrollView, TextInput, View } from 'react-native'
+import { queryClient } from '@/lib/data'
 import { useServer } from '@/lib/server'
 import { success } from '@/design/haptics'
 import { space, usePalette } from '@/design/theme'
@@ -15,13 +16,13 @@ export default function Server() {
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: p.bg }} contentContainerStyle={{ padding: space.l, gap: space.xxl }}
       keyboardShouldPersistTaps="handled">
-      <Section title="Connection" compact footer="Your token is stored in the keychain.">
+      <Section title="Connection" compact footer="Your token is stored in the keychain. Leave it blank for a server without one.">
         <View style={{ paddingHorizontal: space.l }}>
-          <TextInput value={url} onChangeText={setUrl} onEndEditing={() => { s.set(url); success() }} placeholder="https://…" placeholderTextColor={p.label3}
+          <TextInput value={url} onChangeText={setUrl} onEndEditing={() => { if (url.trim() === s.url) return; s.set(url); queryClient.clear(); success() }} placeholder="https://…" placeholderTextColor={p.label3}
             autoCapitalize="none" autoCorrect={false} keyboardType="url" style={field} />
         </View>
         <View style={{ paddingHorizontal: space.l }}>
-          <TextInput value={token} onChangeText={setToken} onEndEditing={() => { if (token.trim()) { s.setToken(token); setToken(''); success() } }}
+          <TextInput value={token} onChangeText={setToken} onEndEditing={() => { if (token.trim()) { s.setToken(token); setToken(''); queryClient.clear(); success() } }}
             placeholder={s.token ? 'Token saved' : 'Token'} placeholderTextColor={p.label3} secureTextEntry autoCapitalize="none" autoCorrect={false} style={field} />
         </View>
       </Section>
