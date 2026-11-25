@@ -8,57 +8,40 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## Unreleased
-Changed
-- The new design is the app: the classic screens, their components and helpers, the design switch and the Tally
-  Lab server choice are removed, and a phone left on Lab moves back to Tally's own address and token. The app
-  switcher and Face ID cover is the system material blur with the current app icon; the glowing t is the default
-  icon, and Settings has an App Icon picker.
-- Activity's switcher is larger, answers before the list redraws, keeps showing the last list while a filter loads
-  (each filter's first page is fetched up front), and a swipe across it jumps to the first or last filter as in
-  Mail. Holding delete on the keypad keeps deleting, faster the longer it's held. Setup lists Add Another Bank as
-  the last row of the banks instead of a button under them, and Plaid Link adds several banks in one session.
-
-Fixed
-- Logos are saved under Plaid's id for a bank and under the account's name and bank, never a bare row number, so a
-  new ledger's account 1 no longer shows the old account 1's logo.
+## 4.0.0 (2026-11-25)
+A new app design and bank sync. The previous design and its screens are removed; its last version is 3.7.0.
 
 Added
-- Bank sync through Plaid (server only, off unless Plaid keys are configured): connected accounts' transactions
-  pair with existing entries, and the rest wait in an inbox with a guess at name, category and accounts, learned
-  from the entries already paired. Card payments pair across both accounts. An audit per account lists bank rows
-  missing from Tally, entries the bank never saw and the balance gap. Bank data lives in its own `bank.db`.
-- The app can switch between Tally and Tally Lab (Settings, Server). Each keeps its own address, token, offline
-  outbox and saved cache, and a Lab badge sits on every tab while Lab is in use.
-- Where the server has bank sync: From the bank (Activity's toolbar and Catch up) lists bank transactions not in
-  Tally yet with a guess for each, one tap to add, a sheet to change the name, category or accounts, and "Add all"
-  for the ones Tally is sure about. Settings, Banks connects banks through Plaid Link, sets which Tally account each
-  bank account is, repairs a lapsed connection in place, and checks an account against its bank.
-- Opening the app with bank sync on brings up New from the bank when something waits: once on the first open of
-  the day and again when new rows arrive. Guessed rows are ticked and added with one button, the rest take a
-  category chip, and a new everyday bank account asks which Tally account it is.
-- The server checks connected banks every few hours (`TALLY_BANK_SYNC_HOURS`, default 4) and skips a check the app
-  asks for when it checked within the last half hour. A new connection's accounts are matched to Tally accounts by
-  kind and name where one clearly fits. The inbox on each account starts a few days before its last entry when it is
-  connected; older bank rows show only in the account's audit.
-- A new design, switchable in Settings (Classic stays as it was): Summary, Activity, Accounts, an entry's page, Add,
-  the bank check-in and Settings rebuilt from scratch on Apple's system colors, text styles and controls, with
-  company and bank logos, a category switcher like Mail's, a week chart, a net worth chart to drag across, an Apple
-  Cash style keypad and haptics throughout.
-- First-time setup from the banks (server with Plaid keys and an empty ledger): connect banks through Plaid, review
-  the accounts Tally makes from them, choose all history or this month, and Tally creates the accounts, a starter
-  set of categories and the entries it's sure of. Such a ledger adds sure rows by itself on every sync (`bank_auto`)
-  and keeps each account at the bank's balance; an entry it added that you delete stays out.
-- New design motion follows the system's: critically damped springs and ease-out curves with no overshoot, numbers
-  that change like SwiftUI's numeric text, a drawn checkmark at the end of setup, and shorter, plainer wording with
-  small list headers on settings-style screens.
-- Plaid's webhook (`PLAID_WEBHOOK_URL`): new transactions sync minutes after Plaid has them. Each message must
-  carry Plaid's signature and the URL's secret, and existing connections are pointed at the URL on start. One Plaid
-  Link session can add several banks (Multi-Item Link) where Plaid allows it.
-- The welcome setup closes completely on Get Started and never offers setup twice (it came back after finishing,
-  and Set Up Tally then failed with "already set up").
-- Logos (`/api/logo`): Plaid's merchant logo or website for bank rows, else the name as a website on logo.dev
-  (`LOGO_DEV_KEY`), cached in `TALLY_LOGOS`; a wrong one can be hidden.
+- Bank sync through Plaid (off unless Plaid keys are configured). Bank rows live in their own `bank.db`, pair with
+  existing entries, and the rest get a guess at name, category and accounts learned from paired entries, card
+  payments paired across both accounts, then Plaid's category. Rows Tally is sure of are added on their own, and
+  each account is held at the bank's balance.
+- Plaid's webhook (`PLAID_WEBHOOK_URL`): new transactions sync minutes after Plaid has them. Each message must carry
+  Plaid's ES256 signature over its body and the URL's secret; existing connections are pointed at the URL on start.
+  The server also checks every four hours (`TALLY_BANK_SYNC_HOURS`) and on app open after half an hour.
+- First-time setup for an empty ledger: connect banks (several in one Plaid Link session where Plaid allows it),
+  review the accounts Tally proposes, choose all history or this month, and Tally creates the accounts, a starter set
+  of categories and the entries it's sure of.
+- The check-in opens on the first open of the day and when new rows arrive: rows to review (swipe right to add,
+  left to skip, or pick a category and account), new bank accounts to place, and the week's automatic additions.
+- A new design on Apple's system colors, text styles and controls: Summary, Activity, Accounts, entry pages, Add,
+  the check-in and Settings, with merchant and bank logos (`/api/logo`), Tally's own emerald tint, critically damped
+  motion, numbers that change like SwiftUI's numeric text and haptics throughout.
+- Summary's rings: spending against the budget (or last month) and the share of the month gone.
+- Accounts stacks cards and bank accounts like Wallet in their banks' colors, or as a picture of the real card
+  (`/api/accounts/{id}/art`, `/api/cards`), and a card zooms open into its account page.
+- An entry's page is washed in the merchant's brand color (`/api/logo/color`).
+- Activity's switcher swipes to the first or last filter as in Mail and answers before the list redraws; holding
+  delete on the keypad keeps deleting.
+- Settings: App Icon picker; the app-switcher and Face ID cover is the system blur with the current icon.
+
+Changed
+- The glowing t is the default app icon.
+- Plaid's salary income maps to Paycheck.
+
+Removed
+- The previous design: Home, Insights, Catch up, budgets and goals editing, recurring entries, reconciliation,
+  themes, sounds and the second server (Tally Lab) setting. The server routes behind them are unchanged.
 
 ## 3.7.0 (2026-11-22)
 A pass over how the app feels in daily use, from reviewers using it the way it gets used: logging single purchases,
