@@ -140,12 +140,16 @@ def _finish(b, con, raw: dict) -> dict:
 
 def adopt(b, con, iid: int) -> list[dict]:
     """A bank connected after setup, on a ledger built from the banks (`bank_auto`): each of its accounts nobody has
-    placed becomes a ledger account the way setup makes them (named after the bank's, held at its balance, all its
-    history), so a new bank needs no answers. Accounts of a kind Tally doesn't keep are left alone."""
+    placed becomes a ledger account the way setup makes them (named after the bank's, held at its balance, its inbox
+    starting where the ledger does), so a new bank needs no answers. Accounts of a kind Tally doesn't keep are left
+    alone."""
     made = []
     rows = b.execute("SELECT a.*, i.institution FROM accounts a JOIN items i ON i.id=a.item_id "
                      "WHERE a.item_id=? AND a.tally_account_id IS NULL AND a.skip=0 ORDER BY a.id", (iid,)).fetchall()
     taken = {r[0].lower() for r in con.execute("SELECT name FROM accounts")}
+    # A ledger kept to this month starts the new bank's inbox there too, as setup did; all history takes it all.
+    hist = con.execute("SELECT value FROM settings WHERE key='bank_history'").fetchone()
+    since = None if hist and hist[0] == "all" else db.setting(con, "start_month")
     sort = (con.execute("SELECT MAX(sort) FROM accounts").fetchone()[0] or 0) + 1
     for a in rows:
         kind = KIND.get(a["type"] or "")
@@ -158,7 +162,7 @@ def adopt(b, con, iid: int) -> list[dict]:
         tid = con.execute("INSERT INTO accounts(name, kind, bank, start_balance, sort) VALUES(?,?,?,0,?)",
                           (name, kind, _brand(a["institution"]), sort)).lastrowid
         sort += 1
-        b.execute("UPDATE accounts SET tally_account_id=?, since=NULL, skip=0, anchor=1 WHERE id=?", (tid, a["id"]))
+        b.execute("UPDATE accounts SET tally_account_id=?, since=?, skip=0, anchor=1 WHERE id=?", (tid, since, a["id"]))
         made.append({"id": tid, "name": name, "kind": kind})
     con.commit()
     b.commit()

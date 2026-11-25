@@ -428,3 +428,30 @@ def test_a_failure_after_the_exchange_keeps_the_connection(client, fake, monkeyp
     assert items[0]["error"] is None and [a["name"] for a in items[0]["accounts"]] == ["Checking", "Card"]
     assert client.delete(f"/api/bank/items/{items[0]['id']}").status_code == 204  # and it can be removed
     assert fake.removed == ["access-sandbox-1"]
+
+
+# ---------- banks connected after setup ----------
+
+def _second_bank(fake, monkeypatch, accounts, item="item-2"):
+    """The next connection is a different bank with these accounts."""
+    fake.accounts = accounts
+    real = fake.__call__
+
+    def call(path, body, timeout=30):
+        if path == "/item/public_token/exchange":
+            return {"access_token": f"access-{item}", "item_id": item}
+        return real(path, body, timeout)
+    monkeypatch.setattr(plaid, "call", call)
+
+
+def test_a_bank_added_to_a_this_month_ledger_starts_this_month(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[prow("now", "acc-chk", 5.00, "2026-09-20", "SQ *THING")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client, "month")
+    _second_bank(fake, monkeypatch, [{"account_id": "acc-2", "name": "Other Checking", "mask": "9999",
+                                      "type": "depository", "subtype": "checking", "balances": {"current": 10.0}}])
+    fake.push(added=[prow("old", "acc-2", 7.00, "2026-03-03", "SQ *OLD SHOP"),
+                     prow("new", "acc-2", 8.00, "2026-09-25", "SQ *NEW SHOP")])
+    assert client.post("/api/bank/sandbox/connect").status_code == 201
+    assert sorted(b["raw"] for b in client.get("/api/bank/inbox").json()) == ["SQ *NEW SHOP", "SQ *THING"]
