@@ -4,7 +4,7 @@ import { router } from 'expo-router'
 import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { SFSymbol } from 'expo-symbols'
-import { useLeaveIfSetUp } from '@/design/setup'
+import { leaveWelcome, useLeaveIfSetUp } from '@/design/setup'
 import { rise } from '@/design/motion'
 import { space, usePalette } from '@/design/theme'
 import { AppMark } from '@/design/ui/AppMark'
@@ -47,7 +47,11 @@ export default function Welcome() {
           <SF name="lock.fill" size={13} color={p.label2} />
           <Txt v="footnote" tone="label2" center>Tally never sees your bank password.</Txt>
         </View>
-        <Button label="Continue" onPress={() => router.push('/welcome/connect')} style={{ alignSelf: 'stretch' }} />
+        <View style={{ alignSelf: 'stretch', gap: space.s }}>
+          <Button label="Continue" onPress={() => router.push('/welcome/connect')} />
+          {/* Tally opens without banks; setup comes back on the next launch and stays in Settings until it's done. */}
+          <Button label="Not Now" kind="plain" onPress={leaveWelcome} />
+        </View>
       </Animated.View>
     </View>
   )
