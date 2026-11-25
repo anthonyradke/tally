@@ -18,8 +18,9 @@ const missed = new Set<string>()
 /** Forget this session's misses (after a logo is hidden or shown again). */
 export const forgetLogo = (key: string) => missed.delete(key)
 
-export function Logo({ name, account, item, size = 40, symbol, color, letter }: {
-  name?: string; account?: number; item?: number; size?: number; symbol?: SFSymbol; color?: string; letter?: boolean
+/** `onFound`: called once the server's logo has loaded (a screen offers Hide Logo only then). */
+export function Logo({ name, account, item, size = 40, symbol, color, letter, onFound }: {
+  name?: string; account?: number; item?: number; size?: number; symbol?: SFSymbol; color?: string; letter?: boolean; onFound?: () => void
 }) {
   const p = usePalette()
   const server = useServer((s) => s.url)
@@ -41,7 +42,7 @@ export function Logo({ name, account, item, size = 40, symbol, color, letter }: 
         <Image source={{ uri: `${api.logoUrl(item !== undefined ? { item, tag } : account !== undefined ? { account, tag } : { name })}&v=${epoch}`, headers: authHeaders() }}
           cachePolicy="disk" recyclingKey={key} transition={shown ? 0 : 180} contentFit="cover"
           style={{ ...FILL, opacity: shown ? 1 : 0, backgroundColor: shown ? '#FFFFFF' : 'transparent' }}
-          onLoad={() => setShown(true)} onError={() => { missed.add(key); setShown(false) }} />
+          onLoad={() => { setShown(true); onFound?.() }} onError={() => { missed.add(key); setShown(false) }} />
       )}
       <View pointerEvents="none" style={{ ...FILL, borderRadius: size / 2, borderWidth: 0.5, borderColor: p.separator, opacity: shown ? 1 : 0 }} />
     </View>
