@@ -479,3 +479,16 @@ def test_reconnecting_a_bank_takes_back_its_accounts_and_decisions(client, fake,
         [(1, 1), (1, 1)]
     assert [t["what"] for t in entries(client)] == ["Acme"]  # paired again, nothing added twice or back
     assert client.get("/api/bank/inbox").json() == []
+
+
+def test_automap_needs_more_than_a_kind_word(client, fake, monkeypatch):
+    """"Chase Checking" isn't the Test Bank's checking, nor "Amex CC" its card; "Test Card" and "Checking 1111" are."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    client.post("/api/accounts", json={"name": "Chase Checking", "kind": "cash"})
+    client.post("/api/accounts", json={"name": "Amex CC", "kind": "card"})
+    assert client.post("/api/bank/sandbox/connect").json()["matched"] == []
+    client.delete(f"/api/bank/items/{client.get('/api/bank').json()['items'][0]['id']}")
+    card = client.post("/api/accounts", json={"name": "Test Card", "kind": "card"}).json()["id"]
+    chk = client.post("/api/accounts", json={"name": "Checking 1111", "kind": "cash"}).json()["id"]
+    matched = client.post("/api/bank/sandbox/connect").json()["matched"]
+    assert sorted(m["account_id"] for m in matched) == sorted([card, chk])

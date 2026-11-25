@@ -365,6 +365,10 @@ def assign(bcon, st, aid: int, target: Optional[int]) -> None:
 _ALIAS = {"american": "amex", "express": "amex", "cc": "card", "credit": "card", "savings": "saving",
           "hysa": "saving", "loans": "loan"}
 _STOP = {"bank", "account", "plaid", "the", "of", "na", "fsb", "n"}
+# Words that say what kind of account it is, which every bank shares: never enough on their own to match.
+_KIND_WORDS = {"checking", "saving", "card", "loan", "cash", "debit", "money", "market", "share", "ira", "hsa",
+               "brokerage", "investment", "k", "401k", "roth", "student", "auto", "mortgage", "personal", "business",
+               "total", "everyday", "rewards", "premier", "plus", "high", "yield", "interest"}
 
 
 def _tokens(*texts) -> set[str]:
@@ -377,18 +381,29 @@ def _tokens(*texts) -> set[str]:
     return out
 
 
+def _own(name: set[str], words: set[str]) -> bool:
+    """A ledger account's name shares more than a kind word ("checking", "card") with a bank account: the bank's
+    name, the account's own words or its last four digits. A plain "Checking" with nothing else in its name is
+    fine; "Chase Checking" isn't another bank's checking."""
+    rest = name - _KIND_WORDS
+    return bool(rest & words) or not rest
+
+
 def automap(bcon, st, iid: int) -> list[dict]:
     """Match a new connection's accounts to ledger accounts by kind and shared words (Chase + checking is Chase
     Checking, American Express is Amex CC), only where one account clearly wins. The rest wait for an answer."""
     inst = (bcon.execute("SELECT institution FROM items WHERE id=?", (iid,)).fetchone() or [None])[0]
     taken = {r[0] for r in bcon.execute("SELECT tally_account_id FROM accounts WHERE tally_account_id IS NOT NULL")}
+    names = {x.id: _tokens(x.name) for x in st.accounts}
     done = []
     for a in bcon.execute("SELECT * FROM accounts WHERE item_id=? AND tally_account_id IS NULL AND skip=0 ORDER BY id",
                           (iid,)).fetchall():
-        words = _tokens(inst, a["name"], a["official_name"], a["subtype"])
-        scored = sorted(((len(words & _tokens(x.name)), x.id) for x in st.accounts
+        # The last four digits in a ledger account's name count as a shared word.
+        words = _tokens(inst, a["name"], a["official_name"], a["subtype"]) | ({a["mask"]} if a["mask"] else set())
+        scored = sorted(((len(words & names[x.id]), x.id) for x in st.accounts
                          if x.kind in kinds_for(a) and x.id not in taken and x.id not in st.hidden), reverse=True)
-        if scored and scored[0][0] > 0 and (len(scored) == 1 or scored[0][0] > scored[1][0]):
+        if (scored and scored[0][0] > 0 and (len(scored) == 1 or scored[0][0] > scored[1][0])
+                and _own(names[scored[0][1]], words)):
             assign(bcon, st, a["id"], scored[0][1])
             taken.add(scored[0][1])
             done.append({"bank_account": a["name"], "account_id": scored[0][1]})
