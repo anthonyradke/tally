@@ -113,13 +113,21 @@ def _ident(con, name: Optional[str], account: Optional[int], item: Optional[int]
     return "name", key
 
 
+def _sources(con, name: Optional[str], account: Optional[int], item: Optional[int]):
+    """Where to look, as a function: logos.resolve only calls it when the cache has no answer, so a cached logo no
+    longer reads the bank's tables first."""
+    if item is not None:
+        return lambda: _item_sources(item)
+    if account is not None:
+        return lambda: _account_sources(con, account)
+    return lambda: _bank_sources(con, name or "") + [("domain", d) for d in logos.domains_for(name or "")]
+
+
 @router.get("")
 def get_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None, item: Optional[int] = None):
     """`item`: a connected bank (setup lists them before any account exists)."""
     kind, ident = _ident(con, name, account, item)
-    sources = _item_sources(item) if item is not None else _account_sources(con, account) if account is not None else \
-        _bank_sources(con, name or "") + [("domain", d) for d in logos.domains_for(name or "")]
-    path = logos.resolve(kind, ident, sources)
+    path = logos.resolve(kind, ident, _sources(con, name, account, item))
     if not path:
         raise HTTPException(404)
     return FileResponse(path, media_type="image/png", headers=CACHE)
@@ -137,9 +145,7 @@ def get_color(con: Con, name: Optional[str] = None, account: Optional[int] = Non
                                   account)
     if plaid_color and re.fullmatch(r"#?[0-9a-fA-F]{6}", plaid_color):
         return {"color": "#" + plaid_color.lstrip("#").upper()}
-    sources = _item_sources(item) if item is not None else _account_sources(con, account) if account is not None else \
-        _bank_sources(con, name or "") + [("domain", d) for d in logos.domains_for(name or "")]
-    path = logos.resolve(kind, ident, sources)
+    path = logos.resolve(kind, ident, _sources(con, name, account, item))
     return {"color": logos.color_of(kind, ident, path) if path else None}
 
 

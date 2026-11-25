@@ -8,20 +8,30 @@ Where a logo comes from, surest first:
 Never logo.dev's best-match name search: it always answers, and a local shop got a stranger's logo.
 
 Words that only describe ("Paycheck", "Rent", "Gas") are never looked up, and a logo shown wrong can be hidden for good
-(`hide`). A miss is remembered for a month, then tried again (the bank may have learned the merchant since).
+(`hide`). A miss is remembered for a month, then tried again (the bank may have learned the merchant since). Only a
+real answer is a miss (logo.dev's 404, a page that isn't an image, or no source at all): a timeout, a 429 or 5xx, a
+network error or the time budget running out waits ten minutes, and without LOGO_DEV_KEY nothing is remembered.
+One lookup per name at a time (`resolve` holds a lock per logo), within BUDGET seconds for all its sources.
 """
 from __future__ import annotations
 import base64
 import hashlib
 import os
 import re
+import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
+import weakref
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional, Union
+from .logo_color import brand_color, washes  # noqa: F401 (washes: for api_logos)
 
 MISS_DAYS = 30
+WAIT_SECONDS = 600  # after a failure that says nothing about the logo (timeout, 429, 5xx, offline)
+BUDGET = 3.0  # seconds for all of one logo's sources; a request used to wait up to 6 s per source
 SIZE = 128
 GENERIC = set("""
 rent paycheck payroll salary income interest dividend transfer payment payments refund refunds deposit withdrawal cash
@@ -130,20 +140,47 @@ def _sniff(data: bytes) -> bool:
         (data[:4] == b"RIFF" and data[8:12] == b"WEBP")
 
 
+class Transient(Exception):
+    """The fetch failed in a way that says nothing about the logo: try again later, don't remember a miss."""
+
+
+class NoKey(Exception):
+    """A logo.dev lookup with no LOGO_DEV_KEY: skipped, and not remembered as a miss."""
+
+
+_until = threading.local()  # the current lookup's deadline (time.monotonic), set by resolve
+
+
+def _timeout() -> float:
+    left = getattr(_until, "t", None)
+    left = 6.0 if left is None else left - time.monotonic()
+    if left <= 0.05:
+        raise Transient("out of time")
+    return min(6.0, left)
+
+
 def _get(url: str) -> Optional[bytes]:
+    """The image at `url`; None when the answer is that there is none (404, 410, not an image). Raises Transient
+    for anything else: a timeout, a 429 or 5xx, a network error."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Tally"})
-        with urllib.request.urlopen(req, timeout=6) as r:
+        with urllib.request.urlopen(req, timeout=_timeout()) as r:
             data = r.read(512 * 1024)
-        return data if _sniff(data) else None
-    except Exception:
-        return None
+    except urllib.error.HTTPError as e:
+        if e.code in (400, 404, 410):
+            return None
+        raise Transient(f"HTTP {e.code}") from None
+    except Transient:
+        raise
+    except Exception as e:  # URLError, timeouts, resets
+        raise Transient(str(e)) from None
+    return data if _sniff(data) else None
 
 
 def from_domain(domain: str) -> Optional[bytes]:
     k = key()
     if not k:
-        return None
+        raise NoKey()
     q = urllib.parse.urlencode({"token": k, "size": SIZE, "format": "png", "retina": "true", "fallback": "404"})
     return _get(f"https://img.logo.dev/{urllib.parse.quote(domain)}?{q}")
 
@@ -159,21 +196,33 @@ def cached(kind: str, ident: str) -> tuple[Optional[Path], bool]:
         return png, False
     if _path(kind, ident, "hidden").exists():
         return None, True
-    miss = _path(kind, ident, "miss")
-    if miss.exists() and time.time() - miss.stat().st_mtime < MISS_DAYS * 86400:
-        return None, True
+    for ext, age in (("miss", MISS_DAYS * 86400), ("wait", WAIT_SECONDS)):
+        f = _path(kind, ident, ext)
+        if f.exists() and time.time() - f.stat().st_mtime < age:
+            return None, True
     return None, False
 
 
-def store(kind: str, ident: str, data: Optional[bytes]) -> Optional[Path]:
+def _write(path: Path, data: bytes) -> None:
+    """Write through a temp file of this writer's own: two requests storing one logo shared `<hash>.tmp`, and the
+    second rename found it gone."""
+    tmp = path.with_name(f"{path.name}.{uuid.uuid4().hex[:8]}.tmp")
+    try:
+        tmp.write_bytes(data)
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def store(kind: str, ident: str, data: Optional[bytes], mark: str = "miss") -> Optional[Path]:
+    """Keep the logo, or with no data remember the miss (`mark`: "miss" for a month, "wait" for ten minutes)."""
     folder().mkdir(parents=True, exist_ok=True)
     if not data:
-        _path(kind, ident, "miss").touch()
+        _path(kind, ident, mark).touch()
         return None
     png = _path(kind, ident, "png")
-    tmp = png.with_suffix(".tmp")
-    tmp.write_bytes(data)
-    tmp.replace(png)
+    _write(png, data)
+    _path(kind, ident, "wait").unlink(missing_ok=True)
     return png
 
 
@@ -185,22 +234,60 @@ def hide(kind: str, ident: str) -> None:
 
 
 def unhide(kind: str, ident: str) -> None:
-    for ext in ("hidden", "miss"):
+    for ext in ("hidden", "miss", "wait"):
         _path(kind, ident, ext).unlink(missing_ok=True)
 
 
-def resolve(kind: str, ident: str, sources: list[tuple[str, str]]) -> Optional[Path]:
+_locks: "weakref.WeakValueDictionary[tuple[str, str], threading.Lock]" = weakref.WeakValueDictionary()
+_locks_guard = threading.Lock()
+
+
+def _lock(kind: str, ident: str) -> threading.Lock:
+    with _locks_guard:
+        lk = _locks.get((kind, ident))
+        if lk is None:
+            lk = _locks[(kind, ident)] = threading.Lock()
+        return lk
+
+
+Sources = list[tuple[str, str]]
+
+
+def resolve(kind: str, ident: str, sources: Union[Sources, Callable[[], Sources]],
+            budget: float = BUDGET) -> Optional[Path]:
     """The cached logo, or the first source that gives one: ("url", plaid logo url), ("domain", site) or
-    ("base64", png data)."""
+    ("base64", png data). `sources` may be a function, called only when the cache has no answer. Requests for the
+    same logo wait for the one already looking it up and share its answer."""
     hit, skip = cached(kind, ident)
     if hit or skip:
         return hit
-    for how, value in sources:
-        data = (_get(value) if how == "url" else from_domain(value) if how == "domain"
-                else _b64(value) if how == "base64" else None)
-        if data:
-            return store(kind, ident, data)
-    return store(kind, ident, None)
+    lk = _lock(kind, ident)
+    with lk:
+        hit, skip = cached(kind, ident)  # another request may have just looked it up
+        if hit or skip:
+            return hit
+        unsure = nokey = False
+        _until.t = time.monotonic() + budget
+        try:
+            for how, value in (sources() if callable(sources) else sources):
+                try:
+                    data = (_get(value) if how == "url" else from_domain(value) if how == "domain"
+                            else _b64(value) if how == "base64" else None)
+                except NoKey:
+                    nokey = True
+                    continue
+                except Transient:
+                    unsure = True
+                    if time.monotonic() >= _until.t:
+                        break
+                    continue
+                if data:
+                    return store(kind, ident, data)
+        finally:
+            _until.t = None
+        if unsure:
+            return store(kind, ident, None, "wait")
+        return None if nokey else store(kind, ident, None)
 
 
 def _b64(s: str) -> Optional[bytes]:
@@ -211,117 +298,7 @@ def _b64(s: str) -> Optional[bytes]:
         return None
 
 
-# ---------- a logo's brand color, for tinting an entry's page or an account's card ----------
-
-def _png_pixels(data: bytes) -> Optional[tuple[int, int, list[tuple[int, int, int, int]]]]:
-    """Width, height and RGBA pixels of an 8-bit, non-interlaced PNG (what logo.dev and Plaid serve); None for
-    anything else. Standard library only."""
-    import struct
-    import zlib
-    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return None
-    pos, idat, plte, trns = 8, [], b"", b""
-    w = h = depth = ctype = inter = 0
-    while pos + 8 <= len(data):
-        n, kind = struct.unpack(">I4s", data[pos:pos + 8])
-        body = data[pos + 8:pos + 8 + n]
-        if kind == b"IHDR":
-            w, h, depth, ctype, _, _, inter = struct.unpack(">IIBBBBB", body)
-        elif kind == b"PLTE":
-            plte = body
-        elif kind == b"tRNS":
-            trns = body
-        elif kind == b"IDAT":
-            idat.append(body)
-        elif kind == b"IEND":
-            break
-        pos += 12 + n
-    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(ctype)
-    if depth != 8 or inter or not channels or not w or not h or w * h > 4_000_000:
-        return None
-    try:
-        raw = zlib.decompress(b"".join(idat))
-    except zlib.error:
-        return None
-    stride = w * channels
-    if len(raw) < h * (stride + 1):
-        return None
-    out: list[tuple[int, int, int, int]] = []
-    prev = bytearray(stride)
-    for y in range(h):
-        f = raw[y * (stride + 1)]
-        line = bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
-        for i in range(stride):
-            a = line[i - channels] if i >= channels else 0
-            b, c = prev[i], prev[i - channels] if i >= channels else 0
-            if f == 1:
-                line[i] = (line[i] + a) & 255
-            elif f == 2:
-                line[i] = (line[i] + b) & 255
-            elif f == 3:
-                line[i] = (line[i] + (a + b) // 2) & 255
-            elif f == 4:
-                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
-                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
-        prev = line
-        if y % 2:
-            continue  # every other row and column is plenty for a color
-        for x in range(0, w, 2):
-            px = line[x * channels:(x + 1) * channels]
-            if ctype == 6:
-                out.append((px[0], px[1], px[2], px[3]))
-            elif ctype == 2:
-                out.append((px[0], px[1], px[2], 255))
-            elif ctype == 3:
-                i = px[0]
-                if 3 * i + 2 >= len(plte):
-                    continue
-                out.append((plte[3 * i], plte[3 * i + 1], plte[3 * i + 2], trns[i] if i < len(trns) else 255))
-            elif ctype == 4:
-                out.append((px[0], px[0], px[0], px[1]))
-            else:
-                out.append((px[0], px[0], px[0], 255))
-    return w, h, out
-
-
-def brand_color(data: bytes) -> Optional[str]:
-    """The color a logo is mostly drawn in, as #RRGGBB: the strongest hue among its opaque pixels, skipping white
-    and grays. A logo in black alone is black; one with no ink to speak of has none."""
-    import colorsys
-    got = _png_pixels(data)
-    if not got:
-        return None
-    bins: dict[int, list[float]] = {}
-    opaque = dark = 0
-    dark_sum = [0, 0, 0]
-    for r, g, b, a in got[2]:
-        if a < 160:
-            continue
-        opaque += 1
-        hue, light, sat = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
-        if sat > 0.28 and 0.12 < light < 0.9:
-            k = int(hue * 18) % 18
-            s = bins.setdefault(k, [0.0, 0.0, 0.0, 0.0])
-            wgt = sat * (1 - abs(light - 0.5))
-            s[0] += wgt
-            s[1] += r * wgt
-            s[2] += g * wgt
-            s[3] += b * wgt
-        elif light < 0.2:
-            dark += 1
-            dark_sum[0] += r
-            dark_sum[1] += g
-            dark_sum[2] += b
-    if not opaque:
-        return None
-    if bins:
-        k, s = max(bins.items(), key=lambda kv: kv[1][0])
-        if s[0] > opaque * 0.03:
-            return "#%02X%02X%02X" % (round(s[1] / s[0]), round(s[2] / s[0]), round(s[3] / s[0]))
-    if dark > opaque * 0.15:
-        return "#%02X%02X%02X" % tuple(round(v / dark) for v in dark_sum)
-    return None
-
+# ---------- a logo's brand color (logo_color.py), remembered beside the cached logo ----------
 
 def color_of(kind: str, ident: str, path: Path) -> Optional[str]:
     """brand_color for a cached logo, remembered beside it."""
@@ -329,5 +306,5 @@ def color_of(kind: str, ident: str, path: Path) -> Optional[str]:
     if side.exists() and side.stat().st_mtime >= path.stat().st_mtime:
         return side.read_text().strip() or None
     c = brand_color(path.read_bytes())
-    side.write_text(c or "")
+    _write(side, (c or "").encode())
     return c
