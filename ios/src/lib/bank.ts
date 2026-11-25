@@ -2,7 +2,7 @@
 // yet, and connecting a bank through Plaid Link. The server does the work (app/bank.py); this asks and shows.
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useQuery } from '@tanstack/react-query'
-import { api, ApiError, type Account, type BankConnected, type BankRow, type BankStatus } from './api'
+import { api, ApiError, type Account, type BankConnected, type BankRow, type BankStatus, type BankSynced } from './api'
 import { invalidateAll, queryClient } from './data'
 
 /** The server's bank sync, or null when it has none (404: no Plaid keys, as on the real Tally). */
@@ -23,11 +23,9 @@ export const useBankOn = () => !!useBank().data
 export const useBankInbox = (enabled = true) =>
   useQuery({ queryKey: ['bank', 'inbox'], queryFn: api.bank.inbox, enabled, staleTime: 15_000 })
 
-/** After anything that changes bank rows or entries: the inbox, the status count, and every list of entries. */
-export const refreshBank = () => Promise.all([queryClient.invalidateQueries({ queryKey: ['bank'] }), invalidateAll()])
-
-export const cachedRow = (id: number): BankRow | undefined =>
-  queryClient.getQueryData<BankRow[]>(['bank', 'inbox'])?.find((r) => r.id === id)
+/** After anything that changes bank rows or entries: the inbox, the status count, and every list of entries
+ *  (`invalidateAll` covers the bank queries too). */
+export const refreshBank = () => invalidateAll()
 
 /** How a bank row reads on its account, like the account's own statement (DESIGN.md): on a cash account + for money
  *  in and − for money out; on a card or loan, charges plain and credits as green +. */
@@ -101,12 +99,17 @@ export async function loadSeen(): Promise<Seen | null> {
 
 export const saveSeen = (s: Seen) => AsyncStorage.setItem(seenKey(), JSON.stringify(s)).catch(() => {})
 
+/** Whether a sync changed entries (some added by Tally itself, or bank rows paired with existing ones). */
+export const syncChanged = (r: Pick<BankSynced, 'added' | 'paired'> | null | undefined) => !!r && ((r.added ?? 0) > 0 || (r.paired ?? 0) > 0)
+
 /** Checks the banks (the server skips it when it did within half an hour) and returns what's waiting, or null on a
  *  server without bank sync. */
 export async function freshBank(): Promise<{ status: BankStatus; rows: BankRow[] } | null> {
   const s = await queryClient.fetchQuery({ queryKey: ['bank'], queryFn: status, staleTime: 0, retry: false })
   if (!s) return null
-  await api.bank.sync(30 * 60).catch(() => {})
+  const synced = await api.bank.sync(30 * 60).catch(() => null)
+  // Entries Tally added by itself, or bank rows paired with entries: balances and lists changed under the screens.
+  if (syncChanged(synced)) await invalidateAll()
   const [st, rows] = await Promise.all([
     queryClient.fetchQuery({ queryKey: ['bank'], queryFn: status, staleTime: 0, retry: false }),
     queryClient.fetchQuery({ queryKey: ['bank', 'inbox'], queryFn: api.bank.inbox, staleTime: 0 }),
