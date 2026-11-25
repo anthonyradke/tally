@@ -21,7 +21,7 @@ function Choice({ icon, on }: { icon: AppIcon; on: boolean }) {
         </View>
         {on && (
           <View style={{ position: 'absolute', right: -6, bottom: -6, backgroundColor: p.card, borderRadius: 12 }}>
-            <SF name="checkmark.circle.fill" size={24} color={p.blue} />
+            <SF name="checkmark.circle.fill" size={24} color={p.tint} />
           </View>
         )}
       </View>

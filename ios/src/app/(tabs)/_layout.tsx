@@ -2,12 +2,13 @@
 // where iOS puts it.
 import { DynamicColorIOS } from 'react-native'
 import { NativeTabs } from 'expo-router/unstable-native-tabs'
+import { TINT } from '@/design/theme'
 
-const blue = process.env.EXPO_OS === 'ios' ? DynamicColorIOS({ light: '#007AFF', dark: '#0A84FF' }) : '#007AFF'
+const tint = process.env.EXPO_OS === 'ios' ? DynamicColorIOS(TINT) : TINT.light
 
 export default function NextTabs() {
   return (
-    <NativeTabs tintColor={blue} minimizeBehavior="onScrollDown">
+    <NativeTabs tintColor={tint} minimizeBehavior="onScrollDown">
       <NativeTabs.Trigger name="(home)">
         <NativeTabs.Trigger.Label>Summary</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'square.grid.2x2', selected: 'square.grid.2x2.fill' }} md="dashboard" />

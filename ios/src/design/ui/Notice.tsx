@@ -46,7 +46,7 @@ export function NoticeHost() {
       {note.action && (
         <Pressable hitSlop={8} onPress={() => { tap(); clear(note.id); Promise.resolve(note.action!.run()).catch(() => {}) }}
           style={{ paddingHorizontal: space.m, height: 34, borderRadius: 17, justifyContent: 'center', backgroundColor: p.fill3 }}>
-          <Txt v="subhead" weight="600" tone="blue">{note.action.label}</Txt>
+          <Txt v="subhead" weight="600" tone="tint">{note.action.label}</Txt>
         </Pressable>
       )}
     </View>

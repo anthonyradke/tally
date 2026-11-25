@@ -27,7 +27,7 @@ export default function Done() {
           <Section>
             <Row title="Accounts" value={accounts} />
             <Row title="Transactions Added" value={Number(added).toLocaleString()} />
-            <Row title="To Review" value={Number(waiting).toLocaleString()} valueTone={Number(waiting) ? 'blue' : 'label2'} />
+            <Row title="To Review" value={Number(waiting).toLocaleString()} valueTone={Number(waiting) ? 'tint' : 'label2'} />
           </Section>
         </Animated.View>
       </View>

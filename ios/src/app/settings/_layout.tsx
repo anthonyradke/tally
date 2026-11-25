@@ -12,7 +12,7 @@ export default function SettingsStack() {
       headerLargeTitleShadowVisible: false,
       headerLargeStyle: { backgroundColor: 'transparent' },
       headerStyle: process.env.EXPO_OS === 'ios' ? undefined : { backgroundColor: p.bg },
-      headerTintColor: p.blue,
+      headerTintColor: p.tint,
       headerTitleStyle: { color: p.label },
       headerLargeTitleStyle: { color: p.label },
       headerBackButtonDisplayMode: 'minimal',

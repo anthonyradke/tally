@@ -11,7 +11,7 @@ export function Button({ label, onPress, kind = 'filled', symbol, disabled, busy
   destructive?: boolean; style?: StyleProp<ViewStyle>
 }) {
   const p = usePalette()
-  const hue = destructive ? p.red : p.blue
+  const hue = destructive ? p.red : p.tint
   const bg = kind === 'filled' ? hue : kind === 'tinted' ? p.fill3 : 'transparent'
   const fg = kind === 'filled' ? p.onTint : hue
   return (

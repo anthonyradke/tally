@@ -33,7 +33,7 @@ export default function Welcome() {
         <View style={{ gap: 28 }}>
           {FEATURES.map(([icon, title, body], i) => (
             <Animated.View key={title} entering={enter(i + 1)} style={{ flexDirection: 'row', gap: space.l, alignItems: 'center' }}>
-              <View style={{ width: 44, alignItems: 'center' }}><SF name={icon} size={30} color={p.blue} weight="regular" /></View>
+              <View style={{ width: 44, alignItems: 'center' }}><SF name={icon} size={30} color={p.tint} weight="regular" /></View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Txt v="headline">{title}</Txt>
                 <Txt v="subhead" tone="label2">{body}</Txt>

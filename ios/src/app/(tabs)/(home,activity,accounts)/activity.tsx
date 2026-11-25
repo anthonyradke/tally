@@ -17,7 +17,7 @@ import { TxnRow } from '@/design/ui/TxnRow'
 
 type Filter = 'all' | 'Spending' | 'Money in' | 'Transfer'
 const FILTERS: SwitchOption<Filter>[] = [
-  { key: 'all', label: 'All', symbol: 'tray.fill', hue: 'blue' },
+  { key: 'all', label: 'All', symbol: 'tray.fill', hue: 'tint' },
   { key: 'Spending', label: 'Spending', symbol: 'bag.fill', hue: 'pink' },
   { key: 'Money in', label: 'Income', symbol: 'arrow.down.circle.fill', hue: 'green' },
   { key: 'Transfer', label: 'Transfers', symbol: 'arrow.left.arrow.right', hue: 'indigo' },

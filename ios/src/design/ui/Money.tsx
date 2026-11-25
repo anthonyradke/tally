@@ -12,7 +12,7 @@ export function Money({ cents, plus, tone = 'plain', v = 'body', weight, noCents
   cents: number; plus?: boolean; tone?: 'pos' | 'plain' | 'quiet' | 'neg'; v?: TypeName; weight?: TextStyle['fontWeight']; noCents?: boolean
 }) {
   const p = usePalette()
-  const color = tone === 'pos' ? p.green : tone === 'neg' ? p.red : tone === 'quiet' ? p.label2 : p.label
+  const color = tone === 'pos' ? p.tint : tone === 'neg' ? p.red : tone === 'quiet' ? p.label2 : p.label
   const text = formatCents(plus ? Math.abs(cents) : cents, { cents: !noCents, sign: plus ? 'always' : 'auto' })
   return <Txt v={v} weight={weight} num color={color} numberOfLines={1}>{text}</Txt>
 }

@@ -2,6 +2,10 @@
 // ones that ship on the phone. Everything visual in src/next and src/app/next comes from here.
 import { useColorScheme, type TextStyle } from 'react-native'
 
+/** Tally's own color, the way Notes is yellow and Health is pink: a deep emerald for everything you can tap and for
+ *  money coming in. The system colors stay for categories and states. */
+export const TINT: { light: string; dark: string } = { light: '#00875F', dark: '#30D398' }
+
 const light = {
   label: '#000000', label2: 'rgba(60,60,67,0.6)', label3: 'rgba(60,60,67,0.3)', label4: 'rgba(60,60,67,0.18)',
   separator: 'rgba(60,60,67,0.29)', bg: '#F2F2F7', card: '#FFFFFF', card2: '#F2F2F7',
@@ -9,6 +13,7 @@ const light = {
   blue: '#007AFF', green: '#34C759', red: '#FF3B30', orange: '#FF9500', yellow: '#FFCC00', pink: '#FF2D55',
   purple: '#AF52DE', indigo: '#5856D6', teal: '#30B0C7', mint: '#00C7BE', cyan: '#32ADE6', brown: '#A2845E',
   gray: '#8E8E93', monogram: ['#A6ABB5', '#858993'] as [string, string], onTint: '#FFFFFF', scrim: 'rgba(0,0,0,0.4)',
+  tint: TINT.light,
 }
 const dark: typeof light = {
   label: '#FFFFFF', label2: 'rgba(235,235,245,0.6)', label3: 'rgba(235,235,245,0.3)', label4: 'rgba(235,235,245,0.16)',
@@ -17,9 +22,10 @@ const dark: typeof light = {
   blue: '#0A84FF', green: '#30D158', red: '#FF453A', orange: '#FF9F0A', yellow: '#FFD60A', pink: '#FF375F',
   purple: '#BF5AF2', indigo: '#5E5CE6', teal: '#40C8E0', mint: '#63E6E2', cyan: '#64D2FF', brown: '#AC8E68',
   gray: '#8E8E93', monogram: ['#6C7079', '#4E525A'] as [string, string], onTint: '#FFFFFF', scrim: 'rgba(0,0,0,0.6)',
+  tint: TINT.dark,
 }
 export type Palette = typeof light
-export type Hue = 'blue' | 'green' | 'red' | 'orange' | 'yellow' | 'pink' | 'purple' | 'indigo' | 'teal' | 'mint' | 'cyan' | 'brown' | 'gray'
+export type Hue = 'tint' | 'blue' | 'green' | 'red' | 'orange' | 'yellow' | 'pink' | 'purple' | 'indigo' | 'teal' | 'mint' | 'cyan' | 'brown' | 'gray'
 
 export function usePalette(): Palette {
   return useColorScheme() === 'dark' ? dark : light

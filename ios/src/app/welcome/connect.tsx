@@ -41,7 +41,7 @@ export default function Connect() {
     <View style={{ flex: 1, backgroundColor: p.bg, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, space.l) }}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.xl, paddingTop: 56, paddingBottom: space.xl, gap: space.xxl }}>
         <View style={{ alignItems: 'center', gap: space.m }}>
-          <SF name="building.columns.fill" size={52} color={p.blue} />
+          <SF name="building.columns.fill" size={52} color={p.tint} />
           <Txt v="largeTitle" center>Add Your Banks</Txt>
           <Txt v="body" tone="label2" center>Sign in to the banks you use. You can add more later in Settings.</Txt>
         </View>
@@ -64,9 +64,9 @@ export default function Connect() {
             <Press feel="highlight" haptic={false} onPress={() => run('link')} disabled={!!busy}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.l }}>
                 <View style={{ width: 40, alignItems: 'center' }}>
-                  {busy === 'link' ? <ActivityIndicator color={p.blue} /> : <SF name="plus.circle.fill" size={28} color={p.blue} />}
+                  {busy === 'link' ? <ActivityIndicator color={p.tint} /> : <SF name="plus.circle.fill" size={28} color={p.tint} />}
                 </View>
-                <Txt v="body" tone="blue">Add Another Bank</Txt>
+                <Txt v="body" tone="tint">Add Another Bank</Txt>
               </View>
             </Press>
           </Card>

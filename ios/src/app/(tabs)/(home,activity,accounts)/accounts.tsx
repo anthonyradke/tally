@@ -77,7 +77,7 @@ export default function Accounts() {
 
             {bank && (
               <Section>
-                <Row leading={<Tile symbol="building.columns.fill" color={p.blue} size={30} />} title="Connected Banks"
+                <Row leading={<Tile symbol="building.columns.fill" color={p.tint} size={30} />} title="Connected Banks"
                   value={String(bank.items.length)} chevron onPress={() => router.push('/settings/banks')} />
               </Section>
             )}

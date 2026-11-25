@@ -99,7 +99,7 @@ function Waiting({ r }: { r: BankRow }) {
           {moving && <Choice options={accounts} value={other} onChange={setOther} none="Choose Account" />}
         </View>
         <Press onPress={add} disabled={!ready || busy} accessibilityLabel={`Add ${name}`}
-          style={{ height: 32, paddingHorizontal: 14, borderRadius: 16, justifyContent: 'center', backgroundColor: ready ? p.blue : p.fill3, opacity: busy ? 0.5 : 1 }}>
+          style={{ height: 32, paddingHorizontal: 14, borderRadius: 16, justifyContent: 'center', backgroundColor: ready ? p.tint : p.fill3, opacity: busy ? 0.5 : 1 }}>
           <Txt v="subhead" weight="600" color={ready ? '#FFFFFF' : p.label3}>Add</Txt>
         </Press>
       </View>

@@ -15,8 +15,8 @@ export function Choice<T extends string | number>({ options, value, onChange, no
   return (
     <Press feel="none" haptic={false} onPress={() => { if (options.length) { tick(); onChange(options[(i + 1) % options.length][0]) } }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        <Txt v="body" color={i >= 0 ? p.label2 : p.blue} numberOfLines={1}>{label}</Txt>
-        <SF name="chevron.up.chevron.down" size={12} color={i >= 0 ? p.label2 : p.blue} weight="semibold" />
+        <Txt v="body" color={i >= 0 ? p.label2 : p.tint} numberOfLines={1}>{label}</Txt>
+        <SF name="chevron.up.chevron.down" size={12} color={i >= 0 ? p.label2 : p.tint} weight="semibold" />
       </View>
     </Press>
   )

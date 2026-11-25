@@ -30,7 +30,7 @@ export default function Settings() {
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: p.bg }} contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 60 }}>
         <Section inset={62}>
           {bank && (
-            <Row leading={<Tile symbol="building.columns.fill" color={p.blue} size={30} />} title="Banks" value={String(bank.items.length)} chevron
+            <Row leading={<Tile symbol="building.columns.fill" color={p.tint} size={30} />} title="Banks" value={String(bank.items.length)} chevron
               onPress={() => router.push('/settings/banks')} />
           )}
           {lockable && (

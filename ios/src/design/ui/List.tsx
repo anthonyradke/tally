@@ -27,7 +27,7 @@ export function Section({ title, aside, action, footer, inset = space.l, compact
       ) : (title || action || aside) && (
         <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: space.xs }}>
           {title ? <Txt v="title3" weight="700">{title}</Txt> : <View />}
-          {action ? <Press feel="none" haptic={false} onPress={action.onPress} hitSlop={10}><Txt v="body" tone="blue">{action.label}</Txt></Press>
+          {action ? <Press feel="none" haptic={false} onPress={action.onPress} hitSlop={10}><Txt v="body" tone="tint">{action.label}</Txt></Press>
             : aside ? <Txt v="body" tone="label2" num>{aside}</Txt> : null}
         </View>
       )}
@@ -48,7 +48,7 @@ export function Section({ title, aside, action, footer, inset = space.l, compact
 
 /** One row: an optional leading view, a title with an optional subtitle, and a value or accessory on the right. */
 export function Row({ leading, title, subtitle, value, valueTone = 'label2', trailing, chevron, destructive, tint, onPress, disabled }: {
-  leading?: ReactNode; title: string; subtitle?: string; value?: string; valueTone?: 'label' | 'label2' | 'green' | 'blue'
+  leading?: ReactNode; title: string; subtitle?: string; value?: string; valueTone?: 'label' | 'label2' | 'green' | 'tint'
   trailing?: ReactNode; chevron?: boolean; destructive?: boolean; tint?: boolean; onPress?: () => void; disabled?: boolean
 }) {
   const p = usePalette()
@@ -56,7 +56,7 @@ export function Row({ leading, title, subtitle, value, valueTone = 'label2', tra
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: subtitle ? 60 : 52, paddingVertical: space.s, opacity: disabled ? 0.4 : 1 }}>
       {leading}
       <View style={{ flex: 1, gap: 1 }}>
-        <Txt v="body" numberOfLines={1} color={destructive ? p.red : tint ? p.blue : undefined}>{title}</Txt>
+        <Txt v="body" numberOfLines={1} color={destructive ? p.red : tint ? p.tint : undefined}>{title}</Txt>
         {subtitle ? <Txt v="subhead" tone="label2" numberOfLines={1}>{subtitle}</Txt> : null}
       </View>
       {value !== undefined && <Txt v="body" tone={valueTone} num numberOfLines={1}>{value}</Txt>}

@@ -12,7 +12,7 @@ export function Choice<T extends string | number>({ options, value, onChange, no
   const NONE = '__none__'
   return (
     <Host matchContents>
-      <Picker selection={value ?? NONE} modifiers={[pickerStyle('menu'), labelsHidden(), tint(value == null ? p.blue : p.label2)]}
+      <Picker selection={value ?? NONE} modifiers={[pickerStyle('menu'), labelsHidden(), tint(value == null ? p.tint : p.label2)]}
         onSelectionChange={(v) => { if (v !== NONE) { tick(); onChange(v as T) } }}>
         {[...(value == null ? [<Text key={NONE} modifiers={[tag(NONE)]}>{none ?? 'Choose'}</Text>] : []),
           ...options.map(([v, label]) => <Text key={String(v)} modifiers={[tag(v)]}>{label}</Text>)]}

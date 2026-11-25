@@ -8,7 +8,7 @@ export function DateChoice({ value, onChange, min }: { value: string; onChange: 
   const p = usePalette()
   return (
     <Press feel="none" haptic={false} onPress={() => { const d = addDays(value, -1); if (!min || d >= min) onChange(d) }}>
-      <Txt v="body" color={p.blue} style={{ backgroundColor: p.fill3, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, overflow: 'hidden' }}>{dayLabel(value)}</Txt>
+      <Txt v="body" color={p.tint} style={{ backgroundColor: p.fill3, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, overflow: 'hidden' }}>{dayLabel(value)}</Txt>
     </Press>
   )
 }

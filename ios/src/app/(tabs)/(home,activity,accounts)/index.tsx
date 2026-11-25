@@ -13,6 +13,7 @@ import { categoryLook } from '@/design/look'
 import { space, usePalette } from '@/design/theme'
 import { Card, Empty, Row, Section, Tile } from '@/design/ui/List'
 import { Money, Rolling } from '@/design/ui/Money'
+import { Rings } from '@/design/ui/Ring'
 import { Txt } from '@/design/ui/Txt'
 import { TxnRow } from '@/design/ui/TxnRow'
 import { WeekChart, type Day } from '@/design/ui/WeekChart'
@@ -62,7 +63,12 @@ export default function Summary() {
   const budget = budgeted.reduce((n, x) => n + x.amount, 0)
   const used = budgeted.reduce((n, x) => n + (m?.by_category[String(x.c.id)] ?? 0), 0)
   const spent = m?.spent ?? 0
-  const share = budget > 0 ? Math.min(1, used / budget) : 0
+  // The month's rings: what's spent against the budget (or all of last month), and how much of the month has gone.
+  // The outer one running ahead of the inner one is spending faster than the plan.
+  const pace = budget > 0 ? used / budget : prev?.spent ? spent / prev.spent : 0
+  const now = fromISO(L.today)
+  const elapsed = now.getDate() / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const ringColor = pace >= 1 ? p.red : pace > elapsed + 0.1 ? p.orange : p.tint
   const waiting = bank?.waiting ?? 0
   const added = recent.data?.length ?? 0
   const weekTotal = days.reduce((n, d) => n + d.total, 0)
@@ -84,28 +90,24 @@ export default function Summary() {
           <>
             {bank && (waiting > 0 || added > 0) && (
               <Card>
-                <Row leading={<Tile symbol={waiting ? 'tray.full.fill' : 'checkmark'} color={waiting ? p.blue : p.green} />}
+                <Row leading={<Tile symbol={waiting ? 'tray.full.fill' : 'checkmark'} color={waiting ? p.tint : p.green} />}
                   title="From Your Bank" chevron onPress={() => router.push('/check-in')}
                   subtitle={[waiting ? `${waiting} to review` : '', added ? `${added} added` : ''].filter(Boolean).join(' · ')} />
               </Card>
             )}
 
-            <Card pad style={{ gap: space.xs, paddingVertical: space.xl }}>
-              <Txt v="subhead" tone="label2" weight="600">Spent in {monthName(ym)}</Txt>
-              <Rolling cents={spent} />
-              {budget > 0 ? (
-                <View style={{ gap: space.s, marginTop: space.s }}>
-                  <View style={{ height: 8, borderRadius: 4, backgroundColor: p.fill3, overflow: 'hidden' }}>
-                    <View style={{ width: `${share * 100}%`, height: 8, borderRadius: 4, backgroundColor: share >= 1 ? p.red : share > 0.85 ? p.orange : p.blue }} />
-                  </View>
-                  <Txt v="subhead" tone="label2">
-                    <Txt v="subhead" weight="600" tone={used > budget ? 'red' : 'label'}>{formatCents(Math.abs(budget - used), { cents: false })} {used > budget ? 'over' : 'left'}</Txt>
-                    {used > budget ? ` your ${formatCents(budget, { cents: false })} budget` : ` of your ${formatCents(budget, { cents: false })} budget`}
-                  </Txt>
+            <Card pad style={{ flexDirection: 'row', alignItems: 'center', gap: space.l, paddingVertical: space.xl }}>
+              <View style={{ flex: 1, gap: space.xs }}>
+                <Txt v="subhead" tone="label2" weight="600">Spent in {monthName(ym)}</Txt>
+                <Rolling cents={spent} />
+                <View style={{ gap: 3, marginTop: space.xs }}>
+                  <Legend color={ringColor} text={budget > 0
+                    ? `${formatCents(Math.abs(budget - used), { cents: false })} ${used > budget ? 'over' : 'left'} of ${formatCents(budget, { cents: false })}`
+                    : prev ? `${formatCents(prev.spent, { cents: false })} in ${monthName(prev.month)}` : 'First month'} />
+                  <Legend color={p.indigo} text={`${Math.round(elapsed * 100)}% of the month`} />
                 </View>
-              ) : prev ? (
-                <Txt v="subhead" tone="label2">{formatCents(prev.spent, { cents: false })} in {monthName(prev.month)}</Txt>
-              ) : null}
+              </View>
+              <Rings rings={[{ value: pace, color: ringColor }, { value: elapsed, color: p.indigo }]} />
             </Card>
 
             <Section title="This Week">
@@ -126,5 +128,14 @@ export default function Summary() {
         )}
       </ScrollView>
     </>
+  )
+}
+
+function Legend({ color, text }: { color: string; text: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+      <Txt v="footnote" tone="label2" numberOfLines={1}>{text}</Txt>
+    </View>
   )
 }

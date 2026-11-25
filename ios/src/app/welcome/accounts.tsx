@@ -75,7 +75,7 @@ export default function Accounts() {
                   trailing={
                     <Press feel="scale" hitSlop={10} accessibilityLabel={on(a) ? 'Leave out' : 'Include'}
                       onPress={() => { tick(); useChoices.setState((x) => ({ off: { ...x.off, [a.id]: on(a) } })) }}>
-                      <SF name={on(a) ? 'checkmark.circle.fill' : 'circle'} size={26} color={on(a) ? p.blue : p.label3} />
+                      <SF name={on(a) ? 'checkmark.circle.fill' : 'circle'} size={26} color={on(a) ? p.tint : p.label3} />
                     </Press>
                   } />
               )
@@ -85,10 +85,10 @@ export default function Accounts() {
         <Section title="Start From" compact footer="Brings in up to two years of transactions.">
           <Row title="All History" subtitle={firsts.length ? `Since ${since(firsts[0])}` : undefined}
             onPress={() => { tick(); useChoices.setState({ history: 'all' }) }}
-            trailing={c.history === 'all' ? <SF name="checkmark" size={17} color={p.blue} weight="semibold" /> : undefined} />
+            trailing={c.history === 'all' ? <SF name="checkmark" size={17} color={p.tint} weight="semibold" /> : undefined} />
           <Row title="This Month"
             onPress={() => { tick(); useChoices.setState({ history: 'month' }) }}
-            trailing={c.history === 'month' ? <SF name="checkmark" size={17} color={p.blue} weight="semibold" /> : undefined} />
+            trailing={c.history === 'month' ? <SF name="checkmark" size={17} color={p.tint} weight="semibold" /> : undefined} />
         </Section>
       </ScrollView>
       <View style={{ paddingHorizontal: space.xl, gap: space.s }}>
