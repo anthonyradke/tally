@@ -48,6 +48,9 @@ async def _too_big(request: Request, exc: Exception):
 async def _too_many(request: Request, exc: sqlite3.OperationalError):
     if "too many SQL variables" in str(exc):
         return JSONResponse({"detail": {"errors": ["Too many entries at once."]}}, status_code=422)
+    if "database is locked" in str(exc):  # another write held it past the timeout: worth trying again shortly
+        return JSONResponse({"detail": {"errors": ["Tally is busy saving something else. Try again in a moment."]}},
+                            status_code=503, headers={"Retry-After": "2"})
     raise exc
 
 

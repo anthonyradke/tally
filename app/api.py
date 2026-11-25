@@ -8,7 +8,7 @@ import uuid
 from dataclasses import replace
 from datetime import date
 from typing import Annotated, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from . import bulk as bulk_edit, db, recurring, search, service
 from .engine import validate
 from .entries import META_COLS, _client_id, _full, _in_range, _landed, _parse, _remove, _sent, _txn, _write
@@ -16,6 +16,10 @@ from .inputs import body, day, ids as id_list, money, opt_id, tag_set, whole
 
 router = APIRouter(prefix="/api")
 Con = Annotated[sqlite3.Connection, Depends(db.session)]
+# A write route's JSON body, read on the event loop before the route runs. The routes themselves are plain `def`, so
+# FastAPI runs them in its threadpool: an async route doing SQLite work held the whole server while it waited on a
+# lock.
+Body = Annotated[dict, Depends(body)]
 
 
 def _acct(a, x: dict):
@@ -160,8 +164,7 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
 
 # ---------- write (helpers in entries.py) ----------
 @router.post("/transactions", status_code=201)
-async def create_txn(request: Request, con: Con):
-    b = await body(request)
+def create_txn(b: Body, con: Con):
     cid = _client_id(b)
     if cid and (done := _landed(con, cid)):
         return done[0]
@@ -179,10 +182,9 @@ async def create_txn(request: Request, con: Con):
 
 
 @router.post("/transactions/split", status_code=201)
-async def create_split(request: Request, con: Con):
+def create_split(b: Body, con: Con):
     """Body: {"lines": [TxnInput, ...], "client_id"?: str}. All lines validate before any is written; they share one
     split_group. Line i stores client_id "<id>:<i>", so a retried split returns the rows already written."""
-    b = await body(request)
     cid = _client_id(b)
     if cid and (done := _landed(con, f"{cid}:%")):
         return done
@@ -217,11 +219,10 @@ def one_txn(txn_id: int, con: Con):
 
 
 @router.put("/transactions/{txn_id}")
-async def update_txn(txn_id: int, request: Request, con: Con):
+def update_txn(txn_id: int, b: Body, con: Con):
     st = service.load(con)
     if not any(t.id == txn_id for t in st.txns):
         raise HTTPException(404)
-    b = await body(request)
     t, meta = _parse(b, txn_id)
     _write(st, t, _sent(b, meta))
     con.commit()
@@ -237,17 +238,17 @@ def delete_txn(txn_id: int, con: Con):
 
 
 @router.post("/transactions/restore", status_code=201)
-async def restore(request: Request, con: Con):
+def restore(b: Body, con: Con):
     """Undo for deletes. Body: {"rows": [Txn, ...]} as returned by a delete. Puts each row back exactly: same id
     (so it sorts where it was), note, tags, split, receipt and recurring link."""
     from .api_files import has_receipt
     st = service.load(con)
-    rows = (await body(request)).get("rows", [])
-    if not isinstance(rows, list) or not all(isinstance(b, dict) for b in rows):
+    rows = b.get("rows", [])
+    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
         raise HTTPException(422, {"errors": ["rows must be a list of entries."]})
     ids = []
-    for b in rows:
-        t, meta = _parse(b, whole(b.get("id"), "id"))
+    for r in rows:
+        t, meta = _parse(r, whole(r.get("id"), "id"))
         _in_range(st, t.date, restoring=True)
         if con.execute("SELECT 1 FROM transactions WHERE id=?", (t.id,)).fetchone():
             raise HTTPException(409, {"errors": ["That entry is already back."]})
@@ -255,8 +256,8 @@ async def restore(request: Request, con: Con):
             raise HTTPException(422, {"errors": ["Its category or account no longer exists."]})
         if errs := validate(t, st.cat[t.category_id].type, st.acct):  # its category's type changed since
             raise HTTPException(422, {"errors": [f"It no longer fits {st.cat[t.category_id].name}.", *errs]})
-        receipt = b.get("receipt") if isinstance(b.get("receipt"), str) and has_receipt(b["receipt"]) else None
-        rid = opt_id(b.get("recurring_id"), "recurring_id")
+        receipt = r.get("receipt") if isinstance(r.get("receipt"), str) and has_receipt(r["receipt"]) else None
+        rid = opt_id(r.get("recurring_id"), "recurring_id")
         if rid and not con.execute("SELECT 1 FROM recurring WHERE id=?", (rid,)).fetchone():
             rid = None
         kept = con.execute("SELECT json_extract(row, '$.slot') FROM deleted WHERE txn_id=?", (t.id,)).fetchone()
@@ -280,14 +281,13 @@ async def restore(request: Request, con: Con):
 
 
 @router.post("/transactions/bulk")
-async def bulk(request: Request, con: Con):
+def bulk(b: Body, con: Con):
     """Body: {"ids": [...], "action": "delete" | "recategorize" | "tag" | "account", "category_id"?: int,
     "tags"?: [..], "account_id"?: int, "side"?: "from" | "to" | "each" (see bulk.move)}, or {"action": "revert",
     "rows": before} to undo a recategorize, tag or account change. Delete returns the removed rows for Undo; the others return `before` (each
     row's category and tags as they were, and its accounts after an account change) for revert. Recategorize and
     account changes check every row against its category's From/To rules first: moving spending into an income
     category would count it as income. `count` is the rows that exist."""
-    b = await body(request)
     if b.get("action") == "revert":
         return bulk_edit.revert(con, b.get("rows"))
     ids = id_list(b.get("ids", []))
