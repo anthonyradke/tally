@@ -1,4 +1,4 @@
-# Every push to main: the backend tests (with the API contract check against the app's types), ruff, and the app's
+# Every push to main: the backend tests, ruff, and the app's
 # tests, type check and lint. Nothing deploys from here.
 name: check
 on:
