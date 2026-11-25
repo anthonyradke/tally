@@ -86,6 +86,10 @@ export default function Activity() {
         style={{ backgroundColor: p.bg }}
         contentContainerStyle={{ paddingBottom: 120 }}
         stickySectionHeadersEnabled={false}
+        initialNumToRender={14}
+        maxToRenderPerBatch={12}
+        windowSize={9}
+        removeClippedSubviews={process.env.EXPO_OS === 'ios'}
         keyboardDismissMode="on-drag"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
         onEndReachedThreshold={0.6}

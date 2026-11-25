@@ -8,6 +8,9 @@ import { digitIn, digitOut, SETTLE } from '../motion'
 import { type as styles, usePalette, type TypeName } from '../theme'
 import { Txt } from './Txt'
 
+// Reanimated's layout transitions don't run on the web preview: a kept character stayed where it was.
+const WEB = process.env.EXPO_OS === 'web'
+
 export function Money({ cents, plus, tone = 'plain', v = 'body', weight, noCents }: {
   cents: number; plus?: boolean; tone?: 'pos' | 'plain' | 'quiet' | 'neg'; v?: TypeName; weight?: TextStyle['fontWeight']; noCents?: boolean
 }) {
@@ -28,7 +31,7 @@ export function NumericText({ text, style, down, typing }: { text: string; style
       {chars.map((ch, i) => {
         const place = typing ? i : chars.length - i
         return (
-          <Animated.Text key={`${place}:${ch}`} entering={digitIn(down, h)} exiting={digitOut(down, h)} layout={SETTLE}
+          <Animated.Text key={`${place}:${ch}`} entering={digitIn(down, h)} exiting={digitOut(down, h)} layout={WEB ? undefined : SETTLE}
             style={[style, { height: h }]}>{ch}</Animated.Text>
         )
       })}

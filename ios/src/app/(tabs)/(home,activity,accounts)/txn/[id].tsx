@@ -1,6 +1,6 @@
 // One entry, the way Apple Card shows a transaction: the place's logo and name, the amount large, the details in a
-// card, the other times you went there, and Edit and Delete.
-import { ScrollView, View } from 'react-native'
+// card, the other times you went there, and Edit and Delete. The top of the page takes the place's brand color.
+import { ScrollView, StyleSheet, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -11,6 +11,7 @@ import { deleteEntry, hideLogo } from '@/design/actions'
 import { useLedger } from '@/design/ledger'
 import { amountLook, categoryLook, KIND_LOOK, wantsLogo } from '@/design/look'
 import { space, usePalette } from '@/design/theme'
+import { BrandWash, useBrandColor } from '@/design/ui/BrandWash'
 import { Card, Empty, Row, Section, Tile } from '@/design/ui/List'
 import { Logo } from '@/design/ui/Logo'
 import { Money } from '@/design/ui/Money'
@@ -28,6 +29,7 @@ export default function TxnPage() {
   const t = q.data
   const c = t ? L.cat.get(t.category_id) : undefined
   const type = c?.type
+  const brand = useBrandColor(t?.what, wantsLogo(type))
   const same = useTransactions({ q: t?.what, sort: 'date', dir: 'desc', limit: 6 }, !!t?.what && wantsLogo(type))
   if (!t) return q.isPending ? null : <Empty symbol="questionmark.circle" title="Transaction Not Found" />
   const look = categoryLook(c)
@@ -44,7 +46,8 @@ export default function TxnPage() {
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button accessibilityLabel="Edit" onPress={() => router.push({ pathname: '/add', params: { id: String(t.id) } })}>Edit</Stack.Toolbar.Button>
       </Stack.Toolbar>
-      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: p.bg }}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: p.bg }]}><BrandWash color={brand} /></View>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: 'transparent' }}
         contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 120 }}>
         <View style={{ alignItems: 'center', gap: space.s, paddingTop: space.s }}>
           <Logo name={wantsLogo(type) ? t.what : undefined} symbol={look.symbol} color={p[look.hue]} size={76} />

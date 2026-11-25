@@ -81,6 +81,8 @@ export interface SetupDone { accounts: { id: number; name: string; kind: Kind }[
 /** `items`: every bank the session added (one Plaid Link session can add several); `item_id` is the first. */
 export type BankConnected = BankSynced & { item_id: number | null; items: number[]; matched: { bank_account: string; account_id: number }[] }
 
+export interface CardFace { art: string | null; mask: string | null; subtype: string | null; institution: string | null; color: string | null }
+
 export class ApiError extends Error {
   constructor(public status: number, public errors: string[]) { super(errors.join(' ')) }
 }
@@ -204,8 +206,22 @@ export const api = {
   },
   /** An entry's logo by its name, an account's bank logo, or a connected bank's (`item`). 404 when there's none:
    *  show a symbol instead. */
-  logoUrl: (q: { name?: string; account?: number; item?: number }) =>
-    `${getServer()}/api/logo${q.item !== undefined ? `?item=${q.item}` : q.account !== undefined ? `?account=${q.account}` : `?name=${encodeURIComponent(q.name ?? '')}`}`,
+  /** `tag`: what the account or bank is called, added to the address so an image cached for an earlier account or bank
+   *  with the same number (a ledger set up again) is never shown for this one. */
+  logoUrl: (q: { name?: string; account?: number; item?: number; tag?: string }) =>
+    `${getServer()}/api/logo${q.item !== undefined ? `?item=${q.item}` : q.account !== undefined ? `?account=${q.account}` : `?name=${encodeURIComponent(q.name ?? '')}`}${q.tag && (q.item !== undefined || q.account !== undefined) ? `&t=${encodeURIComponent(q.tag)}` : ''}`,
+  /** A brand's color (#RRGGBB) from Plaid or from its logo; null when there isn't one. */
+  logoColor: (q: { name?: string; account?: number; item?: number }) =>
+    call<{ color: string | null }>('GET', `/logo/color${q.item !== undefined ? `?item=${q.item}` : q.account !== undefined ? `?account=${q.account}` : `?name=${encodeURIComponent(q.name ?? '')}`}`),
+  /** Each account's card face: a picture of the real card if one was added, and from its bank the last four digits,
+   *  the bank's name and its color. */
+  cards: () => call<Record<string, CardFace>>('GET', '/cards'),
+  uploadArt: (id: number, file: { uri: string; name: string; type: string }) => {
+    const fd = new FormData()
+    fd.append('file', file as unknown as Blob)
+    return call<{ art: string }>('PUT', `/accounts/${id}/art`, fd, 60_000)
+  },
+  deleteArt: (id: number) => call<void>('DELETE', `/accounts/${id}/art`),
   hideLogo: (name: string) => call<void>('DELETE', `/logo?name=${encodeURIComponent(name)}`),
   showLogo: (name: string) => call<void>('POST', `/logo/show?name=${encodeURIComponent(name)}`),
   bank: {

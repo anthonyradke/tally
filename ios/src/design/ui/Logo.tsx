@@ -7,6 +7,7 @@ import type { SFSymbol } from 'expo-symbols'
 import { api } from '@/lib/api'
 import { authHeaders, useServer } from '@/lib/server'
 import { useLogoEpoch } from '../actions'
+import { useLedger } from '../ledger'
 import { usePalette } from '../theme'
 import { SF } from './SF'
 import { Txt } from './Txt'
@@ -23,7 +24,9 @@ export function Logo({ name, account, item, size = 40, symbol, color, letter }: 
   const p = usePalette()
   const server = useServer((s) => s.url)
   const epoch = useLogoEpoch((s) => s.n)
-  const key = `${server}|${epoch}|${item ?? ''}|${account ?? ''}|${(name ?? '').toLowerCase()}`
+  const L = useLedger()
+  const tag = account !== undefined ? `${L.acct.get(account)?.name ?? ''}|${L.acct.get(account)?.bank ?? ''}` : item !== undefined ? name ?? '' : undefined
+  const key = `${server}|${epoch}|${item ?? ''}|${account ?? ''}|${(name ?? '').toLowerCase()}|${tag ?? ''}`
   const want = (item !== undefined || account !== undefined || !!name?.trim()) && !missed.has(key)
   const [shown, setShown] = useState(false)
   const initial = (name ?? '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 1).toUpperCase()
@@ -35,7 +38,7 @@ export function Logo({ name, account, item, size = 40, symbol, color, letter }: 
           : <SF name={symbol} size={size * 0.46} color="#FFFFFF" weight="semibold" />}
       </View>
       {want && (
-        <Image source={{ uri: `${api.logoUrl(item !== undefined ? { item } : account !== undefined ? { account } : { name })}&v=${epoch}`, headers: authHeaders() }}
+        <Image source={{ uri: `${api.logoUrl(item !== undefined ? { item, tag } : account !== undefined ? { account, tag } : { name })}&v=${epoch}`, headers: authHeaders() }}
           cachePolicy="disk" recyclingKey={key} transition={shown ? 0 : 180} contentFit="cover"
           style={{ ...FILL, opacity: shown ? 1 : 0, backgroundColor: shown ? '#FFFFFF' : 'transparent' }}
           onLoad={() => setShown(true)} onError={() => { missed.add(key); setShown(false) }} />

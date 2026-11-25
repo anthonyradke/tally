@@ -1,8 +1,8 @@
-// Accounts: net worth over time (drag across the line to read any month), then every account by kind with its
-// bank's logo and balance.
+// Accounts: net worth over time (drag across the line to read any month), your cards and bank accounts stacked like
+// Wallet (tap one and it zooms open into its page), then investments and loans with their banks' logos.
 import { useMemo, useState } from 'react'
-import { ScrollView, View } from 'react-native'
-import { router, Stack } from 'expo-router'
+import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native'
+import { Link, router, Stack } from 'expo-router'
 import type { Kind } from '@/lib/api'
 import { useBank } from '@/lib/bank'
 import { fromISO } from '@/lib/dates'
@@ -15,8 +15,10 @@ import { LineChart } from '@/design/ui/LineChart'
 import { Logo } from '@/design/ui/Logo'
 import { Rolling } from '@/design/ui/Money'
 import { Txt } from '@/design/ui/Txt'
+import { CARD_RATIO, WalletCard } from '@/design/ui/WalletCard'
 
-const KINDS: Kind[] = ['cash', 'card', 'investment', 'loan']
+const LISTED: Kind[] = ['investment', 'loan']
+const PEEK = 62 // how much of each card shows above the next, as in Wallet
 const HEADER = (
   <>
     <Stack.Toolbar placement="right">
@@ -37,6 +39,11 @@ export default function Accounts() {
   const prev = months.at(-2)
   const change = now && prev ? now.net_worth - prev.net_worth : 0
   const accounts = (L.b?.accounts ?? []).filter((a) => a.active)
+  const { width } = useWindowDimensions()
+  const cardW = width - space.l * 2
+  // Cards first, then bank accounts, like Wallet's payment cards; each group's biggest balance in front.
+  const deck = accounts.filter((a) => a.kind === 'card' || a.kind === 'cash')
+    .sort((x, y) => (x.kind === y.kind ? Math.abs(now?.balances[x.id] ?? 0) - Math.abs(now?.balances[y.id] ?? 0) : x.kind === 'card' ? 1 : -1))
 
   return (
     <>
@@ -58,7 +65,26 @@ export default function Accounts() {
               )}
             </Card>
 
-            {KINDS.map((k) => {
+            {deck.length > 0 && (
+              <View style={{ gap: space.s }}>
+                <Txt v="title3" weight="700" style={{ paddingHorizontal: space.xs }}>Wallet</Txt>
+                <View style={{ height: cardW / CARD_RATIO + (deck.length - 1) * PEEK }}>
+                  {deck.map((a, i) => (
+                    <View key={a.id} style={{ position: 'absolute', top: i * PEEK, left: 0 }}>
+                      <Link href={{ pathname: '/account/[id]', params: { id: String(a.id) } }} asChild>
+                        <Link.Trigger withAppleZoom>
+                          <Pressable accessibilityLabel={`${a.name}, ${formatCents(now?.balances[a.id] ?? 0)}`}>
+                            <WalletCard a={a} balance={now?.balances[a.id] ?? 0} width={cardW} />
+                          </Pressable>
+                        </Link.Trigger>
+                      </Link>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {LISTED.map((k) => {
               const list = accounts.filter((a) => a.kind === k)
               if (!list.length) return null
               const look = KIND_LOOK[k]
