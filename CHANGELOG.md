@@ -9,6 +9,10 @@ The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/packa
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
 ## Unreleased
+Fixed
+- Logos are saved under Plaid's id for a bank and under the account's name and bank, never a bare row number, so a
+  new ledger's account 1 no longer shows the old account 1's logo.
+
 Added
 - Bank sync through Plaid (server only, off unless Plaid keys are configured): connected accounts' transactions
   pair with existing entries, and the rest wait in an inbox with a guess at name, category and accounts, learned
@@ -38,6 +42,9 @@ Added
 - New design motion follows the system's: critically damped springs and ease-out curves with no overshoot, numbers
   that change like SwiftUI's numeric text, a drawn checkmark at the end of setup, and shorter, plainer wording with
   small list headers on settings-style screens.
+- Plaid's webhook (`PLAID_WEBHOOK_URL`): new transactions sync minutes after Plaid has them. Each message must
+  carry Plaid's signature and the URL's secret, and existing connections are pointed at the URL on start. One Plaid
+  Link session can add several banks (Multi-Item Link) where Plaid allows it.
 - The welcome setup closes completely on Get Started and never offers setup twice (it came back after finishing,
   and Set Up Tally then failed with "already set up").
 - Logos (`/api/logo`): Plaid's merchant logo or website for bank rows, else the name as a website on logo.dev

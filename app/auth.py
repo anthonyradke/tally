@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse
 
 def refuse(request: Request) -> JSONResponse | None:
     token = os.environ.get("TALLY_TOKEN", "").strip()
+    if request.method == "POST" and request.url.path.startswith("/api/bank/webhook/"):
+        return None  # Plaid's webhook: checked by its own secret path and Plaid's signature (api_bank.webhook)
     if not token:
         return None
     got = request.headers.get("authorization", "")

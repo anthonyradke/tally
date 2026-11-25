@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS txns(
   pfc TEXT, pfc_detail TEXT, logo TEXT,
   status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','linked','ignored')),
   txn_id INTEGER, how TEXT, decided_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE INDEX IF NOT EXISTS txns_account ON txns(account_id, date);
 CREATE INDEX IF NOT EXISTS txns_txn ON txns(txn_id);
 """
@@ -61,10 +62,13 @@ CREATE INDEX IF NOT EXISTS txns_txn ON txns(txn_id);
 MIGRATIONS = (("accounts", "since", "TEXT"), ("accounts", "skip", "INTEGER NOT NULL DEFAULT 0"),
               ("accounts", "anchor", "INTEGER NOT NULL DEFAULT 0"), ("items", "website", "TEXT"),
               ("items", "logo", "TEXT"), ("items", "color", "TEXT"), ("txns", "website", "TEXT"),
-              ("txns", "pfc_conf", "TEXT"))
+              ("txns", "pfc_conf", "TEXT"), ("items", "webhook", "TEXT"))
 
 
 _setup = threading.Lock()
+# One sync at a time: a webhook, the timer and the app can all ask at once, and two runs of one connection would
+# race on its cursor.
+syncing = threading.RLock()
 
 
 def connect(path: Optional[str] = None) -> sqlite3.Connection:
@@ -94,6 +98,50 @@ def session():
         con.close()
 
 
+def get_meta(bcon, key: str) -> Optional[str]:
+    r = bcon.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+    return r[0] if r else None
+
+
+def set_meta(bcon, key: str, value: str) -> None:
+    bcon.execute("INSERT INTO meta(key, value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                 (key, value))
+    bcon.commit()
+
+
+def plaid_user(bcon) -> Optional[str]:
+    """The Plaid user that lets one Link session add several banks, made on first use. None when Plaid won't make
+    one (Link then adds one bank at a time, as before)."""
+    if uid := get_meta(bcon, "plaid_user_id"):
+        return uid
+    if get_meta(bcon, "plaid_user_failed"):
+        return None
+    try:
+        uid = plaid.create_user("tally-" + os.urandom(6).hex())
+    except plaid.PlaidError:
+        set_meta(bcon, "plaid_user_failed", _now())
+        return None
+    set_meta(bcon, "plaid_user_id", uid)
+    return uid
+
+
+def point_webhooks(bcon) -> int:
+    """Tell Plaid where to report each connection's news (connections made before PLAID_WEBHOOK_URL was set, or
+    after it changed). Returns how many changed."""
+    url, n = plaid.webhook_url(), 0
+    for it in bcon.execute("SELECT id, access_token, webhook FROM items").fetchall():
+        if (it["webhook"] or None) == url:
+            continue
+        try:
+            plaid.set_webhook(it["access_token"], url)
+        except plaid.PlaidError:
+            continue
+        bcon.execute("UPDATE items SET webhook=? WHERE id=?", (url, it["id"]))
+        n += 1
+    bcon.commit()
+    return n
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -112,9 +160,10 @@ def add_item(bcon, access_token: str, item_id: str) -> int:
         info = plaid.institution(inst) if inst else {}
     except plaid.PlaidError:
         pass
-    bcon.execute("INSERT INTO items(item_id, access_token, institution, website, logo, color) VALUES(?,?,?,?,?,?) "
-                 "ON CONFLICT(item_id) DO UPDATE SET access_token=excluded.access_token, error=NULL",
-                 (item_id, access_token, info.get("name"), info.get("url"), info.get("logo"), info.get("primary_color")))
+    bcon.execute("INSERT INTO items(item_id, access_token, institution, website, logo, color, webhook) "
+                 "VALUES(?,?,?,?,?,?,?) ON CONFLICT(item_id) DO UPDATE SET access_token=excluded.access_token, error=NULL",
+                 (item_id, access_token, info.get("name"), info.get("url"), info.get("logo"), info.get("primary_color"),
+                  plaid.webhook_url()))
     iid = bcon.execute("SELECT id FROM items WHERE item_id=?", (item_id,)).fetchone()[0]
     _store_accounts(bcon, iid, plaid.accounts(access_token))
     bcon.commit()

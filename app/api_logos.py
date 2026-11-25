@@ -78,11 +78,34 @@ def _item_sources(iid: int) -> list[tuple[str, str]]:
     return out + [("domain", d) for d in logos.domains_for(it["institution"] or "")][:1]
 
 
-def _ident(name: Optional[str], account: Optional[int], item: Optional[int] = None) -> tuple[str, str]:
+def _plaid_item(b_query: str, arg) -> Optional[str]:
+    try:
+        b = bank.connect()
+    except Exception:
+        return None
+    try:
+        r = b.execute(b_query, (arg,)).fetchone()
+        return r[0] if r else None
+    finally:
+        b.close()
+
+
+def _ident(con, name: Optional[str], account: Optional[int], item: Optional[int] = None) -> tuple[str, str]:
+    """What a logo is saved under. Never a bare row id: a fresh ledger or bank database numbers from 1 again, and
+    account 1 would show the old account 1's bank. A connected bank goes by Plaid's id for it; a ledger account by
+    its id with its bank's name and connection."""
     if item is not None:
-        return "item", str(item)
+        pid = _plaid_item("SELECT item_id FROM items WHERE id=?", item)
+        if not pid:
+            raise HTTPException(404)
+        return "item", pid
     if account is not None:
-        return "account", str(account)
+        a = con.execute("SELECT name, bank FROM accounts WHERE id=?", (account,)).fetchone()
+        if not a:
+            raise HTTPException(404)
+        pid = _plaid_item("SELECT i.item_id FROM accounts x JOIN items i ON i.id=x.item_id WHERE x.tally_account_id=?",
+                          account) or ""
+        return "account", f"{account}|{a['bank'] or ''}|{a['name']}|{pid}"
     key = logos.norm(name or "")
     if not key:
         raise HTTPException(404)
@@ -92,7 +115,7 @@ def _ident(name: Optional[str], account: Optional[int], item: Optional[int] = No
 @router.get("")
 def get_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None, item: Optional[int] = None):
     """`item`: a connected bank (setup lists them before any account exists)."""
-    kind, ident = _ident(name, account, item)
+    kind, ident = _ident(con, name, account, item)
     sources = _item_sources(item) if item is not None else _account_sources(con, account) if account is not None else \
         _bank_sources(con, name or "") + [("domain", d) for d in logos.domains_for(name or "")]
     path = logos.resolve(kind, ident, sources)
@@ -102,12 +125,12 @@ def get_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None
 
 
 @router.delete("", status_code=204)
-def hide_logo(name: Optional[str] = None, account: Optional[int] = None):
-    logos.hide(*_ident(name, account))
+def hide_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None):
+    logos.hide(*_ident(con, name, account))
 
 
 @router.post("/show", status_code=204)
-def show_logo(name: Optional[str] = None, account: Optional[int] = None):
+def show_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None):
     """Undo for hide."""
-    logos.unhide(*_ident(name, account))
+    logos.unhide(*_ident(con, name, account))
 

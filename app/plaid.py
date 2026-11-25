@@ -1,11 +1,17 @@
 """A small client for Plaid's REST API (https://plaid.com/docs/api/), standard library only. Bank sync is off unless
-PLAID_CLIENT_ID and PLAID_SECRET are set; PLAID_ENV picks sandbox (the default) or production.
+PLAID_CLIENT_ID and PLAID_SECRET are set; PLAID_ENV picks sandbox (the default) or production. PLAID_WEBHOOK_URL,
+when set, is where Plaid reports new transactions (api_bank.webhook), so they arrive minutes after Plaid has them.
 
 Plaid signs amounts from the account's point of view: positive is money leaving it (a purchase, a payment out, a
 charge on a card), negative is money arriving (a deposit, a refund, a payment to a card)."""
 from __future__ import annotations
+import base64
+import hashlib
+import hmac
 import json
 import os
+import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -49,19 +55,100 @@ def call(path: str, body: dict, timeout: float = 30) -> dict:
         raise PlaidError("NETWORK", f"Couldn't reach Plaid ({e.reason})")
 
 
-def link_token(access_token: str | None = None) -> str:
+def webhook_url() -> str | None:
+    return os.environ.get("PLAID_WEBHOOK_URL", "").strip() or None
+
+
+def link_token(access_token: str | None = None, user_id: str | None = None) -> str:
     """A token for Plaid Link on the phone. With an access token it opens update mode, which repairs a broken
-    connection in place: a new connection would use up another of the Trial plan's ten lifetime Items."""
+    connection in place: a new connection would use up another of the Trial plan's ten lifetime Items. With a Plaid
+    user (`create_user`) one session can add several banks (Multi-Item Link); `session_tokens` collects them."""
     body: dict = {"client_name": os.environ.get("PLAID_CLIENT_NAME", "Tally"), "language": "en",
-                  "country_codes": ["US"], "user": {"client_user_id": "owner"}}
+                  "country_codes": ["US"]}
     if access_token:
         body["access_token"] = access_token
+        body["user"] = {"client_user_id": "owner"}
     else:
         body["products"] = ["transactions"]
         body["transactions"] = {"days_requested": HISTORY_DAYS}
+        if user_id:
+            body["user_id"] = user_id
+            body["enable_multi_item_link"] = True
+        else:
+            body["user"] = {"client_user_id": "owner"}
+    if hook := webhook_url():
+        body["webhook"] = hook
     if uri := os.environ.get("PLAID_REDIRECT_URI", "").strip():
         body["redirect_uri"] = uri
     return call("/link/token/create", body)["link_token"]
+
+
+def create_user(client_user_id: str) -> str:
+    """A Plaid user, which Multi-Item Link needs. Made once and kept (bank.meta)."""
+    return call("/user/create", {"client_user_id": client_user_id})["user_id"]
+
+
+def session_tokens(link_token: str) -> list[str]:
+    """The public token of every bank added in a Multi-Item Link session (Plaid keeps them six hours)."""
+    r = call("/link/token/get", {"link_token": link_token})
+    return [x["public_token"] for s in r.get("link_sessions") or []
+            for x in ((s.get("results") or {}).get("item_add_results") or []) if x.get("public_token")]
+
+
+def set_webhook(access_token: str, url: str | None) -> None:
+    call("/item/webhook/update", {"access_token": access_token, "webhook": url})
+
+
+# ---------- webhook verification (https://plaid.com/docs/api/webhooks/webhook-verification/) ----------
+_keys: dict[str, object] = {}
+_keys_lock = threading.Lock()
+MAX_AGE = 5 * 60
+
+
+def _b64url(s: str) -> bytes:
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+
+def _key(kid: str):
+    from cryptography.hazmat.primitives.asymmetric import ec
+    with _keys_lock:
+        if kid in _keys:
+            return _keys[kid]
+    jwk = call("/webhook_verification_key/get", {"key_id": kid})["key"]
+    if jwk.get("kty") != "EC" or jwk.get("crv") != "P-256":
+        raise PlaidError("BAD_KEY", "Unexpected webhook key type")
+    pub = ec.EllipticCurvePublicNumbers(int.from_bytes(_b64url(jwk["x"]), "big"), int.from_bytes(_b64url(jwk["y"]), "big"),
+                                        ec.SECP256R1()).public_key()
+    if jwk.get("expired_at"):
+        return pub  # an expired key still checks old messages, but isn't cached
+    with _keys_lock:
+        _keys[kid] = pub
+    return pub
+
+
+def verify_webhook(body: bytes, token: str | None, now: float | None = None) -> bool:
+    """True when the Plaid-Verification JWT is Plaid's (ES256, by a key Plaid lists), under five minutes old, and
+    signs exactly this body."""
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+    try:
+        head_b, claims_b, sig_b = (token or "").split(".")
+        head = json.loads(_b64url(head_b))
+        if head.get("alg") != "ES256" or not head.get("kid"):
+            return False
+        sig = _b64url(sig_b)
+        if len(sig) != 64:
+            return False
+        der = encode_dss_signature(int.from_bytes(sig[:32], "big"), int.from_bytes(sig[32:], "big"))
+        _key(head["kid"]).verify(der, f"{head_b}.{claims_b}".encode(), ec.ECDSA(hashes.SHA256()))
+        claims = json.loads(_b64url(claims_b))
+        if abs((now or time.time()) - float(claims.get("iat", 0))) > MAX_AGE:
+            return False
+        return hmac.compare_digest(hashlib.sha256(body).hexdigest(), str(claims.get("request_body_sha256", "")))
+    except (ValueError, KeyError, TypeError, InvalidSignature, PlaidError):
+        return False
 
 
 def exchange(public_token: str) -> tuple[str, str]:

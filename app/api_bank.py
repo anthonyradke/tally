@@ -2,10 +2,10 @@
 without them (the real Tally, for now) looks exactly as it did. Same conventions as api.py: cents on the wire,
 dollars in request bodies."""
 from __future__ import annotations
-import asyncio, logging, os, sqlite3
+import asyncio, hmac, json, logging, os, sqlite3, threading
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from . import bank, db, plaid, service
 from .api import Con
 from .engine import Txn, month_of
@@ -48,7 +48,8 @@ def status(b: Bank, con: Con):
 
 @router.post("/link-token")
 async def link_token(request: Request, b: Bank):
-    """Body: {"item_id"?: id} to repair that connection in place instead of adding one."""
+    """Body: {"item_id"?: id} to repair that connection in place instead of adding one. A new connection's token lets
+    one session add several banks where Plaid allows it (`multi`); the phone then hands the token back to /connect."""
     raw = await body(request)
     token = None
     if (iid := opt_id(raw.get("item_id"), "Connection")) is not None:
@@ -56,7 +57,14 @@ async def link_token(request: Request, b: Bank):
         if not row:
             raise HTTPException(404)
         token = row[0]
-    return {"link_token": _plaid(plaid.link_token, token)}
+    user = None if token else await asyncio.to_thread(bank.plaid_user, b)
+    try:
+        lt = plaid.link_token(token, user)
+    except plaid.PlaidError as e:
+        if not user:
+            raise HTTPException(424, {"errors": [e.message], "code": e.code})
+        user, lt = None, _plaid(plaid.link_token, token)  # Multi-Item Link refused: one bank per session
+    return {"link_token": lt, "multi": bool(user)}
 
 
 def _auto(con) -> bool:
@@ -125,29 +133,66 @@ def _settle(b, con) -> int:
     return n
 
 
-def _refresh(b, con) -> dict:
-    counts = bank.sync_all(b)
-    st = service.load(con)
-    paired = bank.link(b, st)
-    return {"synced": counts, "paired": paired, "added": _settle(b, con)}
+def _refresh(b, con, items: Optional[list[int]] = None) -> dict:
+    with bank.syncing:
+        if items is None:
+            counts = bank.sync_all(b)
+        else:
+            counts = {}
+            for iid in items:
+                try:
+                    counts[iid] = bank.sync_item(b, iid)
+                except plaid.PlaidError as e:
+                    counts[iid] = {"error": e.code, "message": e.message}
+        st = service.load(con)
+        paired = bank.link(b, st)
+        return {"synced": counts, "paired": paired, "added": _settle(b, con)}
 
 
 def _connected(b, con, access: str, item_id: str) -> dict:
     """A new connection: store it, match its accounts to the ledger's where that's clear, then pull its history."""
     iid = _plaid(bank.add_item, b, access, item_id)
     matched = bank.automap(b, service.load(con), iid)
-    return {"item_id": iid, "matched": matched, **_refresh(b, con)}
+    return {"item_id": iid, "matched": matched, **_refresh(b, con, [iid])}
+
+
+_used: set[str] = set()  # public tokens already exchanged: the phone and Plaid's webhook both hand them over
+_connecting = threading.Lock()
+
+
+def connect_tokens(b, con, tokens: list[str]) -> list[dict]:
+    out = []
+    with _connecting:
+        for pt in tokens:
+            if pt in _used:
+                continue
+            try:
+                access, item_id = plaid.exchange(pt)
+            except plaid.PlaidError as e:
+                if e.code == "INVALID_PUBLIC_TOKEN":  # exchanged already (by the other path, before a restart)
+                    _used.add(pt)
+                    continue
+                raise HTTPException(424, {"errors": [e.message], "code": e.code})
+            _used.add(pt)
+            out.append(_connected(b, con, access, item_id))
+    return out
 
 
 @router.post("/connect", status_code=201)
 async def connect(request: Request, b: Bank, con: Con):
-    """Body: {"public_token": from Plaid Link}. Stores the connection, then pulls its history."""
+    """Body: {"public_token": from Plaid Link} for one bank, or {"link_token": the session's} after a session that
+    could add several. Stores each connection, then pulls its history."""
     raw = await body(request)
     pt = text(raw.get("public_token"), "Public token", 200)
-    if not pt:
+    lt = text(raw.get("link_token"), "Link token", 200)
+    if not pt and not lt:
         bad("Missing public_token.")
-    access, item_id = _plaid(plaid.exchange, pt)
-    return _connected(b, con, access, item_id)
+    tokens = [pt] if pt else await asyncio.to_thread(_plaid, plaid.session_tokens, lt)
+    made = await asyncio.to_thread(connect_tokens, b, con, tokens)
+    if pt and not made:
+        bad("That bank is already connected.")
+    first = made[0] if made else {"item_id": None, "matched": 0, "synced": {}, "paired": 0, "added": 0}
+    return {**first, "items": [m["item_id"] for m in made]}
 
 
 @router.delete("/items/{iid}", status_code=204)
@@ -194,24 +239,94 @@ def sync(b: Bank, con: Con, max_age: Optional[int] = None):
 SYNC_HOURS = float(os.environ.get("TALLY_BANK_SYNC_HOURS", "4"))
 
 
-def sync_now() -> None:
-    """One background check of every bank, on its own connections (the timer below, not a request)."""
+def sync_now(items: Optional[list[int]] = None) -> None:
+    """One background check of the banks (all, or these connections), on its own database connections."""
     b, con = bank.connect(), db.connect()
     try:
-        _refresh(b, con)
+        _refresh(b, con, items)
     finally:
         b.close()
         con.close()
 
 
 async def sync_loop() -> None:
-    """Checks the banks every SYNC_HOURS while the server runs, so new rows are waiting before the app opens."""
-    while plaid.enabled() and SYNC_HOURS > 0:
+    """Points every connection at the webhook, then checks the banks every SYNC_HOURS while the server runs (the
+    webhook brings news sooner; this catches anything it missed)."""
+    if not plaid.enabled():
+        return
+    try:
+        b = bank.connect()
+        try:
+            await asyncio.to_thread(bank.point_webhooks, b)
+        finally:
+            b.close()
+    except Exception:
+        log.exception("couldn't point the connections at the webhook")
+    while SYNC_HOURS > 0:
         await asyncio.sleep(SYNC_HOURS * 3600)
         try:
             await asyncio.to_thread(sync_now)
         except Exception:
             log.exception("bank sync failed")
+
+
+# ---------- Plaid's webhook ----------
+# Public, through its own Tailscale Funnel path, so it skips the login (auth.refuse) and proves itself instead: the
+# URL carries a secret (the last part of PLAID_WEBHOOK_URL), and Plaid signs every message (plaid.verify_webhook).
+hook = APIRouter()
+SYNC_CODES = {"SYNC_UPDATES_AVAILABLE", "DEFAULT_UPDATE", "INITIAL_UPDATE", "HISTORICAL_UPDATE", "TRANSACTIONS_REMOVED"}
+ITEM_TROUBLE = {"PENDING_EXPIRATION", "PENDING_DISCONNECT", "USER_PERMISSION_REVOKED", "USER_ACCOUNT_REVOKED"}
+
+
+def _hook_key() -> str:
+    return (plaid.webhook_url() or "").rstrip("/").rsplit("/", 1)[-1]
+
+
+def handle(msg: dict) -> None:
+    """What a verified webhook asks for, run after the answer has gone back to Plaid."""
+    kind, code = msg.get("webhook_type"), msg.get("webhook_code")
+    b, con = bank.connect(), db.connect()
+    try:
+        if kind == "LINK" and code in ("SESSION_FINISHED", "ITEM_ADD_RESULT"):
+            tokens = msg.get("public_tokens") or ([msg["public_token"]] if msg.get("public_token") else [])
+            connect_tokens(b, con, tokens)
+            return
+        row = b.execute("SELECT id FROM items WHERE item_id=?", (msg.get("item_id") or "",)).fetchone()
+        if not row:
+            return
+        if kind == "TRANSACTIONS" and code in SYNC_CODES:
+            _refresh(b, con, [row["id"]])
+        elif kind == "ITEM" and code == "ERROR":
+            b.execute("UPDATE items SET error=? WHERE id=?", ((msg.get("error") or {}).get("error_code") or "ERROR", row["id"]))
+            b.commit()
+        elif kind == "ITEM" and code in ITEM_TROUBLE:
+            b.execute("UPDATE items SET error=? WHERE id=?", (code, row["id"]))
+            b.commit()
+        elif kind == "ITEM" and code == "LOGIN_REPAIRED":
+            b.execute("UPDATE items SET error=NULL WHERE id=?", (row["id"],))
+            b.commit()
+            _refresh(b, con, [row["id"]])
+    except Exception:
+        log.exception("webhook %s %s failed", kind, code)
+    finally:
+        b.close()
+        con.close()
+
+
+@hook.post("/api/bank/webhook/{key}")
+async def webhook(key: str, request: Request, tasks: BackgroundTasks):
+    want = _hook_key()
+    if not plaid.enabled() or not want or not hmac.compare_digest(key.encode(), want.encode()):
+        raise HTTPException(404)
+    raw = await request.body()
+    if not await asyncio.to_thread(plaid.verify_webhook, raw, request.headers.get("plaid-verification")):
+        raise HTTPException(401)
+    try:
+        msg = json.loads(raw)
+    except ValueError:
+        raise HTTPException(400)
+    tasks.add_task(asyncio.to_thread, handle, msg)
+    return {"ok": True}
 
 
 @router.get("/inbox")
