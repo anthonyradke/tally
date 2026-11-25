@@ -31,13 +31,13 @@ function Bank({ it, taken }: { it: BankItem; taken: Set<number> }) {
   }
   const disconnect = () => {
     warning()
-    Alert.alert(`Disconnect ${it.institution ?? 'this bank'}?`, 'Its transactions stop coming in. What is already in Tally stays. Plaid does not give the connection back.', [
+    Alert.alert(`Disconnect ${it.institution ?? 'This Bank'}?`, 'New transactions will stop coming in. This connection can’t be restored.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Disconnect', style: 'destructive', onPress: async () => { try { await api.bank.disconnect(it.id); await refreshBank() } catch (e) { notify({ text: why(e, 'Failed'), hue: 'orange' }) } } },
     ])
   }
   return (
-    <Section inset={64} footer={it.error ? `The bank wants you to sign in again (${it.error}).` : ago(it.synced_at)}>
+    <Section inset={64} footer={it.error ? 'Sign in again to keep this bank up to date.' : ago(it.synced_at)}>
       <Row leading={<Logo item={it.id} name={it.institution ?? undefined} letter size={36} />} title={it.institution ?? 'Bank'}
         subtitle={`${it.accounts.length} ${it.accounts.length === 1 ? 'account' : 'accounts'}`} />
       {it.accounts.map((a) => {
@@ -80,7 +80,7 @@ export default function Banks() {
     success(); await refreshBank()
     notify({ text: r.added ? `${r.added} new` : 'Up to date', symbol: 'checkmark.circle.fill' })
   })
-  if (!s) return q.isPending ? null : <Empty symbol="building.columns" title="Bank Sync Is Off" body="This Tally doesn't connect to banks." />
+  if (!s) return q.isPending ? null : <Empty symbol="building.columns" title="No Bank Connections" body="This server doesn’t connect to banks." />
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: p.bg }} contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 60 }}>
       {s.env === 'sandbox' && <Txt v="footnote" tone="orange" center>Plaid sandbox: test banks with made-up transactions.</Txt>}

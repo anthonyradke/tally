@@ -75,7 +75,7 @@ export default function TxnPage() {
         <Card>
           {wantsLogo(type) && t.what ? (
             <>
-              <Row title="Wrong Logo" tint onPress={() => hideLogo(t.what)} />
+              <Row title="Hide Logo" tint onPress={() => hideLogo(t.what)} />
               <View style={{ height: 0.5, backgroundColor: p.separator, marginLeft: space.l }} />
             </>
           ) : null}

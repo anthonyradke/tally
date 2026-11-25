@@ -1,9 +1,9 @@
 // The number pad for amounts, like Apple Cash's: big numerals with no keys drawn, a soft circle that blooms under
 // the finger, and a tick for every press.
 import { Pressable, View } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated'
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { tick } from '../haptics'
-import { springs, usePalette } from '../theme'
+import { usePalette } from '../theme'
 import { SF } from './SF'
 import { Txt } from './Txt'
 
@@ -12,12 +12,12 @@ const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫']
 function Key({ k, onKey }: { k: string; onKey: (k: string) => void }) {
   const p = usePalette()
   const down = useSharedValue(0)
-  const bloom = useAnimatedStyle(() => ({ opacity: down.value, transform: [{ scale: 0.6 + down.value * 0.4 }] }))
+  const bloom = useAnimatedStyle(() => ({ opacity: down.value, transform: [{ scale: 0.85 + down.value * 0.15 }] }))
   return (
     <Pressable style={{ flex: 1, height: 58, alignItems: 'center', justifyContent: 'center' }}
       accessibilityLabel={k === '⌫' ? 'Delete' : k === '.' ? 'Decimal point' : k}
-      onPressIn={() => { down.set(withSpring(1, springs.snappy)); tick() }}
-      onPressOut={() => { down.set(withTiming(0, { duration: 260 })) }}
+      onPressIn={() => { down.set(withTiming(1, { duration: 60 })); tick() }}
+      onPressOut={() => { down.set(withTiming(0, { duration: 320 })) }}
       onPress={() => onKey(k)}>
       <Animated.View style={[{ position: 'absolute', width: 64, height: 54, borderRadius: 27, backgroundColor: p.fill3 }, bloom]} />
       {k === '⌫' ? <SF name="delete.left" size={24} color={p.label} /> : <Txt v="title1" weight="500" style={{ fontFamily: 'ui-rounded' }}>{k}</Txt>}

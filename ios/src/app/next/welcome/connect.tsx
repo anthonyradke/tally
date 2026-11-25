@@ -2,11 +2,12 @@
 import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
 import { router } from 'expo-router'
-import Animated, { ZoomIn } from 'react-native-reanimated'
+import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { api, ApiError } from '@/lib/api'
 import { openPlaidLink } from '@/lib/bank'
 import { failure, success } from '@/next/haptics'
+import { rise } from '@/next/motion'
 import { useLeaveIfSetUp, useSetupStatus } from '@/next/setup'
 import { space, usePalette } from '@/next/theme'
 import { Button } from '@/next/ui/Button'
@@ -45,13 +46,13 @@ export default function Connect() {
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.xl, paddingTop: 56, gap: space.xxl }}>
         <View style={{ alignItems: 'center', gap: space.m }}>
           <SF name="building.columns.fill" size={52} color={p.blue} />
-          <Txt v="largeTitle" center>Connect Your Banks</Txt>
-          <Txt v="body" tone="label2" center>Sign in to each bank you use: checking, cards, savings, loans and investments. You can add more later.</Txt>
+          <Txt v="largeTitle" center>Add Your Banks</Txt>
+          <Txt v="body" tone="label2" center>Sign in to each bank you use. You can add more later in Settings.</Txt>
         </View>
         {items.length > 0 && (
           <Card>
             {items.map((it, i) => (
-              <Animated.View key={it.id} entering={ZoomIn.springify().damping(14)}>
+              <Animated.View key={it.id} entering={rise(0)}>
                 {i > 0 && <View style={{ height: 0.5, backgroundColor: p.separator, marginLeft: 68 }} />}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.l }}>
                   <Logo item={it.id} name={it.brand || it.institution || undefined} letter size={40} />
@@ -67,7 +68,7 @@ export default function Connect() {
         )}
       </ScrollView>
       <View style={{ paddingHorizontal: space.xl, gap: space.m }}>
-        <Button label={items.length ? 'Connect Another Bank' : 'Connect a Bank'} symbol="plus" kind={items.length ? 'tinted' : 'filled'} onPress={() => run('link')} busy={busy === 'link'} />
+        <Button label={items.length ? 'Add Another Bank' : 'Add a Bank'} symbol="plus" kind={items.length ? 'tinted' : 'filled'} onPress={() => run('link')} busy={busy === 'link'} />
         {s.data?.env === 'sandbox' && <Button label="Add a Test Bank" kind="plain" onPress={() => run('test')} busy={busy === 'test'} />}
         {items.length > 0 && <Button label="Continue" onPress={() => router.push('/next/welcome/accounts')} />}
       </View>

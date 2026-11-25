@@ -45,7 +45,7 @@ export default function Accounts() {
       {HEADER}
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: p.bg }}
         contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 120 }}>
-        {L.b && !accounts.length ? <Empty symbol="building.columns" title="No Accounts" body="Connect a bank in Settings." /> : (
+        {L.b && !accounts.length ? <Empty symbol="building.columns" title="No Accounts" body="Add a bank in Settings." /> : (
           <>
             <Card pad style={{ gap: space.xs, paddingTop: space.xl }}>
               <Txt v="subhead" tone="label2" weight="600">Net Worth</Txt>

@@ -2,7 +2,8 @@
 // doesn't know yet, and what it added by itself this week, to look over or take back.
 import { useState } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
-import Animated, { FadeOut, LinearTransition } from 'react-native-reanimated'
+import Animated, { FadeOut } from 'react-native-reanimated'
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { useQuery } from '@tanstack/react-query'
 import { api, ApiError, type BankAsk, type BankRecent, type BankRow, type CatType } from '@/lib/api'
 import { refreshBank, useBank, useBankInbox } from '@/lib/bank'
@@ -10,6 +11,7 @@ import { dayLabel } from '@/lib/dates'
 import { deleteEntry } from '@/next/actions'
 import { failure, success } from '@/next/haptics'
 import { useLedger } from '@/next/ledger'
+import { SETTLE } from '@/next/motion'
 import { amountLook, categoryLook, KIND_LOOK, wantsLogo } from '@/next/look'
 import { space, usePalette } from '@/next/theme'
 import { Button } from '@/next/ui/Button'
@@ -22,7 +24,7 @@ import { Press } from '@/next/ui/Press'
 import { SheetHeader } from '@/next/ui/SheetHeader'
 import { Txt } from '@/next/ui/Txt'
 
-const LEAVE = LinearTransition.springify().damping(18).stiffness(200)
+const LEAVE = SETTLE
 const NOT_TRACKED = -1
 
 function Waiting({ r }: { r: BankRow }) {
@@ -74,14 +76,13 @@ function Waiting({ r }: { r: BankRow }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 54, gap: space.s }}>
         <View style={{ flex: 1, gap: space.xs, alignItems: 'flex-start' }}>
           <Choice options={options.map((x) => [x.id, x.name])} value={cat} onChange={setCat} none="Choose Category" />
-          {moving && <Choice options={accounts} value={other} onChange={setOther} none={out ? 'To Which Account?' : 'From Which Account?'} />}
+          {moving && <Choice options={accounts} value={other} onChange={setOther} none="Choose Account" />}
         </View>
         <Press onPress={add} disabled={!ready || busy} accessibilityLabel={`Add ${name}`}
           style={{ height: 32, paddingHorizontal: 14, borderRadius: 16, justifyContent: 'center', backgroundColor: ready ? p.blue : p.fill3, opacity: busy ? 0.5 : 1 }}>
           <Txt v="subhead" weight="600" color={ready ? '#FFFFFF' : p.label3}>Add</Txt>
         </Press>
       </View>
-      {r.raw && r.raw !== name ? <Txt v="caption" tone="label3" numberOfLines={1} style={{ paddingLeft: 54, marginTop: -space.s }}>{r.raw}</Txt> : null}
     </Animated.View>
   )
 }
@@ -115,18 +116,23 @@ function Added({ x }: { x: BankRecent }) {
   const look = categoryLook(c)
   const amt = amountLook(c?.type, x.amount)
   return (
-    <Animated.View exiting={FadeOut.duration(180)} layout={LEAVE} style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: 10 }}>
-      <Logo name={wantsLogo(c?.type) ? x.what : undefined} symbol={look.symbol} color={p[look.hue]} size={42} />
-      <View style={{ flex: 1, gap: 2 }}>
-        <Txt v="body" numberOfLines={1}>{x.what}</Txt>
-        <Txt v="subhead" tone="label2" numberOfLines={1}>{c?.name} · {dayLabel(x.date, L.today)}</Txt>
-      </View>
-      <View style={{ alignItems: 'flex-end', gap: 2 }}>
-        <Money cents={amt.cents} plus={amt.plus} tone={amt.tone} />
-        <Press feel="none" onPress={() => deleteEntry({ id: x.txn_id })} hitSlop={8} accessibilityLabel={`Remove ${x.what}`}>
-          <Txt v="footnote" tone="red">Remove</Txt>
-        </Press>
-      </View>
+    <Animated.View exiting={FadeOut.duration(180)} layout={LEAVE}>
+      <ReanimatedSwipeable friction={1.6} rightThreshold={80} overshootRight={false}
+        renderRightActions={() => (
+          <Press feel="none" onPress={() => deleteEntry({ id: x.txn_id })} accessibilityLabel={`Remove ${x.what}`}
+            style={{ width: 96, backgroundColor: p.red, alignItems: 'center', justifyContent: 'center' }}>
+            <Txt v="subhead" weight="600" color="#FFFFFF">Remove</Txt>
+          </Press>
+        )}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: 10, backgroundColor: p.card }}>
+          <Logo name={wantsLogo(c?.type) ? x.what : undefined} symbol={look.symbol} color={p[look.hue]} size={42} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Txt v="body" numberOfLines={1}>{x.what}</Txt>
+            <Txt v="subhead" tone="label2" numberOfLines={1}>{c?.name} · {dayLabel(x.date, L.today)}</Txt>
+          </View>
+          <Money cents={amt.cents} plus={amt.plus} tone={amt.tone} />
+        </View>
+      </ReanimatedSwipeable>
     </Animated.View>
   )
 }
@@ -158,22 +164,22 @@ export default function CheckIn() {
   return (
     <View style={{ flex: 1, backgroundColor: p.bg }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 60, gap: space.xxl }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
-        <SheetHeader title="From Your Bank" subtitle={posted.length ? `${posted.length} ${posted.length === 1 ? 'needs' : 'need'} a look` : undefined} />
+        <SheetHeader title="From Your Bank" subtitle={posted.length ? `${posted.length} to review` : undefined} />
         <View style={{ paddingHorizontal: space.l, gap: space.xxl }}>
           {done && <Empty symbol="checkmark.circle" title="You're All Caught Up" body="Everything from your banks is in Tally." />}
           {posted.length > 0 && (
-            <Section title="Needs You" inset={70} footer={pending ? `${pending} more ${pending === 1 ? 'is' : 'are'} still pending at the bank.` : undefined}>
+            <Section title="To Review" compact inset={70} footer={pending ? `${pending} pending at the bank.` : undefined}>
               {posted.map((r) => <Waiting key={r.id} r={r} />)}
             </Section>
           )}
-          {guessed.length > 1 && <Button label={`Add ${guessed.length} with Their Categories`} kind="tinted" onPress={addAll} busy={adding} />}
+          {guessed.length > 1 && <Button label="Add All" kind="tinted" onPress={addAll} busy={adding} />}
           {asks.length > 0 && (
-            <Section title="New Accounts" inset={64} footer="Tell Tally which of your accounts each one is, and its transactions start coming in.">
+            <Section title="New Accounts" compact inset={64} footer="Choose where each account belongs.">
               {asks.map((a) => <Ask key={a.id} a={a} />)}
             </Section>
           )}
           {added.length > 0 && (
-            <Section title="Added for You" aside="This week" inset={70}>
+            <Section title="Added Automatically" compact inset={70} footer="This week. Swipe left to remove one.">
               {added.slice(0, 30).map((x) => <Added key={x.id} x={x} />)}
             </Section>
           )}

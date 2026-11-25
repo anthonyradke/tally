@@ -32,7 +32,6 @@ export default function Accounts() {
   const all = items.flatMap((it) => it.accounts).filter((a) => a.kind)
   const on = (a: SetupAccount) => !c.off[a.id]
   const firsts = all.filter((a) => on(a) && a.first && (a.kind === 'cash' || a.kind === 'card')).map((a) => a.first!).sort()
-  const rows = all.filter((a) => on(a) && (a.kind === 'cash' || a.kind === 'card')).reduce((n, a) => n + a.rows, 0)
   const rename = (a: SetupAccount) => {
     if (process.env.EXPO_OS !== 'ios') return
     Alert.prompt('Rename Account', undefined, (v) => { if (v?.trim()) useChoices.setState((x) => ({ names: { ...x.names, [a.id]: v.trim() } })) }, 'plain-text', c.names[a.id] ?? a.suggested)
@@ -61,11 +60,11 @@ export default function Accounts() {
     <View style={{ flex: 1, backgroundColor: p.bg, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, space.l) }}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: space.l, paddingTop: 40, gap: space.xxl, paddingBottom: space.xl }}>
         <View style={{ alignItems: 'center', gap: space.m, paddingHorizontal: space.l }}>
-          <Txt v="largeTitle" center>Your Accounts</Txt>
-          <Txt v="body" tone="label2" center>Tally made these from your banks. Untick any you don’t want, or tap a name to change it.</Txt>
+          <Txt v="largeTitle" center>Choose Accounts</Txt>
+          <Txt v="body" tone="label2" center>Select the accounts you want Tally to track.</Txt>
         </View>
         {items.map((it) => (
-          <Section key={it.id} title={it.brand || it.institution || 'Bank'} inset={64}>
+          <Section key={it.id} title={it.brand || it.institution || 'Bank'} compact inset={64}>
             {it.accounts.filter((a) => a.kind).map((a) => {
               const look = KIND_LOOK[a.kind!]
               return (
@@ -83,17 +82,17 @@ export default function Accounts() {
             })}
           </Section>
         ))}
-        <Section title="Start From" footer="All of it fills your charts from day one. Tally adds what it's sure of and asks you about the rest.">
-          <Row title="All History" subtitle={firsts.length ? `Since ${since(firsts[0])} · ${rows.toLocaleString()} transactions` : undefined}
+        <Section title="Start From" compact footer="Brings in up to two years of transactions.">
+          <Row title="All History" subtitle={firsts.length ? `Since ${since(firsts[0])}` : undefined}
             onPress={() => { tick(); useChoices.setState({ history: 'all' }) }}
             trailing={c.history === 'all' ? <SF name="checkmark" size={17} color={p.blue} weight="semibold" /> : undefined} />
-          <Row title="This Month" subtitle="Older history stays at the bank for later"
+          <Row title="This Month"
             onPress={() => { tick(); useChoices.setState({ history: 'month' }) }}
             trailing={c.history === 'month' ? <SF name="checkmark" size={17} color={p.blue} weight="semibold" /> : undefined} />
         </Section>
       </ScrollView>
       <View style={{ paddingHorizontal: space.xl, gap: space.s }}>
-        {busy && <Txt v="footnote" tone="label2" center>Bringing in your history. This can take a minute.</Txt>}
+        {busy && <Txt v="footnote" tone="label2" center>Setting up. This can take a minute.</Txt>}
         <Button label="Set Up Tally" onPress={finish} busy={busy} disabled={!all.some(on)} />
       </View>
     </View>

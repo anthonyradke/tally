@@ -81,14 +81,14 @@ export default function Summary() {
         contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
         {L.b && !L.b.accounts.length ? (
-          <Empty symbol="building.columns" title="No Accounts Yet" body="Connect a bank in Settings to start." />
+          <Empty symbol="building.columns" title="No Accounts" body="Add a bank in Settings to get started." />
         ) : (
           <>
             {bank && (waiting > 0 || added > 0) && (
               <Card>
                 <Row leading={<Tile symbol={waiting ? 'tray.full.fill' : 'checkmark'} color={waiting ? p.blue : p.green} />}
                   title="From Your Bank" chevron onPress={() => router.push('/next/check-in')}
-                  subtitle={[waiting ? `${waiting} ${waiting === 1 ? 'needs' : 'need'} you` : '', added ? `${added} added for you` : ''].filter(Boolean).join(' · ')} />
+                  subtitle={[waiting ? `${waiting} to review` : '', added ? `${added} added` : ''].filter(Boolean).join(' · ')} />
               </Card>
             )}
 

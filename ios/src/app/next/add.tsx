@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react'
 import { ScrollView, TextInput, View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
-import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming, ZoomIn } from 'react-native-reanimated'
+import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { api, ApiError, type CatType, type Kind, type Txn, type TxnInput } from '@/lib/api'
@@ -13,11 +13,12 @@ import { sendOrQueue } from '@/lib/outbox'
 import { failure, success, tick, warning } from '@/next/haptics'
 import { accountOf, useLedger } from '@/next/ledger'
 import { categoryLook, KIND_LOOK, wantsLogo } from '@/next/look'
-import { radius, space, springs, usePalette } from '@/next/theme'
+import { radius, space, usePalette } from '@/next/theme'
 import { Button } from '@/next/ui/Button'
 import { Keypad, typedCents, typedText, typeKey } from '@/next/ui/Keypad'
 import { Card, Row, Tile } from '@/next/ui/List'
 import { Logo } from '@/next/ui/Logo'
+import { NumericText } from '@/next/ui/Money'
 import { Choice } from '@/next/ui/native/Choice'
 import { DateChoice } from '@/next/ui/native/DateChoice'
 import { Segmented } from '@/next/ui/native/Segmented'
@@ -88,7 +89,7 @@ function Composer({ t }: { t?: Txn }) {
   }
   const press = (k: string) => {
     const next = typeKey(amount, k)
-    if (next === null) { warning(); shake.set(withSequence(withTiming(-8, { duration: 50 }), withTiming(8, { duration: 50 }), withSpring(0, springs.bouncy))); return }
+    if (next === null) { warning(); shake.set(withSequence(...[-9, 9, -6, 6, -3, 0].map((x) => withTiming(x, { duration: 55 })))); return } // the passcode shake
     setAmount(next)
   }
   const switchMode = (m: Mode) => { setMode(m); setCat(null); setRefund(false); setFrom(null); setTo(null) }
@@ -145,13 +146,10 @@ function Composer({ t }: { t?: Txn }) {
         </View>
 
         <Animated.View style={[{ alignItems: 'center', paddingVertical: space.m, gap: space.s }, shakeStyle]}>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', minHeight: 76 }}>
-            {(refund ? '−' + typedText(amount) : typedText(amount)).split('').map((ch, i) => (
-              <Animated.Text key={`${i}${ch}`} entering={i === 0 ? undefined : ZoomIn.springify().damping(14).stiffness(260)} exiting={FadeOut.duration(80)}
-                layout={LinearTransition.springify().damping(18).stiffness(240)}
-                style={{ fontSize: amount.length > 7 ? 52 : 64, lineHeight: 76, fontWeight: '600', fontFamily: 'ui-rounded', letterSpacing: -1,
-                  color: amount ? (refund ? p.green : p.label) : p.label3, fontVariant: ['tabular-nums'] }}>{ch}</Animated.Text>
-            ))}
+          <View style={{ minHeight: 76, justifyContent: 'center' }}>
+            <NumericText typing text={refund ? '−' + typedText(amount) : typedText(amount)} down={false}
+              style={{ fontSize: amount.length > 7 ? 52 : 64, lineHeight: 76, fontWeight: '600', fontFamily: 'ui-rounded', letterSpacing: -1,
+                color: amount ? (refund ? p.green : p.label) : p.label3, fontVariant: ['tabular-nums'] }} />
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
             <DateChoice value={date} onChange={(d) => { tick(); setDate(d) }} min={L.b?.start} />
@@ -168,7 +166,7 @@ function Composer({ t }: { t?: Txn }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 56 }}>
             <Logo name={wantsLogo(c?.type ?? (mode === 'in' ? 'Money in' : mode === 'out' ? 'Spending' : 'Transfer')) ? what.trim() : undefined}
               symbol={look.symbol} color={p[look.hue]} size={30} />
-            <TextInput value={what} onChangeText={setWhat} placeholder={mode === 'move' ? 'Description' : 'Where or what?'} placeholderTextColor={p.label3}
+            <TextInput value={what} onChangeText={setWhat} placeholder="Name" placeholderTextColor={p.label3}
               onFocus={() => setNaming(true)} onBlur={() => setNaming(false)} returnKeyType="done" autoCorrect={false}
               style={{ flex: 1, fontSize: 17, color: p.label, paddingVertical: space.m }} />
           </View>

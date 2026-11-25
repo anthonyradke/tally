@@ -49,11 +49,10 @@ export const space = { xs: 4, s: 8, m: 12, l: 16, xl: 20, xxl: 32 } as const
 /** Corner radii: cards and grouped lists as iOS 26 draws them, controls fully round. */
 export const radius = { card: 26, control: 999, field: 12 } as const
 
-/** Springs, as SwiftUI names them. */
+/** Springs as SwiftUI's defaults: critically damped, so things arrive and settle without overshooting. */
 export const springs = {
-  snappy: { damping: 20, stiffness: 320, mass: 0.7 },
-  bouncy: { damping: 13, stiffness: 210, mass: 0.8 },
-  smooth: { damping: 26, stiffness: 170, mass: 1 },
+  snappy: { duration: 280, dampingRatio: 1 },
+  smooth: { duration: 420, dampingRatio: 1 },
 } as const
 
 /** A color with alpha, for tints behind symbols. */

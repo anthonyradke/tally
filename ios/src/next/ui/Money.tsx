@@ -1,10 +1,11 @@
-// Amounts. `Money` is a figure in running text; `Rolling` is a big one whose digits roll into place when it
-// changes, each on its own spring, like an odometer.
-import { useEffect } from 'react'
-import { Text, View, type TextStyle } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring } from 'react-native-reanimated'
+// Amounts. `Money` is a figure in running text; `Rolling` is a large one that changes like SwiftUI's numeric text:
+// only the digits that change move, the new one sliding in as the old one leaves, both fading.
+import { useRef } from 'react'
+import { View, type TextStyle } from 'react-native'
+import Animated, { LayoutAnimationConfig } from 'react-native-reanimated'
 import { formatCents } from '@/lib/money'
-import { springs, type as styles, usePalette, type TypeName } from '../theme'
+import { digitIn, digitOut, SETTLE } from '../motion'
+import { type as styles, usePalette, type TypeName } from '../theme'
 import { Txt } from './Txt'
 
 export function Money({ cents, plus, tone = 'plain', v = 'body', weight, noCents }: {
@@ -16,34 +17,36 @@ export function Money({ cents, plus, tone = 'plain', v = 'body', weight, noCents
   return <Txt v={v} weight={weight} num color={color} numberOfLines={1}>{text}</Txt>
 }
 
-function Digit({ d, h, style, delay }: { d: number; h: number; style: TextStyle; delay: number }) {
-  const y = useSharedValue(0)
-  useEffect(() => { y.set(withDelay(delay, withSpring(-d * h, springs.smooth))) }, [d, h, delay, y])
-  const anim = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }))
+/** Characters keyed by their place, so only a character that changes swaps in. Places count from the right for a
+ *  figure that changes (a new leading digit doesn't disturb the rest), from the left for one being typed (each new
+ *  digit appears at the end). */
+export function NumericText({ text, style, down, typing }: { text: string; style: TextStyle; down: boolean; typing?: boolean }) {
+  const h = style.lineHeight ?? 40
+  const chars = text.split('')
   return (
-    <View style={{ height: h, overflow: 'hidden' }}>
-      <Animated.View style={anim}>
-        {'0123456789'.split('').map((n) => <Text key={n} style={[style, { height: h }]}>{n}</Text>)}
-      </Animated.View>
+    <View style={{ flexDirection: 'row' }}>
+      {chars.map((ch, i) => {
+        const place = typing ? i : chars.length - i
+        return (
+          <Animated.Text key={`${place}:${ch}`} entering={digitIn(down, h)} exiting={digitOut(down, h)} layout={SETTLE}
+            style={[style, { height: h }]}>{ch}</Animated.Text>
+        )
+      })}
     </View>
   )
 }
 
 export function Rolling({ cents, v = 'hero', color, noCents }: { cents: number; v?: TypeName; color?: string; noCents?: boolean }) {
   const p = usePalette()
-  const base = styles[v]
-  const h = base.lineHeight ?? 56
-  const style: TextStyle = { ...base, color: color ?? p.label, fontVariant: ['tabular-nums'] }
-  const chars = formatCents(cents, { cents: !noCents }).split('')
-  const n = chars.length
+  const last = useRef(cents)
+  const down = cents < last.current // eslint-disable-line react-hooks/refs
+  last.current = cents // eslint-disable-line react-hooks/refs
+  const style: TextStyle = { ...styles[v], color: color ?? p.label, fontVariant: ['tabular-nums'] }
   return (
-    <View style={{ flexDirection: 'row' }} accessible accessibilityLabel={formatCents(cents)}>
-      {chars.map((ch, i) => {
-        const fromEnd = n - i // keyed from the right: a new leading digit doesn't remount the others
-        return /\d/.test(ch)
-          ? <Digit key={`d${fromEnd}`} d={Number(ch)} h={h} style={style} delay={(n - fromEnd) * 18} />
-          : <Text key={`s${fromEnd}${ch}`} style={[style, { height: h }]}>{ch}</Text>
-      })}
+    <View accessible accessibilityLabel={formatCents(cents)}>
+      <LayoutAnimationConfig skipEntering>
+        <NumericText text={formatCents(cents, { cents: !noCents })} style={style} down={down} />
+      </LayoutAnimationConfig>
     </View>
   )
 }

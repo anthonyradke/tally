@@ -29,7 +29,7 @@ export default function Settings() {
     <>
       {HEADER}
       <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: p.bg }} contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 60 }}>
-        <Section footer="Turn this off to go back to the original Tally design. Your data is the same in both." inset={62}>
+        <Section footer="Switch back to the classic design at any time." inset={62}>
           <Row leading={<Tile symbol="sparkles" color={p.purple} size={30} />} title="New Design"
             trailing={<Switch value onValueChange={(on) => { if (!on) { tick(); setDesign('classic') } }} />} />
         </Section>

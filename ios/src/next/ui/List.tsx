@@ -14,14 +14,17 @@ export function Card({ children, style, pad }: { children: ReactNode; style?: St
 }
 
 /** A titled group of rows. `inset`: where each separator starts (after a row's icon). */
-export function Section({ title, aside, action, footer, inset = space.l, children, style }: {
-  title?: string; aside?: string; action?: { label: string; onPress: () => void }; footer?: string; inset?: number; children: ReactNode; style?: StyleProp<ViewStyle>
+/** `compact`: the small gray header of a settings-style list, instead of a bold section title. */
+export function Section({ title, aside, action, footer, inset = space.l, compact, children, style }: {
+  title?: string; aside?: string; action?: { label: string; onPress: () => void }; footer?: string; inset?: number; compact?: boolean; children: ReactNode; style?: StyleProp<ViewStyle>
 }) {
   const p = usePalette()
   const rows = Children.toArray(children).filter(Boolean)
   return (
     <View style={[{ gap: space.s }, style]}>
-      {(title || action || aside) && (
+      {compact && title ? (
+        <Txt v="footnote" tone="label2" style={{ paddingHorizontal: space.l, marginBottom: -2, textTransform: 'uppercase', letterSpacing: 0.2 }}>{title}</Txt>
+      ) : (title || action || aside) && (
         <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: space.xs }}>
           {title ? <Txt v="title3" weight="700">{title}</Txt> : <View />}
           {action ? <Press feel="none" haptic={false} onPress={action.onPress} hitSlop={10}><Txt v="body" tone="blue">{action.label}</Txt></Press>

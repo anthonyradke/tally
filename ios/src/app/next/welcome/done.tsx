@@ -1,38 +1,33 @@
-// Setup's last page: a checkmark that pops in, what Tally made, and the way in.
-import { useEffect } from 'react'
+// Setup's last page: a checkmark that draws itself, what Tally made, and the way in.
 import { View } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { leaveWelcome } from '@/next/setup'
-import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated'
+import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { success } from '@/next/haptics'
+import { rise } from '@/next/motion'
 import { space, usePalette } from '@/next/theme'
+import { Checkmark } from '@/next/ui/Checkmark'
 import { Button } from '@/next/ui/Button'
 import { Row, Section } from '@/next/ui/List'
-import { SF } from '@/next/ui/SF'
 import { Txt } from '@/next/ui/Txt'
 
 export default function Done() {
   const p = usePalette()
   const insets = useSafeAreaInsets()
   const { accounts = '0', added = '0', waiting = '0' } = useLocalSearchParams<{ accounts?: string; added?: string; waiting?: string }>()
-  useEffect(() => { const t = setTimeout(success, 350); return () => clearTimeout(t) }, [])
   return (
     <View style={{ flex: 1, backgroundColor: p.bg, paddingTop: insets.top + 80, paddingBottom: Math.max(insets.bottom, space.l), paddingHorizontal: space.l }}>
       <View style={{ flex: 1, alignItems: 'center', gap: space.l }}>
-        <Animated.View entering={ZoomIn.delay(150).springify().damping(10).stiffness(160)}
-          style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: p.green, alignItems: 'center', justifyContent: 'center' }}>
-          <SF name="checkmark" size={46} color="#FFFFFF" weight="bold" />
-        </Animated.View>
-        <Animated.View entering={FadeInDown.delay(350).springify()} style={{ alignItems: 'center', gap: space.s }}>
+        <Checkmark color={p.green} />
+        <Animated.View entering={rise(700)} style={{ alignItems: 'center', gap: space.s }}>
           <Txt v="largeTitle" center>You’re All Set</Txt>
-          <Txt v="body" tone="label2" center>Tally checks your banks every few hours from now on.</Txt>
+          <Txt v="body" tone="label2" center>Your accounts stay up to date on their own.</Txt>
         </Animated.View>
-        <Animated.View entering={FadeInDown.delay(500).springify()} style={{ alignSelf: 'stretch', marginTop: space.l }}>
+        <Animated.View entering={rise(820)} style={{ alignSelf: 'stretch', marginTop: space.l }}>
           <Section>
             <Row title="Accounts" value={accounts} />
             <Row title="Transactions Added" value={Number(added).toLocaleString()} />
-            <Row title="To Look Over" value={Number(waiting).toLocaleString()} valueTone={Number(waiting) ? 'blue' : 'label2'} />
+            <Row title="To Review" value={Number(waiting).toLocaleString()} valueTone={Number(waiting) ? 'blue' : 'label2'} />
           </Section>
         </Animated.View>
       </View>

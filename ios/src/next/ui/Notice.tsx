@@ -2,13 +2,14 @@
 // Island on a spring and lifts away after a few seconds, or when tapped.
 import { useEffect } from 'react'
 import { Pressable, View } from 'react-native'
-import Animated, { FadeOutUp, SlideInUp } from 'react-native-reanimated'
+import Animated, { FadeOut, Keyframe } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
 import type { SFSymbol } from 'expo-symbols'
 import { create } from 'zustand'
 import { tap } from '../haptics'
+import { EASE } from '../motion'
 import { space, usePalette, type Hue } from '../theme'
 import { SF } from './SF'
 import { Txt } from './Txt'
@@ -21,6 +22,12 @@ export function notify(n: Omit<Note, 'id'>) { useNotice.setState({ note: { ...n,
 const clear = (id: number) => { if (useNotice.getState().note?.id === id) useNotice.setState({ note: null }) }
 
 const glass = process.env.EXPO_OS === 'ios' && isLiquidGlassAvailable()
+// In from just above with a slight scale, like the system's own banners; out as a quick fade.
+const ENTER = new Keyframe({
+  0: { opacity: 0, transform: [{ translateY: -14 }, { scale: 0.96 }] },
+  100: { opacity: 1, transform: [{ translateY: 0 }, { scale: 1 }], easing: EASE },
+}).duration(380)
+const EXIT = FadeOut.duration(200)
 
 export function NoticeHost() {
   const note = useNotice((s) => s.note)
@@ -46,7 +53,7 @@ export function NoticeHost() {
   )
   return (
     <View pointerEvents="box-none" style={{ position: 'absolute', top: insets.top + 6, left: 0, right: 0, alignItems: 'center' }}>
-      <Animated.View key={note.id} entering={SlideInUp.springify().damping(16).stiffness(190)} exiting={FadeOutUp.duration(200)}
+      <Animated.View key={note.id} entering={ENTER} exiting={EXIT}
         style={{ borderRadius: 24, overflow: 'hidden', maxWidth: '92%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } }}>
         <Pressable onPress={() => clear(note.id)}>
           {glass ? <GlassView style={{ borderRadius: 24 }}>{body}</GlassView>

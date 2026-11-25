@@ -18,13 +18,13 @@ export default function Server() {
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: p.bg }} contentContainerStyle={{ padding: space.l, gap: space.xxl }}
       keyboardShouldPersistTaps="handled">
-      <Section footer="Tally Lab is a separate ledger with bank sync, for trying things out. Nothing in one reaches the other.">
+      <Section title="Ledger" compact footer="Tally Lab is a separate ledger for trying new features.">
         {PROFILES.map((x) => (
           <Row key={x} title={PROFILE_NAME[x]} onPress={() => pick(x)}
             trailing={x === s.profile ? <SF name="checkmark" size={17} color={p.blue} weight="semibold" /> : undefined} />
         ))}
       </Section>
-      <Section title="Connection" footer="The token is kept in the keychain. Leave it empty to keep the one saved.">
+      <Section title="Connection" compact footer="Your token is stored in the keychain.">
         <View style={{ paddingHorizontal: space.l }}>
           <TextInput value={url} onChangeText={setUrl} onEndEditing={() => { s.set(url); success() }} placeholder="https://…" placeholderTextColor={p.label3}
             autoCapitalize="none" autoCorrect={false} keyboardType="url" style={field} />

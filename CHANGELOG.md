@@ -35,6 +35,9 @@ Added
   the accounts Tally makes from them, choose all history or this month, and Tally creates the accounts, a starter
   set of categories and the entries it's sure of. Such a ledger adds sure rows by itself on every sync (`bank_auto`)
   and keeps each account at the bank's balance; an entry it added that you delete stays out.
+- New design motion follows the system's: critically damped springs and ease-out curves with no overshoot, numbers
+  that change like SwiftUI's numeric text, a drawn checkmark at the end of setup, and shorter, plainer wording with
+  small list headers on settings-style screens.
 - The welcome setup closes completely on Get Started and never offers setup twice (it came back after finishing,
   and Set Up Tally then failed with "already set up").
 - Logos (`/api/logo`): Plaid's merchant logo or website for bank rows, else the name as a website on logo.dev

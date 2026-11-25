@@ -25,7 +25,7 @@ export async function hideLogo(name: string) {
   try {
     await api.hideLogo(name)
     bump()
-    notify({ text: 'Logo removed', symbol: 'photo', hue: 'gray', action: { label: 'Undo', run: async () => { await api.showLogo(name); bump() } } })
+    notify({ text: 'Logo Hidden', symbol: 'eye.slash', hue: 'gray', action: { label: 'Undo', run: async () => { await api.showLogo(name); bump() } } })
   } catch {
     failure()
   }

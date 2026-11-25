@@ -1,10 +1,11 @@
 // A week of spending as bars, one per day, each split by category color, like Apple Card's weekly activity. The
-// bars grow in on a spring, one after another; touching a day picks it out and dims the rest.
+// bars rise in one after another on a soft ease-out; touching a day picks it out and dims the rest.
 import { useEffect } from 'react'
 import { Pressable, View } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring } from 'react-native-reanimated'
+import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated'
 import { tick } from '../haptics'
-import { springs, usePalette } from '../theme'
+import { EASE } from '../motion'
+import { usePalette } from '../theme'
 import { Txt } from './Txt'
 
 export interface Day { date: string; letter: string; total: number; parts: { color: string; cents: number }[]; today?: boolean }
@@ -15,7 +16,7 @@ function Bar({ d, max, i, dim, onPress }: { d: Day; max: number; i: number; dim:
   const p = usePalette()
   const h = useSharedValue(0)
   const target = max > 0 && d.total > 0 ? Math.max(6, (d.total / max) * H) : 4 // a nub on a quiet day keeps the week's rhythm
-  useEffect(() => { h.set(withDelay(i * 45, withSpring(target, springs.bouncy))) }, [target, i, h])
+  useEffect(() => { h.set(withDelay(i * 30, withTiming(target, { duration: 650, easing: EASE }))) }, [target, i, h])
   const anim = useAnimatedStyle(() => ({ height: h.value }))
   return (
     <Pressable onPress={onPress} style={{ flex: 1, alignItems: 'center', gap: 8 }} accessibilityLabel={`${d.letter}: ${(d.total / 100).toFixed(2)} dollars`}>
