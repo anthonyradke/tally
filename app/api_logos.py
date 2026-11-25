@@ -1,6 +1,7 @@
 """Logos (logos.py): GET /api/logo?name=… for an entry's name, ?account=… for a ledger account's bank. The image, or
 404 when there's none to show (the app then draws the name's first letter). DELETE hides a wrong one for good."""
 from __future__ import annotations
+import re
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -124,6 +125,24 @@ def get_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None
     return FileResponse(path, media_type="image/png", headers=CACHE)
 
 
+@router.get("/color")
+def get_color(con: Con, name: Optional[str] = None, account: Optional[int] = None, item: Optional[int] = None):
+    """The brand's color as #RRGGBB, or null: Plaid's color for a bank where it has one, else the logo's own."""
+    kind, ident = _ident(con, name, account, item)
+    plaid_color = None
+    if item is not None:
+        plaid_color = _plaid_item("SELECT color FROM items WHERE id=?", item)
+    elif account is not None:
+        plaid_color = _plaid_item("SELECT i.color FROM accounts x JOIN items i ON i.id=x.item_id WHERE x.tally_account_id=?",
+                                  account)
+    if plaid_color and re.fullmatch(r"#?[0-9a-fA-F]{6}", plaid_color):
+        return {"color": "#" + plaid_color.lstrip("#").upper()}
+    sources = _item_sources(item) if item is not None else _account_sources(con, account) if account is not None else \
+        _bank_sources(con, name or "") + [("domain", d) for d in logos.domains_for(name or "")]
+    path = logos.resolve(kind, ident, sources)
+    return {"color": logos.color_of(kind, ident, path) if path else None}
+
+
 @router.delete("", status_code=204)
 def hide_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None):
     logos.hide(*_ident(con, name, account))
@@ -134,3 +153,32 @@ def show_logo(con: Con, name: Optional[str] = None, account: Optional[int] = Non
     """Undo for hide."""
     logos.unhide(*_ident(con, name, account))
 
+
+
+cards = APIRouter(prefix="/api/cards")
+
+
+@cards.get("")
+def card_faces(con: Con):
+    """What each account's card on Accounts shows besides the ledger's own fields: the picture of the real card if
+    one was added, and from the bank its last four digits, the bank's name and its brand color."""
+    out: dict[str, dict] = {}
+    linked: dict[int, dict] = {}
+    try:
+        b = bank.connect()
+        try:
+            for r in b.execute("SELECT x.tally_account_id, x.mask, x.subtype, i.institution, i.color FROM accounts x "
+                               "JOIN items i ON i.id=x.item_id WHERE x.tally_account_id IS NOT NULL"):
+                linked[r[0]] = {"mask": r[1], "subtype": r[2], "institution": r[3], "color": r[4]}
+        finally:
+            b.close()
+    except Exception:
+        pass
+    art = {int(k.split(":", 1)[1]): v for k, v in con.execute("SELECT key, value FROM settings WHERE key LIKE 'card_art:%'") if v}
+    for (aid,) in con.execute("SELECT id FROM accounts"):
+        x = linked.get(aid, {})
+        color = x.get("color")
+        out[str(aid)] = {"art": art.get(aid), "mask": x.get("mask"), "subtype": x.get("subtype"),
+                         "institution": x.get("institution"),
+                         "color": "#" + color.lstrip("#").upper() if color and re.fullmatch(r"#?[0-9a-fA-F]{6}", color) else None}
+    return out

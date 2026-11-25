@@ -65,6 +65,7 @@ def sweep(con, grace: int = GRACE, every: int = 3600) -> int:
         return 0
     _swept = now
     used = {r[0] for r in con.execute("SELECT receipt FROM transactions WHERE receipt IS NOT NULL")}
+    used |= {r[0] for r in con.execute("SELECT value FROM settings WHERE key LIKE 'card_art:%'") if r[0]}  # card pictures
     # Entries in Recently deleted keep their file until they're purged, so restoring one brings its receipt back.
     used |= {r[0] for r in con.execute("SELECT json_extract(row, '$.receipt') FROM deleted") if r[0]}
     n = 0
@@ -118,3 +119,47 @@ def get_receipt(name: str):
     # browser from reading a file labelled as an image as anything else.
     return FileResponse(RECEIPTS / name, headers={"Cache-Control": "private, max-age=31536000, immutable",
                                                   "X-Content-Type-Options": "nosniff"})
+
+
+# ---------- card art: a picture of the real card, for an account's card on Accounts ----------
+ART = ("image/jpeg", "image/png", "image/webp", "image/heic")
+
+
+def _art_name(con, aid: int) -> Optional[str]:
+    row = con.execute("SELECT value FROM settings WHERE key=?", (f"card_art:{aid}",)).fetchone()
+    name = row[0] if row else None
+    return name if name and SAFE.match(name) and (RECEIPTS / name).is_file() else None
+
+
+@router.put("/accounts/{aid}/art")
+async def upload_art(aid: int, con: Con, file: UploadFile = File(...)):
+    """A photo or image of the account's card, shown as its card on Accounts. Kept with the receipts."""
+    from .db import set_setting
+    if not con.execute("SELECT 1 FROM accounts WHERE id=?", (aid,)).fetchone():
+        raise HTTPException(404)
+    if file.content_type not in ART:
+        raise HTTPException(422, {"errors": ["Use a JPEG, PNG, WebP or HEIC image."]})
+    data = await file.read(MAX_BYTES + 1)
+    if len(data) > MAX_BYTES:
+        raise HTTPException(413, {"errors": ["That image is over 12 MB."]})
+    if sniff(data) != file.content_type:
+        raise HTTPException(422, {"errors": ["That file isn't the image it says it is."]})
+    old = _art_name(con, aid)
+    RECEIPTS.mkdir(parents=True, exist_ok=True)
+    name = f"card-{uuid.uuid4().hex[:12]}.{EXT[file.content_type]}"
+    (RECEIPTS / name).write_bytes(data)
+    set_setting(con, f"card_art:{aid}", name)
+    con.commit()
+    if old:
+        remove_receipt(old)
+    return {"art": name}
+
+
+@router.delete("/accounts/{aid}/art", status_code=204)
+def delete_art(aid: int, con: Con):
+    from .db import set_setting
+    if old := _art_name(con, aid):
+        remove_receipt(old)
+    set_setting(con, f"card_art:{aid}", "")
+    con.commit()
+    return Response(status_code=204)
