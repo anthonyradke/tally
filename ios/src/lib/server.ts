@@ -15,6 +15,10 @@ interface ServerState {
   token: string
   set: (url: string) => void
   setToken: (token: string) => void
+  /** Back to the address the app was built with (EXPO_PUBLIC_TALLY_URL); the saved one is forgotten. */
+  reset: () => void
+  /** Forgets the token (removed from the keychain). */
+  clearToken: () => void
 }
 
 export const useServer = create<ServerState>((set) => ({
@@ -30,7 +34,18 @@ export const useServer = create<ServerState>((set) => ({
     set({ token: clean })
     if (!WEB) (clean ? SecureStore.setItemAsync(TOKEN_KEY, clean) : SecureStore.deleteItemAsync(TOKEN_KEY)).catch(() => {})
   },
+  reset: () => {
+    set({ url: DEFAULT })
+    AsyncStorage.removeItem(KEY).catch(() => {})
+  },
+  clearToken: () => {
+    set({ token: '' })
+    if (!WEB) SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {})
+  },
 }))
+
+/** Whether the address in use is the one the app was built with. */
+export const isDefaultServer = (url = useServer.getState().url) => url === DEFAULT
 
 /** An address as typed, tidied: https:// added when there's no scheme, and no trailing slash or /api (requests add
  *  /api themselves, so "…:8443/api" went to /api/api/…). */

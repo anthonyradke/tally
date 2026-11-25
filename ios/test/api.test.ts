@@ -1,8 +1,8 @@
 // The API client against a fake fetch: how answers become data, refusals or "unreachable".
 import { afterEach, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { api, ApiError, locked, unreachable } from '@/lib/api'
-import { cleanServer, useServer } from '@/lib/server'
+import { api, ApiError, checkServer, locked, probe, unreachable } from '@/lib/api'
+import { cleanServer, defaultServer, isDefaultServer, useServer } from '@/lib/server'
 
 const realFetch = globalThis.fetch
 let calls: { url: string; init: RequestInit }[] = []
@@ -79,4 +79,48 @@ test('a typed address is tidied: https added, no trailing slash or /api', () => 
   assert.equal(cleanServer(' tally.test:8443/api/ '), 'https://tally.test:8443')
   assert.equal(cleanServer('http://127.0.0.1:8000/'), 'http://127.0.0.1:8000')
   assert.equal(cleanServer(''), '')
+})
+
+test('transaction queries pass the exact name, several types and exact_first through', async () => {
+  respond(200, { total: 0, sum: 0, by_type: {}, exact: 0, items: [] })
+  await api.transactions({ what: 'Costco', type: ['Transfer', 'Loan', 'Saving'], exact_first: 0, q: '' })
+  const u = new URL(calls[0].url)
+  assert.equal(u.searchParams.get('what'), 'Costco')
+  assert.equal(u.searchParams.get('type'), 'Transfer,Loan,Saving')
+  assert.equal(u.searchParams.get('exact_first'), '0')
+  assert.equal(u.searchParams.has('q'), false)
+  await api.transactions({ type: [] })
+  assert.equal(new URL(calls[1].url).searchParams.has('type'), false)
+})
+
+test('probe tidies the address and words every failure', async () => {
+  respond(200, { version: '4.1.0' })
+  assert.equal(await probe('tally.test/api/', ' tok '), '4.1.0')
+  assert.equal(calls[0].url, 'https://tally.test/api/health')
+  assert.equal((calls[0].init.headers as Record<string, string>).Authorization, 'Bearer tok')
+  const said = async (status: number, body: unknown, token = 't') => { respond(status, body); const r = await checkServer('tally.test', token); return r.ok ? r.version : r.error }
+  assert.match(await said(401, { detail: 'no' }), /refused the token/)
+  assert.match(await said(401, { detail: 'no' }, ''), /wants a token/)
+  assert.match(await said(403, { detail: 'no' }), /Tailscale login/)
+  assert.match(await said(404, { detail: 'Not Found' }), /needs updating/)
+  assert.match(await said(200, '<html>', 't'), /did not answer/)
+  assert.match(await said(200, { ok: true }), /did not answer/)
+  globalThis.fetch = (async () => { throw new TypeError('Network request failed') }) as typeof fetch
+  assert.deepEqual(await checkServer('tally.test', ''), { ok: false, error: "Couldn't reach Tally at this address. Check it, and that Tailscale is on.", status: 502 })
+  assert.equal((await checkServer('  ', '')).ok, false)
+})
+
+test('the address resets to the built-in one and the token can be cleared', async () => {
+  const s = useServer.getState()
+  const was = s.url
+  s.set('other.test')
+  assert.equal(useServer.getState().url, 'https://other.test')
+  assert.equal(isDefaultServer(), false)
+  useServer.getState().setToken('abc')
+  useServer.getState().clearToken()
+  assert.equal(useServer.getState().token, '')
+  useServer.getState().reset()
+  assert.equal(useServer.getState().url, defaultServer())
+  assert.equal(isDefaultServer(), true)
+  useServer.setState({ url: was })
 })

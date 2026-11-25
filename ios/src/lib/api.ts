@@ -1,6 +1,6 @@
 // Typed client for the Tally backend (FastAPI on x1, reached over Tailscale). Amounts are integer cents everywhere in
 // the app; request bodies carry dollars because the backend's `cents()` parser is the single source of rounding truth.
-import { authHeaders, getServer } from './server'
+import { authHeaders, cleanServer, getServer } from './server'
 
 export type Kind = 'cash' | 'card' | 'investment' | 'loan'
 export type CatType = 'Money in' | 'Spending' | 'Saving' | 'Transfer' | 'Loan'
@@ -26,9 +26,9 @@ export interface Bootstrap { today: string; start: string; accounts: Account[]; 
 export interface BulkBefore { id: number; category_id: number; tags: string[]; from_id?: number | null; to_id?: number | null }
 /** `exact`: how many of the first rows have the very amount a search typed (they come first). */
 export interface TxnPage { total: number; sum: number; by_type: Partial<Record<CatType, number>>; exact: number; items: Txn[] }
-/** `type`: one type, or several joined by commas ("Transfer,Loan,Saving"); `what`: entries with exactly this name;
- *  `exact_first: 0` keeps a search's exact-amount matches in date order. */
-export interface TxnQuery { q?: string; what?: string; exact_first?: 0 | 1; category?: number; account?: number; type?: CatType | `${CatType},${string}` | ''; start?: string; end?: string; amount_min?: number; amount_max?: number; tag?: string; group?: string; sort?: 'date' | 'amount'; dir?: 'asc' | 'desc'; limit?: number; offset?: number }
+/** `what`: entries with exactly this name (any case); `type`: one type or several (sent as "Transfer,Loan,Saving");
+ *  `exact_first: 0` turns off putting rows with the very amount a search typed first. */
+export interface TxnQuery { q?: string; what?: string; category?: number; account?: number; type?: CatType | '' | CatType[] | `${CatType},${string}`; exact_first?: 0 | 1; start?: string; end?: string; amount_min?: number; amount_max?: number; tag?: string; group?: string; sort?: 'date' | 'amount'; dir?: 'asc' | 'desc'; limit?: number; offset?: number }
 /** `id`: the reconciliation saved (with `save`), for Undo. */
 export interface Diagnosis { expected: number; actual: number; gap: number; saved: boolean; id: number | null; doubled: Txn[]; single: Txn[]; future: Txn[] }
 /** `loans`: each loan's balance for the month as Tally works it out, and the statement balance typed over it, if any. */
@@ -127,7 +127,10 @@ async function call<T>(method: string, path: string, body?: unknown, timeoutMs =
 
 const qs = (params: object) => {
   const p = new URLSearchParams()
-  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '' && v !== null) p.set(k, String(v))
+  for (const [k, v] of Object.entries(params)) {
+    const s = Array.isArray(v) ? v.join(',') : v
+    if (s !== undefined && s !== '' && s !== null) p.set(k, String(s))
+  }
   const s = p.toString()
   return s ? `?${s}` : ''
 }
@@ -265,20 +268,38 @@ export async function download(path: string): Promise<string> {
   }
 }
 
-/** Checks an address and token before Settings switches to them, so nothing (the outbox, a refetch) goes to an
- *  address that doesn't work in the meantime. Resolves with the server's version. */
-export async function probe(url: string, token: string): Promise<string> {
+/** Checks an address (tidied as Settings saves it) and token before Settings switches to them, so nothing (the
+ *  outbox, a refetch) goes to an address that doesn't work in the meantime. Resolves with the server's version;
+ *  rejects with an ApiError whose message is a short sentence to show as it is. */
+export async function probe(url: string, token: string, timeoutMs = 10_000): Promise<string> {
+  const base = cleanServer(url)
+  if (!base) throw new ApiError(400, ['Enter the address of your Tally server.'])
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 10_000)
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
-    const res = await fetch(`${url}/api/health`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: ctrl.signal })
+    let res: Response
+    try {
+      res = await fetch(`${base}/api/health`, { headers: token.trim() ? { Authorization: `Bearer ${token.trim()}` } : {}, signal: ctrl.signal })
+    } catch {
+      throw new ApiError(502, ["Couldn't reach Tally at this address. Check it, and that Tailscale is on."])
+    }
     const data = await res.json().catch(() => undefined)
-    if (data === undefined) throw new ApiError(502, ['Tally did not answer at this address.'])
-    if (res.status === 401) throw new ApiError(401, ['Tally answered, but refused the token.'])
+    if (data === undefined || (res.ok && typeof (data as Partial<Health>).version !== 'string')) throw new ApiError(502, ['Tally did not answer at this address.'])
+    if (res.status === 401) throw new ApiError(401, [token.trim() ? 'Tally answered, but refused the token.' : 'Tally answered, but wants a token.'])
+    if (res.status === 403) throw new ApiError(403, ['Tally answered, but refused this Tailscale login.'])
     if (res.status === 404) throw new ApiError(404, ['Tally answered, but needs updating on the server.'])
     if (!res.ok) throw new ApiError(res.status, [`Tally answered with an error (${res.status}).`])
     return (data as Health).version
   } finally {
     clearTimeout(timer)
+  }
+}
+
+/** `probe` that never throws: the version, or the sentence to show. */
+export async function checkServer(url: string, token: string): Promise<{ ok: true; version: string } | { ok: false; error: string; status: number }> {
+  try {
+    return { ok: true, version: await probe(url, token) }
+  } catch (e) {
+    return e instanceof ApiError ? { ok: false, error: e.errors.join(' '), status: e.status } : { ok: false, error: String(e), status: 0 }
   }
 }
