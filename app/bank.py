@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS txns(
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE INDEX IF NOT EXISTS txns_account ON txns(account_id, date);
 CREATE INDEX IF NOT EXISTS txns_txn ON txns(txn_id);
+CREATE TABLE IF NOT EXISTS forgotten(account INTEGER NOT NULL, day TEXT NOT NULL, amount INTEGER NOT NULL,
+  raw TEXT NOT NULL, PRIMARY KEY(account, day, amount, raw));
 """
 
 
@@ -297,6 +299,12 @@ def sync_item(bcon, iid: int) -> dict:
                 # A removed row that was already paired keeps its entry; the entry is the user's.
                 counts["removed"] += bcon.execute("DELETE FROM txns WHERE plaid_id=? AND status='new'",
                                                   (t["transaction_id"],)).rowcount
+        # A row skipped (or whose entry was deleted) before its bank was disconnected stays skipped when it comes
+        # back with the bank (forget()).
+        bcon.execute("UPDATE txns SET status='ignored', how='removed', decided_at=? WHERE status='new' AND EXISTS("
+                     "SELECT 1 FROM forgotten f JOIN accounts a ON a.tally_account_id=f.account WHERE a.id=txns.account_id"
+                     " AND f.day=COALESCE(txns.authorized_date, txns.date) AND f.amount=txns.amount AND f.raw=txns.raw)",
+                     (_now(),))
         bcon.execute("UPDATE items SET cursor=?, error=NULL, synced_at=? WHERE id=?", (cursor, _now(), iid))
         bcon.commit()
     return dict(counts)
@@ -386,6 +394,15 @@ def automap(bcon, st, iid: int) -> list[dict]:
             done.append({"bank_account": a["name"], "account_id": scored[0][1]})
     bcon.commit()
     return done
+
+
+def forget(bcon, iid: int) -> None:
+    """Before a connection goes: remember its skipped rows by ledger account, day, amount and description, so the
+    same bank connected again doesn't offer (or add) them a second time. Paired rows need nothing: they pair with
+    their entries again."""
+    bcon.execute("INSERT OR IGNORE INTO forgotten(account, day, amount, raw) SELECT a.tally_account_id, "
+                 "COALESCE(t.authorized_date, t.date), t.amount, t.raw FROM txns t JOIN accounts a ON a.id=t.account_id "
+                 "WHERE a.item_id=? AND a.tally_account_id IS NOT NULL AND t.status='ignored' AND t.pending=0", (iid,))
 
 
 def ask(bcon) -> list[dict]:

@@ -177,11 +177,12 @@ def _connected(b, con, access: str, item_id: str) -> dict:
     """A new connection: store it, match its accounts to the ledger's where that's clear, then pull its history."""
     iid = _plaid(bank.add_item, b, access, item_id)
     with bank.settling:
-        matched = bank.automap(b, service.load(con), iid)
-        made: list[dict] = []
-        if _auto(con):  # a ledger built from the banks takes a new bank's accounts as setup would have
-            from .api_setup import adopt
-            made = adopt(b, con, iid)
+        from .api_setup import adopt, reattach
+        # A ledger built from the banks: a bank connected again first takes back the accounts it had (kept at its
+        # balance), then a new bank's accounts are made as setup would have.
+        back = reattach(b, con, iid) if _auto(con) else []
+        matched = back + bank.automap(b, service.load(con), iid)
+        made: list[dict] = adopt(b, con, iid) if _auto(con) else []
     return {"item_id": iid, "matched": matched, "made": made, **_refresh(b, con, [iid])}
 
 
@@ -234,8 +235,10 @@ def disconnect(iid: int, b: Bank):
     except plaid.PlaidError as e:
         if e.code not in ("ITEM_NOT_FOUND", "INVALID_ACCESS_TOKEN"):
             raise HTTPException(424, {"errors": [e.message], "code": e.code})
-    b.execute("DELETE FROM items WHERE id=?", (iid,))
-    b.commit()
+    with bank.settling:
+        bank.forget(b, iid)
+        b.execute("DELETE FROM items WHERE id=?", (iid,))
+        b.commit()
 
 
 @router.put("/accounts/{aid}")

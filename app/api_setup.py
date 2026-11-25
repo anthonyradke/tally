@@ -138,6 +138,38 @@ def _finish(b, con, raw: dict) -> dict:
     return {"accounts": made, "start": start.isoformat(), "added": added, "waiting": bank.waiting(b, st)}
 
 
+def reattach(b, con, iid: int) -> list[dict]:
+    """A bank connected again after it was disconnected, on a ledger built from the banks: each of its accounts takes
+    back the ledger account it was before (same bank and kind, and the name setup gave it or its last four digits;
+    or the only one of that bank and kind), held at the bank's balance again. Its inbox starts a few days before
+    that account's last entry, so history the ledger already has isn't offered or added a second time. Only where
+    exactly one ledger account fits; the rest are left to automap and adopt."""
+    st = service.load(con)
+    rows = b.execute("SELECT a.*, i.institution FROM accounts a JOIN items i ON i.id=a.item_id "
+                     "WHERE a.item_id=? AND a.tally_account_id IS NULL AND a.skip=0 ORDER BY a.id", (iid,)).fetchall()
+    taken = {r[0] for r in b.execute("SELECT tally_account_id FROM accounts WHERE tally_account_id IS NOT NULL")}
+    done = []
+    for a in rows:
+        kind = KIND.get(a["type"] or "")
+        brand = _brand(a["institution"]).lower()
+        same = [x for x in st.accounts if x.kind == kind and (x.bank or "").lower() == brand and brand
+                and x.id not in taken and x.id not in st.hidden]
+        name = suggest(a["institution"], a).lower()
+        hits = [x for x in same if x.name.lower() in (name, f"{name} {a['mask']}".lower())
+                or (a["mask"] and a["mask"] in x.name)]
+        if not hits and len(same) == 1 and [KIND.get(o["type"] or "") for o in rows].count(kind) == 1:
+            hits = same
+        if kind is None or len(hits) != 1:
+            continue
+        x = hits[0]
+        since = bank.start_for(st, x.id) if kind in bank.SYNCED_KINDS else None
+        b.execute("UPDATE accounts SET tally_account_id=?, since=?, skip=0, anchor=1 WHERE id=?", (x.id, since, a["id"]))
+        taken.add(x.id)
+        done.append({"bank_account": a["name"], "account_id": x.id})
+    b.commit()
+    return done
+
+
 def adopt(b, con, iid: int) -> list[dict]:
     """A bank connected after setup, on a ledger built from the banks (`bank_auto`): each of its accounts nobody has
     placed becomes a ledger account the way setup makes them (named after the bank's, held at its balance, its inbox

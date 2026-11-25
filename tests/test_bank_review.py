@@ -455,3 +455,27 @@ def test_a_bank_added_to_a_this_month_ledger_starts_this_month(client, fake, mon
                      prow("new", "acc-2", 8.00, "2026-09-25", "SQ *NEW SHOP")])
     assert client.post("/api/bank/sandbox/connect").status_code == 201
     assert sorted(b["raw"] for b in client.get("/api/bank/inbox").json()) == ["SQ *NEW SHOP", "SQ *THING"]
+
+
+def test_reconnecting_a_bank_takes_back_its_accounts_and_decisions(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    rows = [_shell(40.00, "2026-09-28"), prow("odd", "acc-chk", 12.00, "2026-09-03", "SQ *THING 22"),
+            prow("pay", "acc-chk", -2000.00, "2026-09-01", "ACME PAYROLL", "Acme", "INCOME_WAGES", "HIGH")]
+    fake.push(added=rows)
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    shell = next(t for t in entries(client) if t["what"] == "Shell")
+    client.delete(f"/api/transactions/{shell['id']}")  # not mine
+    odd = client.get("/api/bank/inbox").json()[0]
+    client.post(f"/api/bank/inbox/{odd['id']}/ignore")  # skipped
+    client.post("/api/bank/sync")
+    before = {a["id"]: a["name"] for a in client.get("/api/bootstrap").json()["accounts"]}
+    client.delete(f"/api/bank/items/{client.get('/api/bank').json()['items'][0]['id']}")
+    fake.push(added=rows)
+    r = client.post("/api/bank/sandbox/connect").json()
+    assert sorted(m["account_id"] for m in r["matched"]) == sorted(before) and r["made"] == []
+    assert {a["id"]: a["name"] for a in client.get("/api/bootstrap").json()["accounts"]} == before
+    assert [tuple(x) for x in bank.connect().execute("SELECT anchor, tally_account_id IS NOT NULL FROM accounts")] == \
+        [(1, 1), (1, 1)]
+    assert [t["what"] for t in entries(client)] == ["Acme"]  # paired again, nothing added twice or back
+    assert client.get("/api/bank/inbox").json() == []
