@@ -168,20 +168,36 @@ def _cents(v) -> Optional[int]:
 # ---------- connecting and syncing ----------
 
 def add_item(bcon, access_token: str, item_id: str) -> int:
-    """Store a new connection and its accounts. A connection repaired in update mode keeps its item_id: same row."""
+    """Store a new connection and its accounts. A connection repaired in update mode keeps its item_id: same row.
+    The access token is saved before anything else is asked of Plaid: a failure after the exchange used to lose it,
+    leaving a connection at Plaid that Tally could neither use nor remove. Such a connection is kept with its error,
+    and the next sync fills in its accounts."""
+    with settling:
+        bcon.execute("INSERT INTO items(item_id, access_token, webhook) VALUES(?,?,?) ON CONFLICT(item_id) DO UPDATE "
+                     "SET access_token=excluded.access_token, error=NULL", (item_id, access_token, plaid.webhook_url()))
+        bcon.commit()
+    iid = bcon.execute("SELECT id FROM items WHERE item_id=?", (item_id,)).fetchone()[0]
     info: dict = {}
     try:
         inst = plaid.item(access_token)["item"].get("institution_id")
         info = plaid.institution(inst) if inst else {}
     except plaid.PlaidError:
         pass
-    bcon.execute("INSERT INTO items(item_id, access_token, institution, website, logo, color, webhook) "
-                 "VALUES(?,?,?,?,?,?,?) ON CONFLICT(item_id) DO UPDATE SET access_token=excluded.access_token, error=NULL",
-                 (item_id, access_token, info.get("name"), info.get("url"), info.get("logo"), info.get("primary_color"),
-                  plaid.webhook_url()))
-    iid = bcon.execute("SELECT id FROM items WHERE item_id=?", (item_id,)).fetchone()[0]
-    _store_accounts(bcon, iid, plaid.accounts(access_token))
-    bcon.commit()
+    if info:
+        with settling:
+            bcon.execute("UPDATE items SET institution=?, website=?, logo=?, color=? WHERE id=?",
+                         (info.get("name"), info.get("url"), info.get("logo"), info.get("primary_color"), iid))
+            bcon.commit()
+    try:
+        accounts = plaid.accounts(access_token)
+    except plaid.PlaidError as e:
+        with settling:
+            bcon.execute("UPDATE items SET error=? WHERE id=?", (e.code, iid))
+            bcon.commit()
+        raise
+    with settling:
+        _store_accounts(bcon, iid, accounts)
+        bcon.commit()
     return iid
 
 

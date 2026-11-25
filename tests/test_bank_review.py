@@ -405,3 +405,26 @@ def test_an_entry_you_edited_keeps_your_amount(client, fake, monkeypatch):
     client.post("/api/bank/sync")
     assert [t["amount"] for t in entries(client) if t["what"] == "Gas"] == [3800]
     assert bank.connect().execute("SELECT COUNT(*) FROM txns WHERE was_amount IS NOT NULL").fetchone()[0] == 0
+
+
+# ---------- a connection failing half way ----------
+
+def test_a_failure_after_the_exchange_keeps_the_connection(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    real = fake.__call__
+    state = {"fail": True}
+
+    def call(path, body, timeout=30):
+        if path == "/accounts/get" and state["fail"]:
+            raise plaid.PlaidError("RATE_LIMIT_EXCEEDED", "slow down", 429)
+        return real(path, body, timeout)
+    monkeypatch.setattr(plaid, "call", call)
+    assert client.post("/api/bank/connect", json={"public_token": "public-x"}).status_code == 424
+    items = client.get("/api/bank").json()["items"]
+    assert [(i["institution"], i["error"]) for i in items] == [("Test Bank", "RATE_LIMIT_EXCEEDED")]
+    state["fail"] = False
+    client.post("/api/bank/sync")
+    items = client.get("/api/bank").json()["items"]
+    assert items[0]["error"] is None and [a["name"] for a in items[0]["accounts"]] == ["Checking", "Card"]
+    assert client.delete(f"/api/bank/items/{items[0]['id']}").status_code == 204  # and it can be removed
+    assert fake.removed == ["access-sandbox-1"]
