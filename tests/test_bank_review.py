@@ -257,3 +257,67 @@ def test_pair_checks_the_side(client, world, fake, monkeypatch):
     other = client.post("/api/transactions", json={"date": "2026-09-02", "what": "Shop", "category_id": world["food"],
                                                    "from_id": world["card"], "amount": -20}).json()
     assert client.post(f"/api/bank/inbox/{bid}/pair", json={"txn_id": other["id"]}).status_code == 200
+
+
+# ---------- deleted entries stay deleted ----------
+
+def _restore(client, gone):
+    r = client.post("/api/transactions/restore", json={"rows": [{**gone, "amount": gone["amount"] / 100}]})
+    assert r.status_code == 201, r.text
+
+
+def test_deleting_an_auto_transfer_keeps_both_sides_out_and_undo_brings_them_back(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[prow("o1", "acc-chk", 100.00, "2026-09-10", "PAYMENT TO CARD"),
+                     prow("i1", "acc-card", -100.00, "2026-09-10", "PAYMENT THANK YOU")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    t = next(t for t in entries(client) if t["amount"] == 10000)
+    gone = client.delete(f"/api/transactions/{t['id']}").json()
+    client.post("/api/bank/sync")
+    assert client.get("/api/bank/inbox").json() == []
+    assert [x["amount"] for x in entries(client)] == []
+    _restore(client, gone)  # the Undo on the delete toast
+    client.post("/api/bank/sync")
+    assert _linked(t["id"]) == ["i1", "o1"]
+    assert [x["id"] for x in entries(client)] == [t["id"]]
+    assert [x["txn_id"] for x in client.get("/api/bank/recent").json()] == [t["id"]]
+
+
+def test_deleting_an_accepted_entry_doesnt_add_it_back(client, fake, monkeypatch):
+    """Two coffees accepted teach a sure guess; deleting one puts its row back in the inbox, not in the ledger."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[prow(f"c{i}", "acc-card", 4.0 + i, f"2026-09-1{i}", f"SQ *BLUE BOTTLE {i}", "Blue Bottle")
+                     for i in range(3)])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    dining = cats(client)["Dining"]
+    for _ in range(2):
+        box = client.get("/api/bank/inbox").json()
+        r = client.post(f"/api/bank/inbox/{box[-1]['id']}/accept", json={"what": "Coffee", "category_id": dining})
+        assert r.status_code == 201
+    coffee = [t for t in entries(client) if t["what"] == "Coffee"]
+    assert len(coffee) == 3  # the third was sure by then and added by itself
+    gone = next(t for t in coffee if t["amount"] == 500)  # one accepted by hand
+    client.delete(f"/api/transactions/{gone['id']}")
+    client.post("/api/bank/sync")
+    client.post("/api/bank/sync")
+    assert 500 not in [t["amount"] for t in entries(client) if t["what"] == "Coffee"]
+    assert [b["raw"] for b in client.get("/api/bank/inbox").json()] == ["SQ *BLUE BOTTLE 1"]
+
+
+def test_undo_of_added_in_the_check_in_still_works(client, fake, monkeypatch):
+    """The check-in's Undo after Add: delete the entry, then reset the row. Both sides of a transfer come back."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[prow("a", "acc-chk", 30.00, "2026-09-12", "SQ *FARMSTAND"),
+                     prow("b", "acc-card", -30.00, "2026-09-13", "REFUND STORE 9")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    box = client.get("/api/bank/inbox").json()
+    row = next(b for b in box if b["raw"] == "SQ *FARMSTAND")
+    e = client.post(f"/api/bank/inbox/{row['id']}/accept", json={}).json()
+    assert client.get("/api/bank/inbox").json() == []  # one entry for both sides
+    client.delete(f"/api/transactions/{e['id']}")
+    assert client.post(f"/api/bank/txns/{row['id']}/reset").status_code == 200
+    assert sorted(b["raw"] for b in client.get("/api/bank/inbox").json()) == ["REFUND STORE 9", "SQ *FARMSTAND"]
+    assert entries(client) == []

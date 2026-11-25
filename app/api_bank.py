@@ -91,10 +91,10 @@ def auto_add(b, con, passes: int = 2) -> int:
                 continue
             r = b.execute("SELECT * FROM txns WHERE id=?", (item["id"],)).fetchone()
             g = bank.Guess(**item["guess"])
-            if r["status"] != "new" or not bank.auto_ok(g, r):
-                continue
+            if r["status"] != "new" or r["how"] == "deleted" or not bank.auto_ok(g, r):
+                continue  # decided already, its entry deleted by you before, or not sure enough
             pair = b.execute("SELECT * FROM txns WHERE id=?", (g.pair_id,)).fetchone() if g.pair_id else None
-            if g.pair_id and (not pair or pair["status"] != "new"):
+            if g.pair_id and (not pair or pair["status"] != "new" or pair["how"] == "deleted"):
                 continue  # its other side was decided meanwhile: guess again next time
             when = min(bank._day(r), bank._day(pair)) if pair else bank._day(r)  # a move happens when money leaves
             t = Txn(None, when, g.what, g.category_id, g.from_id, g.to_id, g.amount)

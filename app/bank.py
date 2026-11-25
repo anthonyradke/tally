@@ -401,15 +401,23 @@ def link(bcon, st) -> int:
     """Check every pairing against the ledger and pair new rows with entries already there. Returns how many rows
     were newly paired."""
     entries = {t.id: t for t in st.txns}
+    mapped = _mapped(bcon, st)
+    # An entry put back (Undo of a delete) takes back the rows set aside when it went.
+    back = [r["id"] for r in bcon.execute("SELECT * FROM txns WHERE status='ignored' AND txn_id IS NOT NULL")
+            if r["txn_id"] in entries and r["account_id"] in mapped
+            and fits(entries[r["txn_id"]], mapped[r["account_id"]], r["amount"])]
+    bcon.executemany("UPDATE txns SET status='linked' WHERE id=?", [(i,) for i in back])
     gone = [r for r in bcon.execute("SELECT id, txn_id, how FROM txns WHERE status='linked'")
             if r["txn_id"] not in entries]
-    # The entry was deleted, or the ledger is a fresh copy without it: the row waits again. One Tally added by itself
-    # and you deleted stays out, or the next sync would add it straight back.
-    bcon.executemany("UPDATE txns SET status='new', txn_id=NULL, how=NULL, decided_at=NULL WHERE id=?",
-                     [(r["id"],) for r in gone if r["how"] != "auto"])
-    bcon.executemany("UPDATE txns SET status='ignored', txn_id=NULL, how='removed', decided_at=? WHERE id=?",
-                     [(_now(), r["id"]) for r in gone if r["how"] == "auto"])
-    mapped = _mapped(bcon, st)
+    # An entry Tally added by itself and you deleted: every row it stood for (both sides of a transfer) stays out, or
+    # the next settle would add it straight back. They keep pointing at it, so restoring the entry brings them back.
+    auto = {r["txn_id"] for r in gone if r["how"] == "auto"}
+    bcon.executemany("UPDATE txns SET status='ignored', decided_at=? WHERE id=?",
+                     [(_now(), r["id"]) for r in gone if r["txn_id"] in auto])
+    # Any other entry deleted (or a fresh copy of the ledger without it): its rows wait in the inbox again, marked
+    # `deleted` so nothing adds them by itself; a copy's own entries pair with them again just below.
+    bcon.executemany("UPDATE txns SET status='new', txn_id=NULL, how='deleted', decided_at=? WHERE id=?",
+                     [(_now(), r["id"]) for r in gone if r["txn_id"] not in auto])
     # One bank row per ledger account per entry: a transfer holds one row from each side, never two from one.
     taken: set[tuple[int, int]] = {(mapped.get(r["account_id"]), r["txn_id"]) for r in bcon.execute(
         "SELECT account_id, txn_id FROM txns WHERE status='linked'")}
