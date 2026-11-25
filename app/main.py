@@ -89,7 +89,7 @@ def export_months(con: Con):
     for r in st.rows:
         rows.append([r.month, r.money_in / 100] +
                     [r.by_category.get(c.id, 0) / 100 for c in st.categories if c.type == "Spending"] +
-                    [r.spent / 100, r.loan / 100, r.saving / 100, r.left_over / 100] +
+                    [r.spent / 100, r.loan / 100, r.saving / 100, (r.money_in - r.spent) / 100] +
                     [r.balances[a.id] / 100 for a in st.accounts] +
                     [r.cash / 100, r.invested / 100, r.net_worth / 100])
     return _csv(rows, "months.csv")
