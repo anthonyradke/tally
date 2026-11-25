@@ -37,6 +37,8 @@ The repo has two halves:
   across both accounts, then Plaid's own category mapped onto the ledger's.
 - Summary shows the month's spending with two rings, spending against the budget (or last month) and how much of
   the month has gone, plus the week day by day and the latest entries.
+- Insights shows spending or income over a month, six months, a year or everything, swiped back through time,
+  with the average, a one-line highlight and each category's share and change.
 - Activity groups entries by day, with search and a switcher for spending, income and transfers that swipes to
   either end.
 - Accounts shows net worth over time (drag across the line to read a month) and cards and bank accounts stacked as

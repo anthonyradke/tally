@@ -6,6 +6,7 @@ import { usePalette } from '@/design/theme'
 export const unstable_settings = {
   anchor: 'index',
   activity: { anchor: 'activity' },
+  insights: { anchor: 'insights' },
   accounts: { anchor: 'accounts' },
 }
 
@@ -30,7 +31,9 @@ export default function NextTabStack() {
     }}>
       <Stack.Screen name="index" options={{ title: 'Summary' }} />
       <Stack.Screen name="activity" options={{ title: 'Activity' }} />
+      <Stack.Screen name="insights" options={{ title: 'Insights' }} />
       <Stack.Screen name="accounts" options={{ title: 'Accounts' }} />
+      <Stack.Screen name="category/[id]" options={{ title: '', headerLargeTitle: false }} />
       <Stack.Screen name="txn/[id]" options={{ title: '', headerLargeTitle: false }} />
       <Stack.Screen name="account/[id]" options={{ title: '', headerLargeTitle: false }} />
     </Stack>

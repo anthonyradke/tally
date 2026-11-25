@@ -8,6 +8,15 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## 4.1.0 (2026-11-25)
+Added
+- Insights tab: spending or income by day for a month, or by month for six months, a year or everything, read like
+  Health's trends. Swipe the chart to page back in time, tap or press along the bars to read one, a dashed line marks
+  the average, a highlight compares the latest month with the usual, and each category shows its share and change
+  from the period before. A category opens to its own months and entries.
+- On a ledger built from the banks, a bank connected later brings its accounts in as setup would (named after the
+  bank's, held at its balance, all history), including loans such as a student loan servicer.
+
 ## 4.0.1 (2026-11-25)
 Changed
 - Face ID is iOS's own app lock (touch and hold Tally's icon, Require Face ID); Tally's in-app lock and its

@@ -1,4 +1,4 @@
-// The New design's tab bar: the system's Liquid Glass bar with three tabs. Adding is a + in each screen's toolbar,
+// The tab bar: the system's Liquid Glass bar with four tabs. Adding is a + in each screen's toolbar,
 // where iOS puts it.
 import { DynamicColorIOS } from 'react-native'
 import { NativeTabs } from 'expo-router/unstable-native-tabs'
@@ -16,6 +16,10 @@ export default function NextTabs() {
       <NativeTabs.Trigger name="(activity)">
         <NativeTabs.Trigger.Label>Activity</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'list.bullet', selected: 'list.bullet' }} md="receipt_long" />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="(insights)">
+        <NativeTabs.Trigger.Label>Insights</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} md="bar_chart" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(accounts)">
         <NativeTabs.Trigger.Label>Accounts</NativeTabs.Trigger.Label>

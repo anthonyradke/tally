@@ -27,7 +27,7 @@ export function NumericText({ text, style, down, typing }: { text: string; style
   const h = style.lineHeight ?? 40
   const chars = text.split('')
   return (
-    <View style={{ flexDirection: 'row' }}>
+    <View style={{ flexDirection: 'row', height: h }}>
       {chars.map((ch, i) => {
         const place = typing ? i : chars.length - i
         return (

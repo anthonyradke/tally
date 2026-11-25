@@ -7,7 +7,7 @@ import { router, usePathname } from 'expo-router'
 import { freshBank, loadSeen, newestId, saveSeen, shouldCheckIn } from '@/lib/bank'
 import { todayISO } from '@/lib/dates'
 
-const ROOTS = new Set(['/', '/activity', '/accounts'])
+const ROOTS = new Set(['/', '/activity', '/insights', '/accounts'])
 
 export function BankCheckIn() {
   const pathname = usePathname()

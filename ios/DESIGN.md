@@ -24,6 +24,8 @@ anything below get written here first.
   Outer ahead of inner means spending faster than the plan; the outer ring turns orange, then red past a full lap.
 - **Wallet** on Accounts: cards and bank accounts stacked as cards in their banks' colors, the account name and
   last four digits on the face, or a picture of the real card. A card zooms open into its page (iOS 18 zoom).
+- **Trends** on Insights, after Health: a grid with its scale on the right, a dashed average, bars that dim
+  around the one under the finger, and a swipe to page through time.
 - **Brand wash** on an entry's page, fading from the merchant's color into the background.
 - **Mail's switcher** on Activity: the chosen filter widens into a colored capsule; a swipe across jumps to the
   first or last.
