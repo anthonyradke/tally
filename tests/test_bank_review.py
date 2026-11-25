@@ -112,3 +112,148 @@ def test_two_settles_at_once_add_a_row_once(client, fake, monkeypatch):
 def test_bank_db_uses_wal(client, fake):
     client.post("/api/bank/sandbox/connect")
     assert bank.connect().execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+
+# ---------- transfers: one entry per move ----------
+
+def _linked(txn_id):
+    return [r["plaid_id"] for r in bank.connect().execute("SELECT plaid_id FROM txns WHERE txn_id=? AND "
+                                                          "status='linked' ORDER BY plaid_id", (txn_id,))]
+
+
+def test_transfer_sides_four_days_apart_make_one_entry(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[prow("out", "acc-chk", 100.00, "2026-09-10", "PAYMENT TO CARD"),
+                     prow("in", "acc-card", -100.00, "2026-09-14", "PAYMENT THANK YOU")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    ts = [t for t in entries(client) if t["amount"] == 10000]
+    assert len(ts) == 1 and ts[0]["date"] == "2026-09-10"
+    assert _linked(ts[0]["id"]) == ["in", "out"]
+    assert client.get("/api/bank/inbox").json() == []
+
+
+def test_two_payments_two_days_apart_make_two_entries(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[prow("o1", "acc-chk", 100.00, "2026-09-10", "PAYMENT TO CARD"),
+                     prow("i1", "acc-card", -100.00, "2026-09-10", "PAYMENT THANK YOU"),
+                     prow("o2", "acc-chk", 100.00, "2026-09-12", "PAYMENT TO CARD"),
+                     prow("i2", "acc-card", -100.00, "2026-09-12", "PAYMENT THANK YOU")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    ts = sorted((t for t in entries(client) if t["amount"] == 10000), key=lambda t: t["date"])
+    assert [t["date"] for t in ts] == ["2026-09-10", "2026-09-12"]
+    assert [_linked(t["id"]) for t in ts] == [["i1", "o1"], ["i2", "o2"]]
+
+
+def test_learned_card_payment_is_one_entry_each_month(client, fake, monkeypatch):
+    """Months 2 and 3: history knows the payment; both sides still make one entry, added by itself."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[prow("o1", "acc-chk", 100.00, "2026-08-10", "PAYMENT TO CARD"),
+                     prow("i1", "acc-card", -100.00, "2026-08-10", "PAYMENT THANK YOU")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    fake.push(added=[prow("o2", "acc-chk", 120.00, "2026-09-10", "PAYMENT TO CARD"),
+                     prow("i2", "acc-card", -120.00, "2026-09-10", "PAYMENT THANK YOU")])
+    assert client.post("/api/bank/sync").json()["added"] == 1
+    assert client.get("/api/bank/inbox").json() == []
+    freeze(monkeypatch, date(2026, 10, 31))
+    fake.push(added=[prow("o3", "acc-chk", 100.00, "2026-10-10", "PAYMENT TO CARD"),
+                     prow("i3", "acc-card", -100.00, "2026-10-10", "PAYMENT THANK YOU")])
+    client.post("/api/bank/sync")
+    oct_ = [t for t in entries(client) if t["date"].startswith("2026-10")]
+    assert len(oct_) == 1 and oct_[0]["what"] == "Credit Card Payment"
+    assert _linked(oct_[0]["id"]) == ["i3", "o3"]
+
+
+def test_a_purchase_and_an_unrelated_deposit_are_not_a_transfer(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[prow("g", "acc-card", 50.00, "2026-09-12", "KING SOOPERS #12", "King Soopers",
+                          "FOOD_AND_DRINK_GROCERIES", "VERY_HIGH"),
+                     prow("v", "acc-chk", -50.00, "2026-09-14", "VENMO CASHOUT", "Venmo", "TRANSFER_IN_ACCOUNT_TRANSFER",
+                          "HIGH")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    names = {v: k for k, v in cats(client).items()}
+    assert [(t["what"], names[t["category_id"]]) for t in entries(client)] == [("King Soopers", "Groceries")]
+    box = client.get("/api/bank/inbox").json()
+    assert [b["raw"] for b in box] == ["VENMO CASHOUT"] and box[0]["guess"]["source"] != "transfer"
+
+
+def test_a_card_charge_and_a_deposit_to_checking_are_not_one_move(client, fake, monkeypatch):
+    """Opposite sizes the wrong way round: money doesn't move from a card into checking."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[prow("c", "acc-card", 65.00, "2026-09-12", "COSTCO WHSE #1"),
+                     prow("d", "acc-chk", -65.00, "2026-09-12", "ONLINE TRANSFER FROM SAV")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    assert entries(client) == []
+    assert {b["guess"]["source"] for b in client.get("/api/bank/inbox").json()} == {"none"}
+
+
+def test_rows_that_only_happen_to_match_wait_for_an_answer(client, fake, monkeypatch):
+    """Checking out, card in, same size, but neither says it's a payment: offered as a transfer, not added."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[prow("a", "acc-chk", 30.00, "2026-09-12", "SQ *FARMSTAND"),
+                     prow("b", "acc-card", -30.00, "2026-09-13", "REFUND STORE 9")])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    assert entries(client) == []
+    box = client.get("/api/bank/inbox").json()
+    assert {(b["guess"]["source"], b["guess"]["confidence"]) for b in box} == {("transfer", "guess")}
+
+
+# ---------- pairing only with entries on the row's own account ----------
+
+def _mapped_world(client, world):
+    client.post("/api/bank/sandbox/connect")
+    ids = {a["name"]: a["id"] for a in client.get("/api/bank").json()["items"][0]["accounts"]}
+    client.put(f"/api/bank/accounts/{ids['Checking']}", json={"tally_account_id": world["chk"]})
+    client.put(f"/api/bank/accounts/{ids['Card']}", json={"tally_account_id": world["card"]})
+    return ids
+
+
+def test_link_only_pairs_entries_on_the_rows_account_and_side(client, world, fake, monkeypatch):
+    """A $65 card charge doesn't pair with a $65 deposit entry on checking; the deposit's own row does."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    _mapped_world(client, world)
+    gift = client.post("/api/transactions", json={"date": "2026-09-12", "what": "From Mom", "category_id": world["pay"],
+                                                  "to_id": world["chk"], "amount": 65}).json()
+    fake.push(added=[prow("costco", "acc-card", 65.00, "2026-09-12", "COSTCO WHSE #1"),
+                     prow("dep", "acc-chk", -65.00, "2026-09-12", "ONLINE TRANSFER FROM SAV")])
+    client.post("/api/bank/sync")
+    assert _linked(gift["id"]) == ["dep"]
+    box = client.get("/api/bank/inbox").json()
+    assert [b["raw"] for b in box] == ["COSTCO WHSE #1"]
+    r = client.post(f"/api/bank/inbox/{box[0]['id']}/pair", json={"txn_id": gift["id"]})
+    assert r.status_code == 422  # not on the card at all
+
+
+def test_a_transfer_entry_holds_one_row_per_account(client, world, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    _mapped_world(client, world)
+    pay = client.post("/api/transactions", json={"date": "2026-09-10", "what": "Card payment", "category_id": world["move"],
+                                                 "from_id": world["chk"], "to_id": world["card"], "amount": 100}).json()
+    fake.push(added=[prow("o", "acc-chk", 100.00, "2026-09-10", "PAYMENT TO CARD"),
+                     prow("i1", "acc-card", -100.00, "2026-09-11", "PAYMENT THANK YOU"),
+                     prow("i2", "acc-card", -100.00, "2026-09-12", "PAYMENT THANK YOU")])
+    client.post("/api/bank/sync")
+    assert _linked(pay["id"]) == ["i1", "o"]
+    left = client.get("/api/bank/inbox").json()
+    assert [b["raw"] for b in left] == ["PAYMENT THANK YOU"]
+    assert client.post(f"/api/bank/inbox/{left[0]['id']}/pair", json={"txn_id": pay["id"]}).status_code == 409
+
+
+def test_pair_checks_the_side(client, world, fake, monkeypatch):
+    """A card refund isn't the card's charge."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    _mapped_world(client, world)
+    charge = client.post("/api/transactions", json={"date": "2026-09-01", "what": "Shop", "category_id": world["food"],
+                                                    "from_id": world["card"], "amount": 20}).json()
+    fake.push(added=[prow("r", "acc-card", -20.00, "2026-09-20", "REFUND SHOP")])
+    client.post("/api/bank/sync")
+    bid = client.get("/api/bank/inbox").json()[0]["id"]
+    assert client.post(f"/api/bank/inbox/{bid}/pair", json={"txn_id": charge["id"]}).status_code == 422
+    other = client.post("/api/transactions", json={"date": "2026-09-02", "what": "Shop", "category_id": world["food"],
+                                                   "from_id": world["card"], "amount": -20}).json()
+    assert client.post(f"/api/bank/inbox/{bid}/pair", json={"txn_id": other["id"]}).status_code == 200

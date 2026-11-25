@@ -78,30 +78,32 @@ def _auto(con) -> bool:
 
 
 def auto_add(b, con, passes: int = 2) -> int:
-    """Add every waiting row that `bank.auto_ok` passes, as its own entry. One side of a move between your own
-    accounts is added; the other pairs with it afterwards. A second pass picks up merchants the first one taught.
-    Returns how many entries were added."""
+    """Add every waiting row that `bank.auto_ok` passes, as its own entry. A move between your own accounts is one
+    entry for both sides: the other side is paired with it at once. A second pass picks up merchants the first one
+    taught. Returns how many entries were added."""
     added = 0
     for _ in range(passes):
         st = service.load(con)
         bank.link(b, st)
-        skip: set[int] = set()
         n = 0
         for item in bank.inbox(b, st):
-            if not item["guess"] or item["id"] in skip:
+            if not item["guess"]:
                 continue
             r = b.execute("SELECT * FROM txns WHERE id=?", (item["id"],)).fetchone()
             g = bank.Guess(**item["guess"])
             if r["status"] != "new" or not bank.auto_ok(g, r):
                 continue
+            pair = b.execute("SELECT * FROM txns WHERE id=?", (g.pair_id,)).fetchone() if g.pair_id else None
+            if g.pair_id and (not pair or pair["status"] != "new"):
+                continue  # its other side was decided meanwhile: guess again next time
+            when = min(bank._day(r), bank._day(pair)) if pair else bank._day(r)  # a move happens when money leaves
+            t = Txn(None, when, g.what, g.category_id, g.from_id, g.to_id, g.amount)
             try:
-                tid = _write(st, Txn(None, date.fromisoformat(r["authorized_date"] or r["date"]), g.what,
-                                     g.category_id, g.from_id, g.to_id, g.amount), {})
+                tid = _write(st, t, {})
             except HTTPException:
                 continue  # doesn't fit (a date before the ledger starts, a shape the category refuses): it waits
             bank.decide(b, r["id"], tid, "auto")
-            if g.pair_id:
-                skip.add(g.pair_id)
+            _claim(b, st, pair, t, tid)
             n += 1
         con.commit()
         b.commit()
@@ -110,6 +112,14 @@ def auto_add(b, con, passes: int = 2) -> int:
             break
     bank.link(b, service.load(con))
     return added
+
+
+def _claim(b, st, pair, t: Txn, tid: int) -> None:
+    """The other side of a move (still waiting) stands for the same entry, when the entry has its account on the
+    right side."""
+    acct = bank._mapped(b, st).get(pair["account_id"]) if pair else None
+    if acct and pair["status"] == "new" and bank.fits(t, acct, pair["amount"]):
+        bank.decide(b, pair["id"], tid, "matched")
 
 
 def _reach_back(b, con) -> None:
@@ -370,9 +380,10 @@ def _bank_row(b, bid: int):
     return r
 
 
-def _accept(b, st, r, over: dict) -> int:
-    """Write the entry a bank row stands for: the guess, with anything the body sends instead."""
-    g = bank.guess(b, st, r)
+def _accept(b, st, r, over: dict, g: Optional[bank.Guess] = None) -> int:
+    """Write the entry a bank row stands for (the guess, with anything the body sends instead), and pair the other
+    side of a move with it. Doesn't commit the ledger."""
+    g = g or bank.guess(b, st, r)
     cat = whole(over["category_id"], "Category") if over.get("category_id") not in (None, "") else g.category_id
     if cat is None:
         bad("Pick a category.")
@@ -388,7 +399,12 @@ def _accept(b, st, r, over: dict) -> int:
     when = day(over["date"]) if over.get("date") else date.fromisoformat(r["authorized_date"] or r["date"])
     what = text(over["what"], "Description") if "what" in over else g.what
     meta = {"note": text(over.get("note"), "Note", 2000)}
-    return _write(st, Txn(None, when, what, cat, f, t, amt), meta)
+    entry = Txn(None, when, what, cat, f, t, amt)
+    tid = _write(st, entry, meta)
+    bank.decide(b, r["id"], tid, "added")
+    if g.pair_id:
+        _claim(b, st, b.execute("SELECT * FROM txns WHERE id=?", (g.pair_id,)).fetchone(), entry, tid)
+    return tid
 
 
 @router.post("/inbox/{bid}/accept", status_code=201)
@@ -404,9 +420,8 @@ def _accept_one(b, con, bid: int, over: dict) -> dict:
         st = service.load(con)
         tid = _accept(b, st, r, over)
         con.commit()
-        bank.decide(b, bid, tid, "added")
         b.commit()
-        bank.link(b, service.load(con))  # the other side of a transfer pairs with the same entry
+        bank.link(b, service.load(con))
         _settle(b, con)
     return _full(con, [tid])[0]
 
@@ -428,22 +443,28 @@ def _accept_many(b, con, ids: list[int]) -> list:
 
 
 def _accept_rows(b, con, ids: list[int]) -> list:
+    """Add each row as Tally guessed it (guessed once for the batch, as the inbox showed them). Rows already done
+    (the other side of a move added a moment ago), pending or without a category are skipped."""
     st = service.load(con)
+    seen, pfc = bank.history(b, st)
+    mapped = bank._mapped(b, st)
+    paired = bank.moves(b, st, mapped)
     done = []
     for bid in ids:
         r = b.execute("SELECT * FROM txns WHERE id=?", (bid,)).fetchone()
-        if not r or r["status"] != "new" or r["pending"] or bank.guess(b, st, r).category_id is None:
+        if not r or r["status"] != "new" or r["pending"]:
+            continue
+        g = bank.guess(b, st, r, seen, pfc, mapped, paired)
+        if g.category_id is None:
             continue
         try:
-            tid = _accept(b, st, r, {})
+            tid = _accept(b, st, r, {}, g)
         except HTTPException:
             continue  # the guess doesn't make a whole entry (a transfer missing its other account): it waits
         con.commit()
-        bank.decide(b, r["id"], tid, "added")
         b.commit()
-        st = service.load(con)
-        bank.link(b, st)
         done.append(tid)
+    bank.link(b, service.load(con))
     _settle(b, con)
     return _full(con, done) if done else []
 
@@ -465,7 +486,6 @@ def _accept_sure(b, con) -> list:
                 continue  # paired with an entry added earlier in this loop
             tid = _accept(b, st, r, {})
             con.commit()
-            bank.decide(b, r["id"], tid, "added")
             b.commit()
             st = service.load(con)
             bank.link(b, st)
@@ -483,9 +503,22 @@ async def pair(bid: int, request: Request, b: Bank, con: Con):
 
 def _pair(b, con, bid: int, tid: int) -> dict:
     with bank.settling:
-        _bank_row(b, bid)
-        if not con.execute("SELECT 1 FROM transactions WHERE id=?", (tid,)).fetchone():
+        r = _bank_row(b, bid)
+        e = con.execute("SELECT * FROM transactions WHERE id=?", (tid,)).fetchone()
+        if not e:
             raise HTTPException(404)
+        mapped = bank._mapped(b, service.load(con))
+        acct = mapped.get(r["account_id"])
+        if acct is None:
+            bad("Pick the Tally account this bank account is first.")
+        t = Txn(e["id"], date.fromisoformat(e["date"]), e["what"], e["category_id"], e["from_account_id"],
+                e["to_account_id"], e["amount"])
+        # The amount may differ (a tip added at the bank); the account and the direction can't.
+        if acct not in (t.from_id, t.to_id) or bank._out(t, acct) != (r["amount"] > 0):
+            bad("That entry isn't this bank line: it doesn't move money the same way on this account.")
+        if any(mapped.get(o["account_id"]) == acct for o in b.execute(
+                "SELECT account_id FROM txns WHERE txn_id=? AND status='linked'", (tid,))):
+            raise HTTPException(409, {"errors": ["Another bank line on this account is already that entry."]})
         bank.decide(b, bid, tid, "manual")
         b.commit()
     return {"ok": True}
@@ -509,6 +542,7 @@ def recent(b: Bank, con: Con, days: int = 7):
     "Added for you", to look over or undo."""
     st = service.load(con)
     entries = {t.id: t for t in st.txns}
+    mapped = bank._mapped(b, st)
     out = []
     cut = (datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 90)))).isoformat(timespec="seconds")
     for r in b.execute("SELECT * FROM txns WHERE how='auto' AND status='linked' AND decided_at >= ? "
@@ -517,7 +551,7 @@ def recent(b: Bank, con: Con, days: int = 7):
         if t:
             out.append({"id": r["id"], "txn_id": t.id, "date": t.date.isoformat(), "what": t.what,
                         "category_id": t.category_id, "amount": t.amount, "raw": r["raw"],
-                        "account_id": t.from_id if t.from_id is not None else t.to_id})
+                        "account_id": mapped.get(r["account_id"], t.from_id if t.from_id is not None else t.to_id)})
     return out
 
 

@@ -13,7 +13,8 @@ How a row becomes an entry, best first:
      common name and category among the same merchant's rows is the guess. Nothing is stored as a separate rule;
      every entry you confirm or type yourself teaches it.
   3. A transfer: a row of the opposite sign and the same size on another connected account within a few days (a
-     card payment shows on the checking account and on the card).
+     card payment shows on the checking account and on the card); see bank_moves. A merchant whose history is a
+     transfer looks for its other side first, so both sides become one entry.
   4. Plaid's own category, mapped onto yours by what your history did with it, else by name.
 """
 from __future__ import annotations
@@ -28,12 +29,12 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from . import plaid
+from .bank_moves import PAIR_DAYS, SURE_PFC, looks_like_move, pairs
 from .engine import Txn
 
 log = logging.getLogger(__name__)
 
-WINDOW = 3  # days between the bank's date and the entry's
-PAIR_DAYS = 5  # days between the two sides of a transfer
+WINDOW = 3  # days between the bank's date and the entry's; PAIR_DAYS (bank_moves) for an entry with both sides
 SYNCED_KINDS = ("cash", "card")  # loans and investments follow typed balances; only their balances come across
 FRESH_DAYS = 30  # how far back the inbox starts on an account with no entries yet
 
@@ -386,6 +387,12 @@ def _out(t: Txn, acct: int) -> bool:
     return (t.from_id == acct) == (t.amount > 0)
 
 
+def fits(t: Txn, acct: int, plaid_amount: int) -> bool:
+    """Whether a bank row on ledger account `acct` can stand for entry `t`: the entry uses the account, on the side
+    the row's sign says, for the same size."""
+    return acct in (t.from_id, t.to_id) and abs(t.amount) == abs(plaid_amount) and _out(t, acct) == (plaid_amount > 0)
+
+
 def _day(r) -> date:
     return date.fromisoformat(r["authorized_date"] or r["date"])
 
@@ -403,7 +410,8 @@ def link(bcon, st) -> int:
     bcon.executemany("UPDATE txns SET status='ignored', txn_id=NULL, how='removed', decided_at=? WHERE id=?",
                      [(_now(), r["id"]) for r in gone if r["how"] == "auto"])
     mapped = _mapped(bcon, st)
-    taken: set[tuple[int, int]] = {(r["account_id"], r["txn_id"]) for r in bcon.execute(
+    # One bank row per ledger account per entry: a transfer holds one row from each side, never two from one.
+    taken: set[tuple[int, int]] = {(mapped.get(r["account_id"]), r["txn_id"]) for r in bcon.execute(
         "SELECT account_id, txn_id FROM txns WHERE status='linked'")}
     fresh = [r for r in bcon.execute("SELECT * FROM txns WHERE status='new' AND pending=0 ORDER BY date, id")
              if r["account_id"] in mapped]
@@ -414,18 +422,20 @@ def link(bcon, st) -> int:
             for a in {t.from_id, t.to_id} - {None}:
                 index.setdefault((a, abs(t.amount)), []).append(t)
     n, done = 0, set()
-    for gap in range(WINDOW + 1):  # exact dates first, so a daily $4.50 coffee pairs with its own day
+    # Exact dates first, so a daily $4.50 coffee pairs with its own day. A transfer's two sides can post up to
+    # PAIR_DAYS apart, so an entry with both accounts waits that long for its other side.
+    for gap in range(PAIR_DAYS + 1):
         for r in fresh:
             if r["id"] in done:
                 continue
             acct, day = mapped[r["account_id"]], _day(r)
             hit = next((t for t in index.get((acct, abs(r["amount"])), ())
-                        if (r["account_id"], t.id) not in taken and _out(t, acct) == (r["amount"] > 0)
-                        and abs((t.date - day).days) == gap), None)
+                        if (acct, t.id) not in taken and fits(t, acct, r["amount"])
+                        and abs((t.date - day).days) == gap and (gap <= WINDOW or (t.from_id and t.to_id))), None)
             if hit:
                 bcon.execute("UPDATE txns SET status='linked', txn_id=?, how='matched', decided_at=? WHERE id=?",
                              (hit.id, _now(), r["id"]))
-                taken.add((r["account_id"], hit.id))
+                taken.add((acct, hit.id))
                 done.add(r["id"])
                 n += 1
     bcon.commit()
@@ -482,7 +492,7 @@ class Guess:
     confidence: str  # sure, likely, guess, unknown
     source: str  # history, transfer, plaid, none
     why: str
-    pair_id: Optional[int] = None  # the other side of a transfer
+    pair_id: Optional[int] = None  # the other side of a transfer, still waiting: one entry stands for both
 
 
 # Plaid's categories (https://plaid.com/documents/pfc-taxonomy-all.csv) to words likely in a category's name,
@@ -524,7 +534,7 @@ PFC_DEFAULT = {
     "LOAN_PAYMENTS_PERSONAL_LOAN_PAYMENT": "Loan Payment", "LOAN_PAYMENTS_OTHER_PAYMENT": "Loan Payment",
     "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS": "Investing",
 }
-SURE_PFC = ("VERY_HIGH", "HIGH")
+MOVES = ("Transfer", "Loan", "Saving")  # category types that move money to another account
 
 
 def _by_default(st, r) -> Optional[int]:
@@ -540,11 +550,13 @@ def _by_default(st, r) -> Optional[int]:
 
 def auto_ok(g: "Guess", r) -> bool:
     """Whether a guess is safe to add without asking: filed the same way every time before, both sides of a move
-    between your own accounts, or a named merchant Plaid is sure of (by its category, or as you filed it last).
-    Anything else waits for an answer."""
+    between your own accounts that the bank (or your history) says are a move, or a named merchant Plaid is sure of
+    (by its category, or as you filed it last). Anything else waits for an answer."""
     if g.category_id is None:
         return False
-    if g.source == "transfer" or (g.source == "history" and g.confidence == "sure"):
+    if g.source == "transfer":
+        return g.confidence in ("sure", "likely")  # a "guess" is two rows that only happen to match
+    if g.source == "history" and g.confidence == "sure":
         return True
     bank_sure = bool(r["merchant"]) and "pfc_conf" in r.keys() and r["pfc_conf"] in SURE_PFC
     # A merchant the bank is sure of, filed by Plaid's category or the way you filed it the last time.
@@ -593,11 +605,37 @@ def shape(st, cat_id: Optional[int], acct: int, other: Optional[int], plaid_amou
     return other, acct, -plaid_amount
 
 
-def guess(bcon, st, r, seen=None, pfc=None, mapped=None, fresh=None) -> Guess:
+def moves(bcon, st, mapped=None) -> dict:
+    """Each waiting posted row -> the waiting row on the other side of the same move (bank_moves.pairs)."""
+    mapped = mapped if mapped is not None else _mapped(bcon, st)
+    rows = bcon.execute("SELECT * FROM txns WHERE status='new' AND pending=0 ORDER BY date, id").fetchall()
+    return pairs(rows, mapped, {a.id: a.kind for a in st.accounts})
+
+
+def _move(st, r, pair, mapped, learned=None) -> Optional[Guess]:
+    """The guess for one side of a move whose other side `pair` is waiting too. `learned`: (what, category, other
+    account, times) when your history files this merchant as a transfer."""
+    acct, other = mapped[r["account_id"]], mapped[pair["account_id"]]
+    why = f"Matches {abs(r['amount']) / 100:,.2f} on {st.acct[other].name}"
+    if learned and learned[2] == other and learned[1] in st.cat:
+        what, cat, sure = learned[0], learned[1], True
+        why = f"Seen {learned[3]} time{'s' * (learned[3] > 1)} before as {what}; {why[0].lower()}{why[1:]}"
+    else:
+        cat = _transfer_category(st, acct, other)
+        if cat is None:
+            return None
+        what, sure = st.cat[cat].name, looks_like_move(r) and looks_like_move(pair)
+    f, t, amt = shape(st, cat, acct, other, r["amount"])
+    return Guess(what, cat, f, t, amt, "likely" if sure else "guess", "transfer", why, pair["id"])
+
+
+def guess(bcon, st, r, seen=None, pfc=None, mapped=None, paired=None) -> Guess:
     if seen is None:
         seen, pfc = history(bcon, st)
     mapped = mapped if mapped is not None else _mapped(bcon, st)
+    paired = paired if paired is not None else moves(bcon, st, mapped)
     acct = mapped.get(r["account_id"])
+    pair = paired.get(r["id"]) if acct else None
     name = name_for(r)
     for k in keys(r):
         c = seen.get(k)
@@ -610,24 +648,16 @@ def guess(bcon, st, r, seen=None, pfc=None, mapped=None, fresh=None) -> Guess:
             cats[cid] += n
         share = cats[cat] / total
         conf = "sure" if total >= 2 and share >= 0.8 else "likely" if share >= 0.6 else "guess"
+        if pair is not None and cat in st.cat and st.cat[cat].type in MOVES:
+            # A transfer you've filed before, with its other side waiting: one entry for both.
+            if (g := _move(st, r, pair, mapped, (what, cat, other, total))) is not None:
+                return g
         f, t, amt = shape(st, cat, acct, other, r["amount"])
         return Guess(what, cat, f, t, amt, conf, "history",
                      f"Seen {total} time{'s' * (total > 1)} before as {what} ({st.cat[cat].name})"
                      if cat in st.cat else f"Seen {total} times before")
-    # a transfer between two connected accounts
-    others = fresh if fresh is not None else bcon.execute(
-        "SELECT * FROM txns WHERE pending=0 AND status!='ignored' AND id!=?", (r["id"],)).fetchall()
-    day = _day(r)
-    pair = next((o for o in others if o["id"] != r["id"] and o["amount"] == -r["amount"]
-                 and o["account_id"] != r["account_id"] and o["account_id"] in mapped
-                 and abs((_day(o) - day).days) <= PAIR_DAYS), None)
-    if pair and acct:
-        other = mapped[pair["account_id"]]
-        cat = _transfer_category(st, acct, other)
-        if cat is not None:
-            f, t, amt = shape(st, cat, acct, other, r["amount"])
-            return Guess(st.cat[cat].name, cat, f, t, amt, "likely", "transfer",
-                         f"Matches {abs(r['amount']) / 100:,.2f} on {st.acct[other].name}", pair["id"])
+    if pair is not None and (g := _move(st, r, pair, mapped)) is not None:
+        return g
     for code in (r["pfc_detail"], r["pfc"]):
         c = (pfc or {}).get(code or "")
         if c:
@@ -676,8 +706,7 @@ def inbox(bcon, st) -> list[dict]:
     mapped = _mapped(bcon, st)
     names = {r["id"]: r for r in bcon.execute("SELECT id, name, mask, tally_account_id, since FROM accounts")}
     rows = bcon.execute("SELECT * FROM txns WHERE status='new' ORDER BY pending, date DESC, id DESC").fetchall()
-    fresh = [r for r in rows if not r["pending"]] + bcon.execute(
-        "SELECT * FROM txns WHERE status='linked' AND pending=0").fetchall()
+    paired = pairs([r for r in rows if not r["pending"]], mapped, {a.id: a.kind for a in st.accounts})
     out = []
     for r in rows:
         if r["account_id"] not in mapped or _before(r, names[r["account_id"]]["since"]):
@@ -687,7 +716,7 @@ def inbox(bcon, st) -> list[dict]:
                 "account_id": mapped[r["account_id"]], "bank_account": names[r["account_id"]]["name"],
                 "guess": None}
         if not r["pending"]:
-            g = guess(bcon, st, r, seen, pfc, mapped, fresh)
+            g = guess(bcon, st, r, seen, pfc, mapped, paired)
             item["guess"] = g.__dict__
         out.append(item)
     return out
