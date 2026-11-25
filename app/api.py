@@ -31,7 +31,7 @@ def _cat(c, x: dict):
 
 def _row(r):
     # Left over is money in less spending. The engine's own left_over (also less saving and loan payments) is the
-    # spreadsheet's column, kept for the importer's check and months.csv.
+    # spreadsheet's column, kept for the importer's check; months.csv exports this one too.
     return {"month": r.month.isoformat(), "money_in": r.money_in, "spent": r.spent, "loan": r.loan,
             "saving": r.saving, "left_over": r.money_in - r.spent, "by_category": r.by_category, "balances": r.balances,
             "cash": r.cash, "invested": r.invested, "cards": r.cards, "loans": r.loans, "net_worth": r.net_worth}
@@ -88,15 +88,22 @@ def bootstrap(con: Con):
 def transactions(con: Con, q: str = "", category: Optional[int] = None, account: Optional[int] = None, type: str = "",
                  start: str = "", end: str = "", amount_min: Optional[float] = None,
                  amount_max: Optional[float] = None, tag: str = "", group: str = "",
-                 sort: str = "date", dir: str = "desc", limit: int = 200, offset: int = 0):
+                 sort: str = "date", dir: str = "desc", limit: int = 200, offset: int = 0,
+                 what: Optional[str] = None, exact_first: int = 1):
     """Filtered list. Search matches description, note, tags, category, account names and the amount, and takes the
     shortcuts in search.py (>100, aug, last week, #trip). `by_type` sums the matches per category type, so the client
-    can show a real net across types. `exact`: how many of the first rows have the very amount the search typed."""
+    can show a real net across types. `exact`: how many rows have the very amount the search typed; they come first
+    unless `exact_first=0`, which keeps the plain sort.
+    `what`: entries with exactly this description (any case), with `q` left out: the other times at one place. Search
+    took "May Market" as May and a word. `type` takes one category type or several, comma separated."""
     first, last = day(start, "Start") if start else None, day(end, "End") if end else None
     st = service.load(con)
     meta = _meta(st.con)
     items = list(st.txns)
-    s = search.parse(q, st.today)
+    if what is not None:
+        name = what.strip().lower()
+        items = [t for t in items if t.what.lower() == name]
+    s = search.parse(q, st.today) if what is None else search.Query()
     if s.min is not None:
         items = [t for t in items if abs(t.amount) >= s.min]
     if s.max is not None:
@@ -123,8 +130,8 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
         items = [t for t in items if t.category_id == category]
     if account:
         items = [t for t in items if account in (t.from_id, t.to_id)]
-    if type:
-        items = [t for t in items if st.cat[t.category_id].type == type]
+    if types := {x.strip() for x in type.split(",") if x.strip()}:
+        items = [t for t in items if st.cat[t.category_id].type in types]
     if first:
         items = [t for t in items if t.date >= first]
     if last:
@@ -139,7 +146,8 @@ def transactions(con: Con, q: str = "", category: Optional[int] = None, account:
         items = [t for t in items if meta.get(t.id, {}).get("split_group") == group]
     key = (lambda t: (abs(t.amount), t.id or 0)) if sort == "amount" else (lambda t: (t.date, t.id or 0))
     items.sort(key=key, reverse=(dir != "asc"))
-    items.sort(key=lambda t: t.id not in exact)  # stable: each part keeps its order
+    if exact_first:
+        items.sort(key=lambda t: t.id not in exact)  # stable: each part keeps its order
     by_type: dict[str, int] = {}
     for t in items:
         ty = st.cat[t.category_id].type
