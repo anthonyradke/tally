@@ -3,7 +3,7 @@ import { beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
 import storage from '@react-native-async-storage/async-storage'
 import * as Auth from 'expo-local-authentication'
-import { appStateChanged, AWAY_MS, holdLink, loadLock, lockDue, lockedNow, onAppState, setFaceId, unlock, useLock, type Gate } from '@/lib/lock'
+import { appStateChanged, AWAY_MS, holdLink, loadLock, lockDue, lockedNow, onAppState, refreshFaceId, setFaceId, unlock, useLock, type Gate } from '@/lib/lock'
 
 const phone = (Auth as unknown as { phone: { hardware: boolean; enrolled: boolean; answers: object[]; asked: number } }).phone
 const PASS = { success: true }
@@ -80,6 +80,16 @@ test('no Face ID set up: off and never locks', async () => {
   appStateChanged('background', 0)
   appStateChanged('active', 60 * MIN)
   assert.equal(useLock.getState().locked, false)
+})
+
+test('Face ID set up after launch shows in Settings, on by default, without locking now', async () => {
+  phone.enrolled = false
+  await loadLock()
+  phone.enrolled = true
+  await refreshFaceId()
+  const s = useLock.getState()
+  assert.equal(s.available && s.enabled, true)
+  assert.equal(s.locked, false)
 })
 
 test('turned off stays off', async () => {

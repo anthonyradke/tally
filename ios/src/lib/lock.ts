@@ -91,10 +91,19 @@ export function appStateChanged(app: string, now = Date.now()) {
 
 let watching = false
 
+async function readSetting() {
+  const [stored, available] = await Promise.all([AsyncStorage.getItem(KEY).catch(() => null), canUse()])
+  return { available, enabled: stored === null ? available : stored === '1' } // on by default where Face ID is set up
+}
+
+/** Checks again whether Face ID can be used (set up, or allowed for Tally, since launch), for Settings. */
+export async function refreshFaceId() {
+  useLock.setState(await readSetting())
+}
+
 /** Reads the setting and whether the phone has Face ID, and starts locked if it's on. Runs before the splash lifts. */
 export async function loadLock() {
-  const [stored, available] = await Promise.all([AsyncStorage.getItem(KEY).catch(() => null), canUse()])
-  const enabled = stored === null ? available : stored === '1' // on by default where Face ID is set up
+  const { available, enabled } = await readSetting()
   const locked = enabled && available
   useLock.setState({ ready: true, available, enabled, locked, tried: false, opened: !locked })
   if (!watching) {
