@@ -8,8 +8,54 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## 4.1.0 (2026-11-25)
+## 4.2.0 (2026-11-26)
+A review of every screen and of the server, from reviewers reading the code and using the app on demo data.
+
 Added
+- Every screen says when it's loading, when Tally can't be reached ("Can't Reach Tally", Try Again), and when the
+  token is refused ("Check the Token in Settings"), instead of showing $0. Saved figures carry an "Offline ·
+  Updated" line.
+- Settings › Waiting to Send lists entries saved on the phone, with why each is waiting, Send Now and swipe to
+  discard. Settings shows how many are waiting.
+- Settings › Server checks an address and token before switching, can go back to the default address and can
+  remove the token.
+- Entry pages show tags, a split's other lines and the receipt (tap to zoom); the category and accounts open their
+  pages.
+- Accounts keeps hidden accounts that still hold money, in their own section, and names every stacked card.
+- Account and category pages load all their entries as you scroll; scheduled entries fold into their own row.
+- Edits have Undo; the check-in's Not Tracked has Undo.
+
+Changed
+- Summary's ring compares this month with what earlier months had spent by the same day, so rent on the 1st no
+  longer reads as overspending. This Week leaves out days still to come and counts refunds.
+- An account's entries are signed from that account: money out of checking shows −, a card payment shows on the
+  card as a green +.
+- Insights' averages, highlight and category changes use whole months; a future or empty month can't be picked; the
+  month total leaves out scheduled entries; gridlines sit at their values; the month view has its average line.
+- Activity's Transfers include loan payments and saving; an amount search keeps days in order; results add up by
+  kind. "More at" on an entry page counts every visit by exact name.
+- Logos: lookups give up after 3 seconds instead of stalling the server, a failed lookup is tried again later
+  instead of in 30 days, more bank abbreviations find their brand, and a hidden logo stays hidden after a restart.
+- Disabled buttons look disabled; notices show above sheets; scrolling across a chart no longer scrubs it.
+- Darker emerald behind white text in dark mode, and card faces pick dark or light text by contrast.
+
+Fixed
+- Bank sync: one transfer could become two or three entries; a purchase and an unrelated deposit of the same amount
+  could become a card payment; a bank row could pair with an entry on another account; deleted entries came back on
+  the next sync; two syncs at once could add a row twice; balances held to the bank drifted once a month-end balance
+  was typed, and loans took several syncs to land. Changes the bank makes to a posted row now reach the entry Tally
+  made from it.
+- Bank sync: a failure right after connecting no longer loses the connection; a bank connected later on a "this
+  month" ledger no longer fills the check-in with two years of rows; reconnecting a bank keeps its accounts held to
+  the bank; checks, Venmo, Zelle and ATM lines no longer teach guesses; network errors no longer stop the other
+  banks' sync; slow work no longer blocks the server.
+- Check-in: swiping right adds and left skips (they were reversed); Add All keeps the categories picked on screen;
+  a second tap no longer acts twice; picks on other rows survive adding one.
+- Add: a fast double tap no longer saves twice; editing replaces the amount on the first digit; To accounts follow
+  the category; hidden accounts and categories in use stay in the pickers.
+- A deleted account's card picture no longer shows on a new account; months.csv's left over matches the app.
+
+
 - Insights tab: spending or income by day for a month, or by month for six months, a year or everything, read like
   Health's trends. Swipe the chart to page back in time, tap or press along the bars to read one, a dashed line marks
   the average, a highlight compares the latest month with the usual, and each category shows its share and change
