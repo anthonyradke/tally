@@ -535,6 +535,21 @@ def test_a_row_authorized_before_its_posting_month_is_inside_the_ledger(client, 
     assert [(t["what"], t["date"]) for t in entries(client)] == [("Shell", "2026-07-31")]
 
 
+def test_zero_rows_skip_the_inbox_and_dropped_holds_go(client, world, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    ids = _mapped_world(client, world)
+    fake.push(added=[prow("zero", "acc-card", 0.0, "2026-09-15", "CARD VERIFY"),
+                     {**prow("hold", "acc-card", 75.0, "2026-09-25", "HOTEL HOLD"), "pending": True}])
+    client.post("/api/bank/sync")
+    box = client.get("/api/bank/inbox").json()
+    assert [b["raw"] for b in box] == ["HOTEL HOLD"]
+    client.post(f"/api/bank/inbox/{box[0]['id']}/ignore")
+    fake.push(removed=["hold"])
+    client.post("/api/bank/sync")
+    assert client.get(f"/api/bank/audit/{ids['Card']}").json()["pending"] == 0
+    assert client.get("/api/bank").json()["waiting"] == 0
+
+
 def test_automap_needs_more_than_a_kind_word(client, fake, monkeypatch):
     """"Chase Checking" isn't the Test Bank's checking, nor "Amex CC" its card; "Test Card" and "Checking 1111" are."""
     freeze(monkeypatch, date(2026, 9, 30))

@@ -296,9 +296,13 @@ def sync_item(bcon, iid: int) -> dict:
                     _upsert(bcon, t, accts)
                     counts[kind] += 1
             for t in page.get("removed", []):
-                # A removed row that was already paired keeps its entry; the entry is the user's.
-                counts["removed"] += bcon.execute("DELETE FROM txns WHERE plaid_id=? AND status='new'",
+                # A removed row that was already paired keeps its entry; the entry is the user's. A pending hold
+                # goes whatever was decided: nothing stands for it, and it would count as pending forever.
+                counts["removed"] += bcon.execute("DELETE FROM txns WHERE plaid_id=? AND (status='new' OR pending=1)",
                                                   (t["transaction_id"],)).rowcount
+        # A $0 line (a card check, an authorization) can never be an entry: out of the inbox as it arrives.
+        bcon.execute("UPDATE txns SET status='ignored', how='zero', decided_at=? WHERE status='new' AND amount=0",
+                     (_now(),))
         # A row skipped (or whose entry was deleted) before its bank was disconnected stays skipped when it comes
         # back with the bank (forget()).
         bcon.execute("UPDATE txns SET status='ignored', how='removed', decided_at=? WHERE status='new' AND EXISTS("
