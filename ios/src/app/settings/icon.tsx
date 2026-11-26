@@ -2,10 +2,11 @@
 import { ScrollView, View } from 'react-native'
 import { Image } from 'expo-image'
 import { DEFAULT_ICON, ICON_GROUPS, useAppIcon, type AppIcon } from '@/lib/appIcon'
-import { success } from '@/design/haptics'
+import { failure, success } from '@/design/haptics'
 import { space, usePalette } from '@/design/theme'
 import { Press } from '@/design/ui/Press'
 import { Section } from '@/design/ui/List'
+import { notify } from '@/design/ui/Notice'
 import { SF } from '@/design/ui/SF'
 import { Txt } from '@/design/ui/Txt'
 
@@ -13,7 +14,7 @@ function Choice({ icon, on }: { icon: AppIcon; on: boolean }) {
   const p = usePalette()
   const set = useAppIcon((s) => s.set)
   return (
-    <Press onPress={() => { if (!on) set(icon.name).then(success).catch(() => {}) }} accessibilityLabel={icon.label}
+    <Press onPress={() => { if (!on) set(icon.name).then(success).catch(() => { failure(); notify({ text: 'Couldn’t Change the Icon', symbol: 'exclamationmark.triangle.fill', hue: 'orange' }) }) }} accessibilityLabel={icon.label}
       style={{ width: '25%', alignItems: 'center', gap: 6, paddingVertical: space.s }}>
       <View>
         <View style={{ width: 60, height: 60, borderRadius: 13.5, borderCurve: 'continuous', overflow: 'hidden' }}>
