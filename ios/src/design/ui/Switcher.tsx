@@ -10,6 +10,7 @@ import { scheduleOnRN } from 'react-native-worklets'
 import type { SFSymbol } from 'expo-symbols'
 import { tick } from '../haptics'
 import { EASE, fadeIn, fadeOut, SETTLE } from '../motion'
+import { deepen } from '../color'
 import { usePalette, type Hue } from '../theme'
 import { SF } from './SF'
 
@@ -19,18 +20,21 @@ const H = 44
 
 function Pill<K extends string>({ o, on, onPress }: { o: SwitchOption<K>; on: boolean; onPress: () => void }) {
   const p = usePalette()
+  // The capsule's color, deepened where the bright system hue would leave its white label under 3:1 (green, the
+  // dark-mode tint, yellow), the way Mail's capsules stay legible.
+  const fill = deepen(o.hue === 'tint' ? p.tintFill : p[o.hue])
   const lit = useSharedValue(on ? 1 : 0)
   useEffect(() => { lit.set(withTiming(on ? 1 : 0, { duration: 220, easing: EASE })) }, [on, lit])
-  const anim = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(lit.value, [0, 1], [p.fill3, p[o.hue]]) }))
+  const anim = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(lit.value, [0, 1], [p.fill3, fill]) }))
   return (
-    <Animated.View layout={SETTLE} style={[{ height: H, borderRadius: H / 2, flexGrow: on ? 1 : 0, minWidth: 56 }, anim]}>
+    <Animated.View layout={SETTLE} style={[{ height: H, borderRadius: H / 2, flexGrow: on ? 1 : 0, minWidth: 56, overflow: 'hidden' }, anim]}>
       <Pressable accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={o.label}
         onPress={onPress} hitSlop={4}
         style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: on ? 18 : 0 }}>
         <SF name={o.symbol} size={19} color={on ? '#FFFFFF' : p.label2} weight="semibold" />
         {on && (
           <Animated.Text entering={fadeIn(90)} exiting={fadeOut} numberOfLines={1}
-            style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '600', letterSpacing: -0.43 }}>{o.label}</Animated.Text>
+            style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '600' }}>{o.label}</Animated.Text>
         )}
       </Pressable>
     </Animated.View>

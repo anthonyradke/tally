@@ -3,6 +3,8 @@
 import { useEffect } from 'react'
 import { Pressable, View } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated'
+import { fromISO } from '@/lib/dates'
+import { formatCents } from '@/lib/money'
 import { tick } from '../haptics'
 import { EASE } from '../motion'
 import { usePalette } from '../theme'
@@ -13,16 +15,20 @@ export interface Day { date: string; letter: string; total: number; parts: { col
 
 const H = 132
 
-function Bar({ d, max, i, dim, onPress }: { d: Day; max: number; i: number; dim: boolean; onPress: () => void }) {
+function Bar({ d, max, i, dim, selected, onPress }: { d: Day; max: number; i: number; dim: boolean; selected: boolean; onPress: () => void }) {
   const p = usePalette()
   const h = useSharedValue(0)
   const target = max > 0 && d.total > 0 ? Math.max(6, (d.total / max) * H) : 4 // a nub on a quiet day keeps the week's rhythm
   useEffect(() => { h.set(withDelay(i * 30, withTiming(target, { duration: 650, easing: EASE }))) }, [target, i, h])
-  const anim = useAnimatedStyle(() => ({ height: h.value }))
+  const op = useSharedValue(1)
+  useEffect(() => { op.set(withTiming(dim ? 0.3 : 1, { duration: 160, easing: EASE })) }, [dim, op])
+  const anim = useAnimatedStyle(() => ({ height: h.value, opacity: op.value }))
+  const day = fromISO(d.date).toLocaleDateString('en-US', { weekday: 'long' })
   return (
-    <Pressable onPress={onPress} disabled={d.future} style={{ flex: 1, alignItems: 'center', gap: 8 }} accessibilityLabel={d.a11y ?? `${d.letter}: ${(d.total / 100).toFixed(2)} dollars`}>
+    <Pressable onPress={onPress} disabled={d.future} style={{ flex: 1, alignItems: 'center', gap: 8 }} accessibilityRole="button"
+      accessibilityLabel={d.a11y ?? `${day}${d.today ? ', today' : ''}, ${formatCents(d.total)}`} accessibilityState={{ selected, disabled: !!d.future }}>
       <View style={{ height: H, justifyContent: 'flex-end' }}>
-        <Animated.View style={[{ width: 22, borderRadius: 11, overflow: 'hidden', backgroundColor: p.fill3, opacity: dim ? 0.3 : 1, flexDirection: 'column-reverse' }, anim]}>
+        <Animated.View style={[{ width: 22, borderRadius: 11, overflow: 'hidden', backgroundColor: p.fill3, flexDirection: 'column-reverse' }, anim]}>
           {d.parts.map((x, k) => <View key={k} style={{ flex: x.cents, backgroundColor: x.color }} />)}
         </Animated.View>
       </View>
@@ -36,7 +42,7 @@ export function WeekChart({ days, picked, onPick }: { days: Day[]; picked: numbe
   return (
     <View style={{ flexDirection: 'row' }}>
       {days.map((d, i) => (
-        <Bar key={d.date} d={d} max={max} i={i} dim={picked !== null && picked !== i}
+        <Bar key={d.date} d={d} max={max} i={i} dim={picked !== null && picked !== i} selected={picked === i}
           onPress={() => { tick(); onPick(picked === i ? null : i) }} />
       ))}
     </View>
