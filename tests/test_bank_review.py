@@ -563,8 +563,11 @@ def test_expiry_warnings_last_until_repaired(client, fake, monkeypatch):
                         else real(p, body, timeout))
     iid = client.get("/api/bank").json()["items"][0]["id"]
     assert client.post("/api/bank/link-token", json={"item_id": iid}).json()["link_token"] == "link-1"
-    client.post("/api/bank/sync")  # what the app does once update mode succeeds
+    client.post("/api/bank/sync")  # update mode opened but cancelled: the warning stays
+    assert client.get("/api/bank").json()["items"][0]["error"] == "PENDING_EXPIRATION"
+    client.post(f"/api/bank/sync?repaired={iid}")  # what the app sends once update mode succeeds
     assert client.get("/api/bank").json()["items"][0]["error"] is None
+    assert client.post("/api/bank/sync?repaired=999").status_code == 404
 
 
 def test_a_broken_bank_isnt_asked_on_every_open(client, fake, monkeypatch):

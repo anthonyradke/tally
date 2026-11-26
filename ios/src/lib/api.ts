@@ -236,6 +236,8 @@ export const api = {
     inbox: () => call<BankRow[]>('GET', '/bank/inbox', undefined, 30_000),
     /** `maxAge` (seconds): the server skips the banks when it checked them all more recently than that. */
     sync: (maxAge?: number) => call<BankSynced>('POST', maxAge === undefined ? '/bank/sync' : `/bank/sync?max_age=${maxAge}`, undefined, 90_000),
+    /** After update mode finished for a connection: syncs and clears its expiry warning. */
+    repaired: (itemId: number) => call<BankSynced>('POST', `/bank/sync?repaired=${itemId}`, undefined, 90_000),
     linkToken: (itemId?: number) => call<{ link_token: string; multi?: boolean }>('POST', '/bank/link-token', itemId ? { item_id: itemId } : {}),
     /** One bank by its public token, or every bank a multi-bank session added, by the session's link token. */
     connect: (by: { public_token: string } | { link_token: string }) => call<BankConnected>('POST', '/bank/connect', by, 180_000),

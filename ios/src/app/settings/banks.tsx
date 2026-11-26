@@ -55,7 +55,7 @@ function Bank({ it, taken, asked }: { it: BankItem; taken: Set<number>; asked: S
     try {
       const { link_token } = await api.bank.linkToken(it.id)
       if (!(await openPlaidLink(link_token))) return
-      await api.bank.sync().catch(() => {}) // the sign-in is fixed either way; the next check brings the rows
+      await api.bank.repaired(it.id).catch(() => {}) // the sign-in is fixed either way; the next check brings the rows
       success()
       await refreshBank()
       notify({ text: `${name} Signed In`, symbol: 'checkmark.circle.fill' })

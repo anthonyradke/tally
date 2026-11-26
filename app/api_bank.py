@@ -61,9 +61,6 @@ def _link_token(b, iid: Optional[int]) -> dict:
         if not row:
             raise HTTPException(404)
         token = row[0]
-        # Opening update mode is the repair of a warned connection: its next good sync clears the warning.
-        with bank.settling:
-            bank.set_meta(b, f"repair:{iid}", bank._now())
     user = None if token else bank.plaid_user(b)
     try:
         lt = plaid.link_token(token, user)
@@ -276,9 +273,16 @@ def _map_account(b, con, aid: int, target: Optional[int], ask: bool = False) -> 
 
 
 @router.post("/sync")
-def sync(b: Bank, con: Con, max_age: Optional[int] = None):
+def sync(b: Bank, con: Con, max_age: Optional[int] = None, repaired: Optional[int] = None):
     """`max_age` (seconds): skip asking the banks when every connection was checked more recently than that (the app
-    asks on every open; the banks only change a few times a day)."""
+    asks on every open; the banks only change a few times a day). `repaired`: a connection the phone just signed in
+    again through update mode (Link finished, not cancelled): this sync clears its expiry warning."""
+    if repaired is not None:
+        if not b.execute("SELECT 1 FROM items WHERE id=?", (repaired,)).fetchone():
+            raise HTTPException(404)
+        with bank.settling:
+            bank.set_meta(b, f"repair:{repaired}", bank._now())
+        return _refresh(b, con, [repaired])
     if max_age is not None and bank.fresh(b, max_age):
         with bank.settling:
             return {"synced": {}, "paired": bank.link(b, service.load(con))}
