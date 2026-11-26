@@ -81,3 +81,12 @@ export function mayPop(o: { roots: Set<string>; startPath: string; path: string;
 /** Whether coming back to the front should look at the banks: only after the app was really in the background (not
  *  Control Center or a Face ID prompt, which only pass through "inactive"), and not again within RECHECK_MS. */
 export const shouldLook = (wasBackground: boolean, last: number, now: number) => wasBackground && now - last >= RECHECK_MS
+
+/** What Settings › Banks says after Check Now: a bank that couldn't be checked first, then rows waiting for review,
+ *  and only then "Up to Date". */
+export function checkSummary(synced: Record<string, { added?: number; error?: string }>, items: { id: number; institution: string | null }[], waiting: number, added = 0): { kind: 'failed' | 'review' | 'ok'; text: string } {
+  const failed = Object.entries(synced).filter(([, x]) => x.error).map(([id]) => items.find((i) => String(i.id) === id)?.institution ?? 'a Bank')
+  if (failed.length) return { kind: 'failed', text: failed.length === 1 ? `Couldn’t Check ${failed[0]}` : `Couldn’t Check ${failed.length} Banks` }
+  if (waiting) return { kind: 'review', text: `${waiting} to Review` }
+  return { kind: 'ok', text: added ? `${added} Added · Up to Date` : 'Up to Date' }
+}

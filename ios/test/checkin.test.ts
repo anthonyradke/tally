@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import storage from '@react-native-async-storage/async-storage'
 import { ApiError, type BankGuess, type BankRow } from '@/lib/api'
-import { addAllPlan, already, kindsFor, loadSeenFor, mayPop, PATIENCE_MS, RECHECK_MS, rowPlan, saveSeenFor, shouldLook } from '@/design/checkin'
+import { addAllPlan, already, checkSummary, kindsFor, loadSeenFor, mayPop, PATIENCE_MS, RECHECK_MS, rowPlan, saveSeenFor, shouldLook } from '@/design/checkin'
 
 const types: Record<number, { type: 'Spending' | 'Transfer' | 'Loan' | 'Money in' }> = { 1: { type: 'Spending' }, 2: { type: 'Spending' }, 3: { type: 'Transfer' }, 4: { type: 'Loan' }, 5: { type: 'Money in' } }
 const catOf = (id: number) => types[id]
@@ -80,4 +80,13 @@ test('looks only on a real return to the app, and not again within a few minutes
   assert.equal(shouldLook(true, 0, RECHECK_MS), true)
   assert.equal(shouldLook(false, 0, RECHECK_MS), false) // Control Center, Face ID: never left
   assert.equal(shouldLook(true, 0, RECHECK_MS - 1), false)
+})
+
+test('Check Now reports failed banks, then rows to review, before up to date', () => {
+  const items = [{ id: 1, institution: 'Chase' }, { id: 2, institution: 'Amex' }]
+  assert.deepEqual(checkSummary({ 1: { error: 'LOGIN_REQUIRED' }, 2: { added: 3 } }, items, 4), { kind: 'failed', text: 'Couldn’t Check Chase' })
+  assert.equal(checkSummary({ 1: { error: 'X' }, 2: { error: 'Y' } }, items, 0).text, 'Couldn’t Check 2 Banks')
+  assert.deepEqual(checkSummary({ 1: { added: 2 } }, items, 4), { kind: 'review', text: '4 to Review' })
+  assert.deepEqual(checkSummary({}, items, 0, 2), { kind: 'ok', text: '2 Added · Up to Date' })
+  assert.deepEqual(checkSummary({}, items, 0), { kind: 'ok', text: 'Up to Date' })
 })
