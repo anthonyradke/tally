@@ -3,7 +3,6 @@
 // to add it as shown and left to skip it.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native'
-import { router } from 'expo-router'
 import Animated, { FadeOut } from 'react-native-reanimated'
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { useQuery } from '@tanstack/react-query'
@@ -142,9 +141,11 @@ function Ask({ a }: { a: BankAsk }) {
       await api.bank.mapAccount(a.id, v === NOT_TRACKED ? null : v)
       success()
       await refreshBank()
-      // There's no taking back "not tracked" from the check-in (the server stops asking); Settings › Banks can still
-      // make it one of Tally's accounts.
-      if (v === NOT_TRACKED) notify({ text: `${a.name} Not Tracked`, symbol: 'eye.slash.fill', hue: 'gray', action: { label: 'Change', run: () => router.push('/settings/banks') } })
+      // Undo asks about the account again (ask: true clears the server's "not tracked" mark).
+      if (v === NOT_TRACKED) notify({ text: `${a.name} Not Tracked`, symbol: 'eye.slash.fill', hue: 'gray', action: { label: 'Undo', run: async () => {
+        await api.bank.mapAccount(a.id, null, true)
+        await refreshBank()
+      } } })
     } catch (e) {
       failure()
       notify({ text: why(e, "Couldn't place it"), ...oops })
@@ -177,9 +178,9 @@ function Added({ x }: { x: BankRecent }) {
       notify({ text: `Removed ${x.what}`, symbol: 'trash.fill', hue: 'red', action: { label: 'Undo', run: async () => {
         await api.restore([row])
         // Removing it marked the bank row as taken back; tie it to the entry again so it isn't asked about or added
-        // twice. (It comes back as paired by hand, so it no longer lists under Added Automatically.)
+        // twice, still listed under Added Automatically.
         await api.bank.reset(x.id).catch(() => {})
-        await api.bank.pair(x.id, row.id).catch(() => {}) // 409: the next sync paired it already
+        await api.bank.pair(x.id, row.id, 'auto').catch(() => {}) // 409: the next sync paired it already
         await refreshBank()
         success()
       } } })

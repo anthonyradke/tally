@@ -237,13 +237,13 @@ export const api = {
     connect: (by: { public_token: string } | { link_token: string }) => call<BankConnected>('POST', '/bank/connect', by, 180_000),
     sandbox: () => call<BankConnected>('POST', '/bank/sandbox/connect', undefined, 120_000),
     disconnect: (itemId: number) => call<void>('DELETE', `/bank/items/${itemId}`),
-    mapAccount: (bankAccountId: number, tallyAccountId: number | null) => call<{ paired: number }>('PUT', `/bank/accounts/${bankAccountId}`, { tally_account_id: tallyAccountId }),
+    mapAccount: (bankAccountId: number, tallyAccountId: number | null, ask?: boolean) => call<{ paired: number }>('PUT', `/bank/accounts/${bankAccountId}`, { tally_account_id: tallyAccountId, ...(ask ? { ask: true } : {}) }),
     /** Adds the entry a bank row stands for: the guess, with anything in `over` instead (`amount` in cents here). */
     accept: (id: number, over: BankAccept = {}) => call<Txn>('POST', `/bank/inbox/${id}/accept`, over.amount === undefined ? over : { ...over, amount: over.amount / 100 }),
     /** Adds each row as Tally guessed it; ones without a category are skipped. */
     acceptMany: (ids: number[]) => call<Txn[]>('POST', '/bank/inbox/accept', { ids }, 60_000),
     acceptSure: () => call<Txn[]>('POST', '/bank/inbox/accept-sure', undefined, 60_000),
-    pair: (id: number, txnId: number) => call<{ ok: true }>('POST', `/bank/inbox/${id}/pair`, { txn_id: txnId }),
+    pair: (id: number, txnId: number, how?: 'auto' | 'manual') => call<{ ok: true }>('POST', `/bank/inbox/${id}/pair`, { txn_id: txnId, ...(how ? { how } : {}) }),
     ignore: (id: number) => call<{ ok: true }>('POST', `/bank/inbox/${id}/ignore`),
     reset: (id: number) => call<{ ok: true }>('POST', `/bank/txns/${id}/reset`),
     recent: (days = 7) => call<BankRecent[]>('GET', `/bank/recent?days=${days}`),
