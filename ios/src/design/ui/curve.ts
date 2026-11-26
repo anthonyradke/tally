@@ -1,6 +1,6 @@
 // The arithmetic under the month chart, kept apart from the view so it can be tested: a smooth line that never
 // overshoots, and a scale with a round top and zero at the bottom.
-import { axisLabel, niceMax } from './chart'
+import { axisLabel } from './chart'
 
 /** A monotone cubic path (Fritsch-Carlson) through the points: smooth, but it never bulges past a point, so a day
  *  with no spending stays flat and the line never dips under what was spent. */
@@ -27,11 +27,20 @@ export function curve(xs: number[], ys: number[]): string {
   return d
 }
 
+/** A round top for the scale with a little more choice than the bars' (3, 4, 6 and 8 too), so a line at $2,600
+ *  tops out at $3k rather than leaving half the plot empty under $5k. Its half is a round label too. $100 for
+ *  nothing above zero. */
+export function lineTop(v: number): number {
+  if (!Number.isFinite(v) || v <= 0) return 100_00
+  const p = 10 ** Math.floor(Math.log10(v))
+  return ([1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((m) => m * p >= v - 1e-9) ?? 10) * p
+}
+
 /** The scale of a running total `h` points tall: a round top at or above the largest value, zero at the bottom (or
  *  the lowest value, when refunds take the total below zero), and three gridlines with their labels. */
 export function lineScale(values: number[], h: number): { lo: number; hi: number; y: (v: number) => number; grid: { value: number; y: number; label: string }[] } {
   const v = values.filter(Number.isFinite)
-  const hi = niceMax(Math.max(0, ...v))
+  const hi = lineTop(Math.max(0, ...v))
   const lo = Math.min(0, ...v)
   const y = (x: number) => ((hi - x) / (hi - lo || 1)) * h
   return { lo, hi, y, grid: [hi, hi / 2, 0].map((value) => ({ value, y: y(value), label: axisLabel(value) })) }

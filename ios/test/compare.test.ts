@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { compareA11y, compareLine, compareOn, monthCompare, ordinal } from '@/design/trends'
-import { curve, lineScale } from '@/design/ui/curve'
+import { curve, lineScale, lineTop } from '@/design/ui/curve'
 
 test('running totals by day: posted only, refunds netted, last month whole', () => {
   const c = monthCompare([
@@ -33,6 +33,7 @@ test('edges: the 1st, a long month after a short one, no last month, refunds bel
   // A ledger begun this month has nothing to compare.
   const fresh = monthCompare([{ date: '2026-11-02', amount: 100 }], '2026-11-05', '2026-11-01')
   assert.equal(fresh.prev, null)
+  assert.equal(fresh.days, 30)
   assert.deepEqual(compareOn(fresh, 2), { cur: 100, prev: null })
   // A refund larger than the day's spending takes the running total under zero.
   const neg = monthCompare([{ date: '2026-11-01', amount: -4000 }, { date: '2026-11-02', amount: 1000 }], '2026-11-02', '2026-01-01')
@@ -61,11 +62,12 @@ test('words: less, more, same, nothing yet, nothing to compare', () => {
 
 test('the scale: a round top, zero at the bottom unless refunds take a line below it', () => {
   const s = lineScale([0, 120000, 141000], 150)
-  assert.equal(s.hi, 200000)
+  assert.equal(s.hi, 150000)
   assert.equal(s.lo, 0)
-  assert.deepEqual(s.grid.map((g) => g.label), ['$2k', '$1k', '0'])
+  assert.deepEqual(s.grid.map((g) => g.label), ['$1.5k', '$750', '0'])
   assert.equal(s.y(0), 150)
-  assert.equal(s.y(200000), 0)
+  assert.equal(s.y(150000), 0)
+  assert.deepEqual([257400, 310000, 99, 4500000, 600000].map(lineTop), [300000, 400000, 100, 5000000, 600000])
   const n = lineScale([-4000, 1000], 100)
   assert.equal(n.lo, -4000)
   assert.ok(n.y(0) < 100 && n.y(-4000) === 100)

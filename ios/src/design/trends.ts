@@ -191,7 +191,8 @@ export function monthCompare(entries: { date: string; amount: number }[], today:
     else if (m === prevMonth) prevDaily[d] += e.amount
   }
   const run = (a: number[]) => { let t = 0; return a.map((v) => (t += v)) }
-  return { month, prevMonth, days: Math.max(daysIn(month), pn), cur: run(curDaily), prev: prevMonth >= monthOf(start) ? run(prevDaily) : null }
+  const known = prevMonth >= monthOf(start)
+  return { month, prevMonth, days: known ? Math.max(daysIn(month), pn) : daysIn(month), cur: run(curDaily), prev: known ? run(prevDaily) : null }
 }
 
 /** Both months by day `d` (1-based): this month's total so far (null after today) and last month's by the same day
