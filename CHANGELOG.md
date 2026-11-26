@@ -8,7 +8,26 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## 4.2.0 (2026-11-26)
+## 4.3.0 (2026-11-26)
+Added
+- Face ID: opening Tally, or coming back after five minutes away, asks Apple's Face ID (or the iPhone passcode)
+  before anything shows. On by default where Face ID is set up; Settings › Face ID turns it off. Links into Tally
+  wait until it's unlocked. If Tally's icon is set to Require Face ID, turn that off to be asked once.
+- Summary: this month's spending drawn over last month's, day by day. Touch and hold, then slide, to read any day.
+  Swipe the card for This Week; the dots show which page is open.
+- Settings › Accounts: show or hide each account, and rename it. Hidden accounts still count toward net worth.
+- Settings opens from a button on Summary and Accounts, and every Settings page has Done.
+
+Changed
+- Activity's filters move the moment a finger lifts, and the list fades between them like Mail's, keeping the old
+  one until the new one is ready.
+- Settings › Banks: each bank account shows its name, last four digits and balance in full, with the Tally account
+  it's matched to on its own line; tapping it picks another. Add a Bank comes first.
+- Banks are asked for new transactions on pull to refresh, when Tally opens (at most hourly) and every two hours
+  during the day, so purchases show up sooner.
+- Bank logos use the bank's own image from Plaid when it has one.
+
+
 A review of every screen and of the server, from reviewers reading the code and using the app on demo data.
 
 Added
