@@ -1,6 +1,9 @@
 import { router, Stack } from 'expo-router'
 import { usePalette } from '@/design/theme'
 
+// Opening a page straight (/settings/banks from Accounts) still puts Settings under it, so Back leads somewhere.
+export const unstable_settings = { initialRouteName: 'index' }
+
 export default function SettingsStack() {
   const p = usePalette()
   return (
