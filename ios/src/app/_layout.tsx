@@ -61,8 +61,9 @@ function Screens({ locked }: { locked: boolean }) {
   const server = useServer((s) => s.url)
   const setup = useQuery({ queryKey: ['setup', server], queryFn: setupNeeded, staleTime: 60_000, retry: false })
   useEffect(() => {
-    if (setup.data && !locked) router.push('/welcome')
-  }, [setup.data, locked])
+    // Never over the lock: setup found while locked is left to Settings' Finish Setup.
+    if (setup.data && !useLock.getState().locked) router.push('/welcome')
+  }, [setup.data])
   const sheet = { contentStyle: { backgroundColor: p.bg } }
   return (
     <View style={{ flex: 1 }} accessibilityElementsHidden={locked} importantForAccessibility={locked ? 'no-hide-descendants' : 'auto'}>
