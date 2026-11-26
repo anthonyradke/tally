@@ -1,5 +1,6 @@
-"""Logos (logos.py): GET /api/logo?name=… for an entry's name, ?account=… for a ledger account's bank. The image, or
-404 when there's none to show (the app then draws the name's first letter). DELETE hides a wrong one for good."""
+"""Logos (logos.py): GET /api/logo?name=… for an entry's name, ?account=… for a ledger account's bank, ?item=… for a
+connected bank. The image, or 404 when there's none to show (the app then draws the name's first letter). DELETE
+hides a wrong one for good."""
 from __future__ import annotations
 import re
 from typing import Optional
@@ -50,10 +51,10 @@ def _account_sources(con, aid: int) -> list[tuple[str, str]]:
                            "WHERE x.tally_account_id=? LIMIT 1", (aid,)).fetchone()
         finally:
             b.close()
-        if it and (d := logos.domain_of(it["website"])):
-            out.append(("domain", d))
         if it and it["logo"]:
             out.append(("base64", it["logo"]))
+        if it and (d := logos.domain_of(it["website"])):
+            out.append(("domain", d))
     except Exception:
         pass
     hint = (a["icon"] or "").removeprefix("logo:") if (a["icon"] or "").startswith("logo:") else None
@@ -63,7 +64,8 @@ def _account_sources(con, aid: int) -> list[tuple[str, str]]:
 
 
 def _item_sources(iid: int) -> list[tuple[str, str]]:
-    """A connected bank: Plaid's record of its website and logo, then its name."""
+    """A connected bank: Plaid's logo for it, then its website, then its name. Plaid's is drawn to fill the circle
+    (Amex's blue square edge to edge, X Money white on black); the website's sat small inside a white disc."""
     b = bank.connect()
     try:
         it = b.execute("SELECT institution, website, logo FROM items WHERE id=?", (iid,)).fetchone()
@@ -72,10 +74,10 @@ def _item_sources(iid: int) -> list[tuple[str, str]]:
     if not it:
         raise HTTPException(404)
     out: list[tuple[str, str]] = []
-    if d := logos.domain_of(it["website"]):
-        out.append(("domain", d))
     if it["logo"]:
         out.append(("base64", it["logo"]))
+    if d := logos.domain_of(it["website"]):
+        out.append(("domain", d))
     return out + [("domain", d) for d in logos.domains_for(it["institution"] or "")][:1]
 
 
@@ -91,26 +93,43 @@ def _plaid_item(b_query: str, arg) -> Optional[str]:
         b.close()
 
 
+# Bumped when the order of a bank's sources changes, so logos cached under the old order are looked up again:
+# "2" put Plaid's logo before the bank's website (2026-11-26).
+BANK_LOGOS = "2"
+
+
 def _ident(con, name: Optional[str], account: Optional[int], item: Optional[int] = None) -> tuple[str, str]:
     """What a logo is saved under. Never a bare row id: a fresh ledger or bank database numbers from 1 again, and
     account 1 would show the old account 1's bank. A connected bank goes by Plaid's id for it; a ledger account by
-    its id with its bank's name and connection."""
+    its id with its bank's name and connection. Both carry BANK_LOGOS."""
     if item is not None:
         pid = _plaid_item("SELECT item_id FROM items WHERE id=?", item)
         if not pid:
             raise HTTPException(404)
-        return "item", pid
+        return "item", f"v{BANK_LOGOS}|{pid}"
     if account is not None:
-        a = con.execute("SELECT name, bank FROM accounts WHERE id=?", (account,)).fetchone()
-        if not a:
-            raise HTTPException(404)
-        pid = _plaid_item("SELECT i.item_id FROM accounts x JOIN items i ON i.id=x.item_id WHERE x.tally_account_id=?",
-                          account) or ""
-        return "account", f"{account}|{a['bank'] or ''}|{a['name']}|{pid}"
+        return "account", f"v{BANK_LOGOS}|{_account_ident(con, account)}"
     key = logos.norm(name or "")
     if not key:
         raise HTTPException(404)
     return "name", key
+
+
+def _account_ident(con, account: int) -> str:
+    """A ledger account's key as first saved (before BANK_LOGOS): a logo hidden under it stays hidden."""
+    a = con.execute("SELECT name, bank FROM accounts WHERE id=?", (account,)).fetchone()
+    if not a:
+        raise HTTPException(404)
+    pid = _plaid_item("SELECT i.item_id FROM accounts x JOIN items i ON i.id=x.item_id WHERE x.tally_account_id=?",
+                      account) or ""
+    return f"{account}|{a['bank'] or ''}|{a['name']}|{pid}"
+
+
+def _carry_hidden(con, kind: str, ident: str, account: Optional[int]) -> None:
+    """An account's logo hidden before BANK_LOGOS changed its key is hidden under the new key too."""
+    if kind == "account" and account is not None and not logos.cached(kind, ident)[0]:
+        if logos._path(kind, _account_ident(con, account), "hidden").exists():
+            logos.hide(kind, ident)
 
 
 def _sources(con, name: Optional[str], account: Optional[int], item: Optional[int]):
@@ -127,6 +146,7 @@ def _sources(con, name: Optional[str], account: Optional[int], item: Optional[in
 def get_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None, item: Optional[int] = None):
     """`item`: a connected bank (setup lists them before any account exists)."""
     kind, ident = _ident(con, name, account, item)
+    _carry_hidden(con, kind, ident, account)
     path = logos.resolve(kind, ident, _sources(con, name, account, item))
     if not path:
         raise HTTPException(404)
@@ -147,6 +167,7 @@ def get_color(con: Con, name: Optional[str] = None, account: Optional[int] = Non
                                   account)
     if plaid_color and re.fullmatch(r"#?[0-9a-fA-F]{6}", plaid_color):
         return {"color": "#" + plaid_color.lstrip("#").upper()}
+    _carry_hidden(con, kind, ident, account)
     path = logos.resolve(kind, ident, _sources(con, name, account, item))
     color = logos.color_of(kind, ident, path) if path else None
     if kind == "name" and not logos.washes(color):
@@ -163,6 +184,8 @@ def hide_logo(con: Con, name: Optional[str] = None, account: Optional[int] = Non
 def show_logo(con: Con, name: Optional[str] = None, account: Optional[int] = None):
     """Undo for hide."""
     logos.unhide(*_ident(con, name, account))
+    if account is not None:
+        logos.unhide("account", _account_ident(con, account))  # hidden under the key before BANK_LOGOS
 
 
 

@@ -2,7 +2,7 @@
 
 Where a logo comes from, surest first:
   1. The bank: Plaid's own merchant logo or website on a bank row with the same merchant, or on the row paired with
-     an entry of that name; for an account, the connected institution's website or Plaid's logo for it.
+     an entry of that name; for a bank or an account, Plaid's logo for the institution, else its website.
   2. The name as a website: "Chipotle" is chipotle.com, "King Soopers" kingsoopers.com, looked up on logo.dev
      (LOGO_DEV_KEY, a publishable key) with fallback=404, so a name that isn't a site has no logo.
 Never logo.dev's best-match name search: it always answers, and a local shop got a stranger's logo.
