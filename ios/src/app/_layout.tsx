@@ -1,9 +1,12 @@
 // The app's frame: data kept on the phone, the outbox, the bank check-in, notices and the lock cover around three
 // tabs and their sheets. A ledger with no accounts yet, on a server with bank sync, opens the welcome setup first.
+// With Face ID on (lib/lock.ts), the screens mount only once Face ID has passed, so a cold start shows no saved figure
+// before it; locked again later, they stay mounted (drafts and sheets kept) under the cover, hidden from VoiceOver,
+// while the check-in, notices and links wait.
 import { useEffect, useState } from 'react'
-import { AppState, useColorScheme } from 'react-native'
+import { AppState, useColorScheme, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router'
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, useRootNavigationState } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
@@ -13,7 +16,7 @@ import Constants from 'expo-constants'
 import { BankCheckIn } from '@/components/BankCheckIn'
 import { api, ApiError } from '@/lib/api'
 import { keepOnPhone, queryClient } from '@/lib/data'
-import { watchCover } from '@/lib/lock'
+import { askIfDue, loadLock, useLock } from '@/lib/lock'
 import { flush, loadOutbox } from '@/lib/outbox'
 import { loadServer, useServer } from '@/lib/server'
 import { loadLogoEpoch } from '@/design/actions'
@@ -53,23 +56,37 @@ async function setupNeeded(): Promise<boolean> {
   }
 }
 
-function Screens() {
+function Screens({ locked }: { locked: boolean }) {
   const p = usePalette()
   const server = useServer((s) => s.url)
   const setup = useQuery({ queryKey: ['setup', server], queryFn: setupNeeded, staleTime: 60_000, retry: false })
   useEffect(() => {
-    if (setup.data) router.push('/welcome')
-  }, [setup.data])
+    if (setup.data && !locked) router.push('/welcome')
+  }, [setup.data, locked])
   const sheet = { contentStyle: { backgroundColor: p.bg } }
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: p.bg } }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="add" options={{ presentation: 'modal', ...sheet }} />
-      <Stack.Screen name="check-in" options={{ presentation: 'modal', ...sheet }} />
-      <Stack.Screen name="settings" options={{ presentation: 'modal', ...sheet }} />
-      <Stack.Screen name="welcome" options={{ presentation: 'fullScreenModal', gestureEnabled: false, ...sheet }} />
-    </Stack>
+    <View style={{ flex: 1 }} accessibilityElementsHidden={locked} importantForAccessibility={locked ? 'no-hide-descendants' : 'auto'}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: p.bg } }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="add" options={{ presentation: 'modal', ...sheet }} />
+        <Stack.Screen name="check-in" options={{ presentation: 'modal', ...sheet }} />
+        <Stack.Screen name="settings" options={{ presentation: 'modal', ...sheet }} />
+        <Stack.Screen name="welcome" options={{ presentation: 'fullScreenModal', gestureEnabled: false, ...sheet }} />
+      </Stack>
+    </View>
   )
+}
+
+/** Opens a tally:// link that came in while locked (app/+native-intent.tsx), once the screens are there. */
+function HeldLink() {
+  const held = useLock((s) => s.held)
+  const navReady = !!useRootNavigationState()?.key
+  useEffect(() => {
+    if (!held || !navReady) return
+    useLock.setState({ held: null })
+    router.push(held as never)
+  }, [held, navReady])
+  return null
 }
 
 export default function RootLayout() {
@@ -77,11 +94,13 @@ export default function RootLayout() {
   const p = usePalette()
   const nav = scheme === 'dark' ? DarkTheme : DefaultTheme
   const [ready, setReady] = useState(false)
+  const locked = useLock((s) => s.locked)
+  const opened = useLock((s) => s.opened)
   useEffect(() => {
-    watchCover()
-    Promise.all([loadServer(), loadOutbox(), loadLogoEpoch()]).finally(() => {
+    Promise.all([loadServer(), loadOutbox(), loadLogoEpoch(), loadLock().catch(() => useLock.setState({ ready: true, opened: true }))]).finally(() => {
       setReady(true)
-      SplashScreen.hideAsync().catch(() => {})
+      // Face ID comes up over the cover once the splash has gone, not over the splash.
+      SplashScreen.hideAsync().catch(() => {}).finally(askIfDue)
     })
   }, [])
   if (!ready) return null
@@ -91,10 +110,15 @@ export default function RootLayout() {
         persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 7, buster: Constants.expoConfig?.version ?? 'v1',
           dehydrateOptions: { shouldDehydrateQuery: (q) => q.state.data !== undefined && keepOnPhone(q.queryKey) } }}>
         <ThemeProvider value={{ ...nav, colors: { ...nav.colors, primary: p.tint, background: p.bg, card: p.bg } }}>
-          <Screens />
+          {opened && <Screens locked={locked} />}
           <OutboxSync />
-          <BankCheckIn />
-          <NoticeHost />
+          {!locked && opened && (
+            <>
+              <BankCheckIn />
+              <NoticeHost />
+              <HeldLink />
+            </>
+          )}
           <LockCover />
         </ThemeProvider>
       </PersistQueryClientProvider>
