@@ -13,9 +13,8 @@ import { Txt } from './Txt'
 /** `future`: a day still to come, which can't be picked; `a11y`: what VoiceOver reads for it ("Tuesday, $12.00"). */
 export interface Day { date: string; letter: string; total: number; parts: { color: string; cents: number }[]; today?: boolean; future?: boolean; a11y?: string }
 
-const H = 132
 
-function Bar({ d, max, i, dim, selected, onPress }: { d: Day; max: number; i: number; dim: boolean; selected: boolean; onPress: () => void }) {
+function Bar({ d, max, i, dim, selected, onPress, H }: { d: Day; max: number; i: number; dim: boolean; selected: boolean; onPress: () => void; H: number }) {
   const p = usePalette()
   const h = useSharedValue(0)
   const target = max > 0 && d.total > 0 ? Math.max(6, (d.total / max) * H) : 4 // a nub on a quiet day keeps the week's rhythm
@@ -37,12 +36,13 @@ function Bar({ d, max, i, dim, selected, onPress }: { d: Day; max: number; i: nu
   )
 }
 
-export function WeekChart({ days, picked, onPick }: { days: Day[]; picked: number | null; onPick: (i: number | null) => void }) {
+/** `height`: the tallest bar's (132 by default). */
+export function WeekChart({ days, picked, onPick, height = 132 }: { days: Day[]; picked: number | null; onPick: (i: number | null) => void; height?: number }) {
   const max = Math.max(...days.map((d) => d.total), 0)
   return (
     <View style={{ flexDirection: 'row' }}>
       {days.map((d, i) => (
-        <Bar key={d.date} d={d} max={max} i={i} dim={picked !== null && picked !== i} selected={picked === i}
+        <Bar key={d.date} d={d} max={max} i={i} H={height} dim={picked !== null && picked !== i} selected={picked === i}
           onPress={() => { tick(); onPick(picked === i ? null : i) }} />
       ))}
     </View>
