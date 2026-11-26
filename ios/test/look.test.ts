@@ -29,7 +29,7 @@ test('category words match from the start of a word', () => {
   assert.equal(sym('Car Insurance'), 'car.fill')
   assert.equal(sym('Groceries'), 'cart.fill')
   assert.equal(sym('Credit Card Payment', 'Transfer'), 'creditcard.fill')
-  assert.equal(sym('Mom (owes me)', 'Loan'), 'arrow.uturn.left')
+  assert.equal(sym('Lent to a friend', 'Loan'), 'arrow.uturn.left')
 })
 
 test('contrast and ink', () => {

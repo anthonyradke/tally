@@ -217,7 +217,7 @@ def test_link_only_pairs_entries_on_the_rows_account_and_side(client, world, fak
     """A $65 card charge doesn't pair with a $65 deposit entry on checking; the deposit's own row does."""
     freeze(monkeypatch, date(2026, 9, 30))
     _mapped_world(client, world)
-    gift = client.post("/api/transactions", json={"date": "2026-09-12", "what": "From Mom", "category_id": world["pay"],
+    gift = client.post("/api/transactions", json={"date": "2026-09-12", "what": "From a friend", "category_id": world["pay"],
                                                   "to_id": world["chk"], "amount": 65}).json()
     fake.push(added=[prow("costco", "acc-card", 65.00, "2026-09-12", "COSTCO WHSE #1"),
                      prow("dep", "acc-chk", -65.00, "2026-09-12", "ONLINE TRANSFER FROM SAV")])
