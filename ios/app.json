@@ -45,6 +45,12 @@
           "photosPermission": "Tally shows a picture of your card that you choose from Photos.",
           "cameraPermission": false
         }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Tally uses Face ID to keep your finances private."
+        }
       ]
     ],
     "experiments": {
