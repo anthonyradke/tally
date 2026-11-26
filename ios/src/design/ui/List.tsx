@@ -1,10 +1,11 @@
 // Inset grouped lists the way iOS 26 draws them: rounded cards on the grouped background, rows with a separator
 // that starts where the text does, section titles above and notes below.
-import { Children, Fragment, type ReactNode } from 'react'
-import { View, type StyleProp, type ViewStyle } from 'react-native'
+import { Fragment, type ReactNode } from 'react'
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import type { SFSymbol } from 'expo-symbols'
 import { radius, space, usePalette } from '../theme'
 import { Press } from './Press'
+import { sectionRows } from './rows'
 import { SF } from './SF'
 import { Txt } from './Txt'
 
@@ -19,7 +20,7 @@ export function Section({ title, aside, action, footer, inset = space.l, compact
   title?: string; aside?: string; action?: { label: string; onPress: () => void }; footer?: string; inset?: number; compact?: boolean; children: ReactNode; style?: StyleProp<ViewStyle>
 }) {
   const p = usePalette()
-  const rows = Children.toArray(children).filter(Boolean)
+  const rows = sectionRows(children)
   return (
     <View style={[{ gap: space.s }, style]}>
       {compact && title ? (
@@ -33,10 +34,10 @@ export function Section({ title, aside, action, footer, inset = space.l, compact
       )}
       {rows.length > 0 && (
         <Card>
-          {rows.map((r, i) => (
-            <Fragment key={i}>
-              {i > 0 && <View style={{ height: 0.5, backgroundColor: p.separator, marginLeft: inset }} />}
-              {r}
+          {rows.map(({ key, node }, i) => (
+            <Fragment key={key}>
+              {i > 0 && <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: p.separator, marginLeft: inset }} />}
+              {node}
             </Fragment>
           ))}
         </Card>
@@ -59,7 +60,7 @@ export function Row({ leading, title, subtitle, value, valueTone = 'label2', tra
         <Txt v="body" numberOfLines={1} color={destructive ? p.red : tint ? p.tint : undefined}>{title}</Txt>
         {subtitle ? <Txt v="subhead" tone="label2" numberOfLines={1}>{subtitle}</Txt> : null}
       </View>
-      {value !== undefined && <Txt v="body" tone={valueTone} num numberOfLines={1}>{value}</Txt>}
+      {value !== undefined && <Txt v="body" tone={valueTone} num numberOfLines={1} style={{ flexShrink: 1, maxWidth: '60%', textAlign: 'right' }}>{value}</Txt>}
       {trailing}
       {chevron && <SF name="chevron.right" size={13} color={p.label3} weight="semibold" />}
     </View>
