@@ -30,7 +30,8 @@ anything below get written here first.
   around the one under the finger, and a swipe to page through time.
 - **Brand wash** on an entry's page, fading from the merchant's color into the background.
 - **Mail's switcher** on Activity: the chosen filter widens into a colored capsule; a swipe across jumps to the
-  first or last.
+  first or last. The capsule moves the instant the finger lifts; the list crossfades to the new filter as Mail's
+  does (out 90 ms, in 150 ms), never through a blank.
 
 ## Motion
 After Face ID and Apple Pay: quick ease-out curves and critically damped springs, nothing overshoots or wobbles

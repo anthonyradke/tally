@@ -1,7 +1,7 @@
-// Activity's switcher lights.
+// Activity's switcher lights and the first screenful a list switch shows.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { labelOpacity, lights, lit } from '@/design/ui/switching'
+import { headOf, labelOpacity, lights, lit } from '@/design/ui/switching'
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
 const near = (a: number, b: number) => Math.abs(a - b) < 1e-9
@@ -37,4 +37,19 @@ test('a name shows only once its capsule has room for it', () => {
   assert.equal(labelOpacity(0.5), 0)
   assert.equal(labelOpacity(0.75), 0.5)
   assert.equal(labelOpacity(1), 1)
+})
+
+test('a switch first shows a screenful, cut inside a day when need be', () => {
+  const day = (key: string, n: number) => ({ key, data: Array.from({ length: n }, (_, i) => `${key}${i}`) })
+  const sections = [day('a', 3), day('b', 5), day('c', 4)]
+  const head = headOf(sections, 6)
+  assert.deepEqual(head.map((s) => [s.key, s.data.length]), [['a', 3], ['b', 3]])
+  assert.equal(head[0], sections[0]) // whole days are passed through untouched
+  assert.deepEqual(head[1].data, ['b0', 'b1', 'b2'])
+  assert.equal(sections[1].data.length, 5) // the full list isn't changed
+  assert.deepEqual(headOf(sections, 8).map((s) => s.key), ['a', 'b'])
+  assert.equal(headOf(sections, 99), sections)
+  assert.equal(headOf(sections, 12), sections)
+  assert.deepEqual(headOf(sections, 0), [])
+  assert.deepEqual(headOf([], 10), [])
 })
