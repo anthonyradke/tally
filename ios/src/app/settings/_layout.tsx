@@ -39,6 +39,7 @@ export default function SettingsStack() {
       ),
     })}>
       <Stack.Screen name="index" options={{ title: 'Settings' }} />
+      <Stack.Screen name="accounts" options={{ title: 'Accounts' }} />
       <Stack.Screen name="banks" options={{ title: 'Banks' }} />
       <Stack.Screen name="bank-account/[id]" options={{ title: '', headerLargeTitle: false }} />
       <Stack.Screen name="icon" options={{ title: 'App Icon' }} />
