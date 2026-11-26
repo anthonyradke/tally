@@ -6,7 +6,7 @@ import asyncio, hmac, json, logging, os, sqlite3, threading
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from . import bank, db, plaid, service
+from . import bank, bank_pending, db, plaid, service
 from .api import Con
 from .engine import Txn, month_of
 from .entries import _full, _write
@@ -461,6 +461,13 @@ async def webhook(key: str, request: Request, tasks: BackgroundTasks):
 def inbox(b: Bank, con: Con):
     with bank.settling:
         return bank.inbox(b, _link(b, con))
+
+
+@router.get("/pending")
+def pending(b: Bank, con: Con):
+    """Pending rows on tracked accounts, each shaped like the entry it would become (bank_pending). Read only: Activity
+    shows them dimmed until the bank posts them."""
+    return bank_pending.pending(b, service.load(con))
 
 
 def _bank_row(b, bid: int):
