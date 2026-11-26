@@ -171,3 +171,63 @@ export function highlight(rows: Map<string, MonthRow>, full: string[], value: (m
   const v = rows.get(last) ? value(rows.get(last)!) : 0
   return { month: last, v, avg, diff: Math.round(((v - avg) / avg) * 100) }
 }
+
+/** Summary's month chart: this month's spending added up day by day against last month's. `cur` runs from the 1st
+ *  to today (one value a day), `prev` through the whole of last month, or null when last month came before the
+ *  ledger. `days`: the slots across the chart, the longer month's length, so a 31st still has its place. */
+export interface MonthCompare { month: string; prevMonth: string; days: number; cur: number[]; prev: number[] | null }
+
+/** From the spending rows of last month and this one. Posted rows only (a scheduled bill waits for its day), and
+ *  refunds net out on their day, so a day of refunds takes the running total down, even below zero. */
+export function monthCompare(entries: { date: string; amount: number }[], today: string, start: string): MonthCompare {
+  const month = monthOf(today), prevMonth = addMonths(month, -1)
+  const pn = daysIn(prevMonth)
+  const curDaily = new Array<number>(Number(today.slice(8, 10))).fill(0)
+  const prevDaily = new Array<number>(pn).fill(0)
+  for (const e of entries) {
+    if (e.date > today || !Number.isFinite(e.amount)) continue
+    const m = monthOf(e.date), d = Number(e.date.slice(8, 10)) - 1
+    if (m === month) curDaily[d] += e.amount
+    else if (m === prevMonth) prevDaily[d] += e.amount
+  }
+  const run = (a: number[]) => { let t = 0; return a.map((v) => (t += v)) }
+  return { month, prevMonth, days: Math.max(daysIn(month), pn), cur: run(curDaily), prev: prevMonth >= monthOf(start) ? run(prevDaily) : null }
+}
+
+/** Both months by day `d` (1-based): this month's total so far (null after today) and last month's by the same day
+ *  (all of it for a day it didn't have: the 31st against a 30-day month). */
+export function compareOn(c: Pick<MonthCompare, 'cur' | 'prev'>, d: number): { cur: number | null; prev: number | null } {
+  const cur = d >= 1 && d <= c.cur.length ? c.cur[d - 1] : null
+  const prev = c.prev?.length && d >= 1 ? c.prev[Math.min(d, c.prev.length) - 1] : null
+  return { cur, prev }
+}
+
+/** 1st, 2nd, 3rd, 4th … 11th, 12th, 13th … 21st, 22nd, 23rd … 31st. */
+export function ordinal(n: number): string {
+  const t = n % 100, u = n % 10
+  return `${n}${t >= 11 && t <= 13 ? 'th' : u === 1 ? 'st' : u === 2 ? 'nd' : u === 3 ? 'rd' : 'th'}`
+}
+
+const dollars = (c: number) => Math.round(c / 100)
+
+/** The line under the month chart's figure, as Apple would word it: "$170 less than last month by today", "$40 more
+ *  than last month by the 12th", "Same as last month by the 3rd". `day` null: today. Compared in whole dollars, the
+ *  way both figures read. */
+export function compareLine(cur: number, prev: number | null, day: number | null): string {
+  const when = day === null ? 'by today' : `by the ${ordinal(day)}`
+  if (prev === null) return 'Nothing to compare yet'
+  if (dollars(cur) === 0 && dollars(prev) === 0) return day === null ? 'Nothing spent yet' : `Nothing spent ${when}`
+  const diff = dollars(cur) - dollars(prev)
+  if (diff === 0) return `Same as last month ${when}`
+  return `$${Math.abs(diff).toLocaleString('en-US')} ${diff < 0 ? 'less' : 'more'} than last month ${when}`
+}
+
+/** What VoiceOver reads for the month chart: "Spent $1,240 this month, $170 less than last month by today", or for a
+ *  day stepped to, "November 12, spent $980, $60 more than last month by the 12th". */
+export function compareA11y(cur: number, prev: number | null, day: number | null, date?: string): string {
+  const spent = `${dollars(cur) < 0 ? '−' : ''}$${Math.abs(dollars(cur)).toLocaleString('en-US')}`
+  const head = day === null ? `Spent ${spent} this month` : `${date ? `${date}, s` : 'S'}pent ${spent}`
+  if (prev === null) return head
+  const line = compareLine(cur, prev, day)
+  return `${head}, ${line[0].toLowerCase()}${line.slice(1)}`
+}
