@@ -89,7 +89,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <PersistQueryClientProvider client={queryClient}
         persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 * 7, buster: Constants.expoConfig?.version ?? 'v1',
-          dehydrateOptions: { shouldDehydrateQuery: (q) => q.state.status === 'success' && keepOnPhone(q.queryKey) } }}>
+          dehydrateOptions: { shouldDehydrateQuery: (q) => q.state.data !== undefined && keepOnPhone(q.queryKey) } }}>
         <ThemeProvider value={{ ...nav, colors: { ...nav.colors, primary: p.tint, background: p.bg, card: p.bg } }}>
           <Screens />
           <OutboxSync />

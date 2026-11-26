@@ -38,11 +38,11 @@ function Key({ k, run }: { k: string; run: Run }) {
       onPressIn={() => {
         down.set(withTiming(1, { duration: 60 }))
         // Delete acts on touch-down (and then repeats); digits on release, so a sheet swiped down from the pad types
-        // nothing.
+        // nothing. Delete still gets a no-op onPress: without one, React Native Web drops a quick tap's press-in.
         if (del) { stop(); if (run(k)) timer.current = setTimeout(() => repeat(0), 420) }
       }}
       onPressOut={() => { down.set(withTiming(0, { duration: 320 })); stop() }}
-      onPress={del ? undefined : () => { run(k) }}>
+      onPress={del ? () => {} : () => { run(k) }}>
       <Animated.View style={[{ position: 'absolute', width: 64, height: 54, borderRadius: 27, backgroundColor: p.fill3 }, bloom]} />
       {del ? <SF name="delete.left" size={24} color={p.label} /> : <Txt v="title1" weight="500" style={{ fontFamily: 'ui-rounded' }}>{k}</Txt>}
     </Pressable>

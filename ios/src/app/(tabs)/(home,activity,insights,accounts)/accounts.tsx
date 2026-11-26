@@ -56,6 +56,8 @@ export default function Accounts() {
   // nearest the front. The front card shows everything; the ones behind show their name in the strip that peeks out.
   const deck = accounts.filter((a) => a.kind === 'card' || a.kind === 'cash')
     .sort((x, y) => (x.kind === y.kind ? Math.abs(balance(x)) - Math.abs(balance(y)) : x.kind === 'card' ? 1 : -1))
+  // The Wallet's totals add up the cards it shows (a hidden account's money is under Hidden, not here).
+  const sum = (list: Account[], kind: Account['kind']) => list.filter((a) => a.kind === kind).reduce((n, a) => n + balance(a), 0)
   const strip = (a: Account) => { const mask = faces?.[String(a.id)]?.mask; return mask ? `${a.name} •• ${mask}` : a.name }
 
   return (
@@ -86,7 +88,7 @@ export default function Accounts() {
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: space.xs }}>
                   <Txt v="title3" weight="700">Wallet</Txt>
                   <Txt v="subhead" tone="label2" num numberOfLines={1}>
-                    {[deck.some((a) => a.kind === 'cash') ? `${whole(now?.cash ?? 0)} cash` : '', deck.some((a) => a.kind === 'card') ? `${whole(now?.cards ?? 0)} on cards` : ''].filter(Boolean).join(' · ')}
+                    {[deck.some((a) => a.kind === 'cash') ? `${whole(sum(deck, 'cash'))} cash` : '', deck.some((a) => a.kind === 'card') ? `${whole(sum(deck, 'card'))} on cards` : ''].filter(Boolean).join(' · ')}
                   </Txt>
                 </View>
                 <View style={{ height: cardW / CARD_RATIO + (deck.length - 1) * PEEK }}>

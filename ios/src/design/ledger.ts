@@ -84,7 +84,7 @@ export function searchLine(page: Pick<TxnPage, 'total' | 'by_type'>, filter: Fil
   const parts = filter === 'Spending' ? [`${f(spent)} spent`]
     : filter === 'Money in' ? [`${f(earned)} in`]
       : filter === 'Transfer' ? [`${f(moved)} moved`]
-        : [spent ? `${f(spent)} spent` : '', earned ? `${f(earned)} in` : '', !spent && !earned && moved ? `${f(moved)} moved` : '']
+        : [spent ? `${f(spent)} spent` : '', earned ? `${f(earned)} in` : '', moved ? `${f(moved)} moved` : '']
   return [n, ...parts.filter(Boolean)].join(' · ')
 }
 
