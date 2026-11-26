@@ -128,8 +128,9 @@ def _reach_back(b, con) -> None:
     row = con.execute("SELECT value FROM settings WHERE key='bank_history'").fetchone()
     if not row or row[0] != "all":
         return
-    first = b.execute("SELECT MIN(t.date) FROM txns t JOIN accounts a ON a.id=t.account_id WHERE a.anchor=1 "
-                      "AND t.pending=0").fetchone()[0]
+    # By the day an entry would carry (authorized, else posted), so the oldest row's entry is never before the start.
+    first = b.execute("SELECT MIN(COALESCE(t.authorized_date, t.date)) FROM txns t JOIN accounts a ON a.id=t.account_id"
+                      " WHERE a.anchor=1 AND t.pending=0").fetchone()[0]
     start = con.execute("SELECT value FROM settings WHERE key='start_month'").fetchone()[0]
     if first and month_of(date.fromisoformat(first)).isoformat() < start:
         db.set_setting(con, "start_month", month_of(date.fromisoformat(first)).isoformat())

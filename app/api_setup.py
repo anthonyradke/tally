@@ -112,8 +112,9 @@ def _finish(b, con, raw: dict) -> dict:
     synced = [a["id"] for a, _ in chosen if KIND[a["type"]] in bank.SYNCED_KINDS]
     first = None
     if history == "all" and synced:
-        first = b.execute(f"SELECT MIN(date) FROM txns WHERE pending=0 AND account_id IN ({','.join('?' * len(synced))})",
-                          synced).fetchone()[0]
+        # The day each row's entry would carry: one authorized the day before the oldest posting still fits.
+        first = b.execute("SELECT MIN(COALESCE(authorized_date, date)) FROM txns WHERE pending=0 AND account_id IN "
+                          f"({','.join('?' * len(synced))})", synced).fetchone()[0]
     start = month_of(date.fromisoformat(first)) if first else today.replace(day=1)
     db.set_setting(con, "start_month", start.isoformat())
 

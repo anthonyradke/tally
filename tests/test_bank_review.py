@@ -524,6 +524,17 @@ def test_accept_sure_adds_what_it_can_and_settles(client, world, fake, monkeypat
     assert [b["raw"] for b in client.get("/api/bank/inbox").json()] == ["BLUE BOTTLE 4"]
 
 
+def test_a_row_authorized_before_its_posting_month_is_inside_the_ledger(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    r = prow("edge", "acc-card", 40.00, "2026-08-01", "SHELL OIL 5544", "Shell", "TRANSPORTATION_GAS", "VERY_HIGH")
+    r["authorized_date"] = "2026-07-31"
+    fake.push(added=[r])
+    client.post("/api/bank/sandbox/connect")
+    done = setup_all(client)
+    assert done["start"] == "2026-07-01" and done["added"] == 1
+    assert [(t["what"], t["date"]) for t in entries(client)] == [("Shell", "2026-07-31")]
+
+
 def test_automap_needs_more_than_a_kind_word(client, fake, monkeypatch):
     """"Chase Checking" isn't the Test Bank's checking, nor "Amex CC" its card; "Test Card" and "Checking 1111" are."""
     freeze(monkeypatch, date(2026, 9, 30))
