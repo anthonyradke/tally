@@ -22,12 +22,13 @@ import { Txt } from '@/design/ui/Txt'
 import { TxnRow } from '@/design/ui/TxnRow'
 import { WeekChart, type Day } from '@/design/ui/WeekChart'
 
+// Settings where iOS keeps an account button, beside the +. Buttons sit directly in the toolbar: anything wrapped is
+// dropped in Release builds.
 const HEADER = (
-  <>
-    <Stack.Toolbar placement="right">
-      <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add a transaction" onPress={() => router.push('/add')} />
-    </Stack.Toolbar>
-  </>
+  <Stack.Toolbar placement="right">
+    <Stack.Toolbar.Button icon="gearshape" accessibilityLabel="Settings" onPress={() => router.push('/settings')} />
+    <Stack.Toolbar.Button icon="plus" accessibilityLabel="Add a transaction" onPress={() => router.push('/add')} />
+  </Stack.Toolbar>
 )
 
 const monthName = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'long' })

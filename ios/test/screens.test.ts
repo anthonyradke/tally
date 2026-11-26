@@ -23,6 +23,15 @@ test('toolbar items are direct children of Stack.Toolbar', () => {
   assert.deepEqual(bad, [])
 })
 
+test('Summary and Accounts open Settings from a button straight in their header toolbar', () => {
+  for (const name of ['index.tsx', 'accounts.tsx']) {
+    const text = readFileSync(join(src, 'app/(tabs)/(home,activity,insights,accounts)', name), 'utf8')
+    const header = /const HEADER = \(\s*<Stack\.Toolbar placement="right">([\s\S]*?)<\/Stack\.Toolbar>\s*\)/.exec(text)
+    assert.ok(header, `${name}: HEADER is a Stack.Toolbar itself, not one wrapped in something`)
+    assert.match(header[1], /<Stack\.Toolbar\.Button icon="gearshape"[^\n]*router\.push\('\/settings'\)/, name)
+  }
+})
+
 test('no leftovers of the retired web app', () => {
   const hits = files(src).filter((f) => /\bweb\/|\/static\/|pwa|service ?worker/i.test(readFileSync(f, 'utf8')))
   assert.deepEqual(hits.map((f) => f.slice(src.length)), [])

@@ -23,11 +23,9 @@ import { CARD_RATIO, useCardFaces, WalletCard } from '@/design/ui/WalletCard'
 const LISTED: Kind[] = ['investment', 'loan']
 const PEEK = 62 // how much of each card shows above the next, as in Wallet
 const HEADER = (
-  <>
-    <Stack.Toolbar placement="right">
-      <Stack.Toolbar.Button icon="gearshape" accessibilityLabel="Settings" onPress={() => router.push('/settings')} />
-    </Stack.Toolbar>
-  </>
+  <Stack.Toolbar placement="right">
+    <Stack.Toolbar.Button icon="gearshape" accessibilityLabel="Settings" onPress={() => router.push('/settings')} />
+  </Stack.Toolbar>
 )
 const longMonth = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 const whole = (c: number) => formatCents(c, { cents: false })
