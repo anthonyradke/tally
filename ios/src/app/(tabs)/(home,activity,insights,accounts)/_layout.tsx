@@ -1,5 +1,5 @@
-// One stack per tab with large titles that collapse into the glass bar as you scroll. An entry or an account opens
-// inside the tab you're in.
+// One stack per tab with large titles that collapse into the glass bar as you scroll. An entry, an account, a category
+// or a receipt opens inside the tab you're in.
 import { Stack, useRoute } from 'expo-router'
 import { usePalette } from '@/design/theme'
 
@@ -36,6 +36,7 @@ export default function NextTabStack() {
       <Stack.Screen name="category/[id]" options={{ title: '', headerLargeTitle: false }} />
       <Stack.Screen name="txn/[id]" options={{ title: '', headerLargeTitle: false }} />
       <Stack.Screen name="account/[id]" options={{ title: '', headerLargeTitle: false }} />
+      <Stack.Screen name="receipt/[name]" options={{ title: 'Receipt', headerLargeTitle: false }} />
     </Stack>
   )
 }
