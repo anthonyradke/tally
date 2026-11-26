@@ -67,7 +67,8 @@ export default function Insights() {
   const head = picked !== null
     ? { label: 'Total', figure: bars[picked]?.value ?? 0, sub: pickedDay ? `${monthName(month).split(' ')[0]} ${day(pickedDay)}` : monthName(win.months[picked]) }
     : range === 'M' ? { label: 'Total', figure: total, sub: rangeLabel(win.months, range) }
-      : { label: 'Average', figure: Math.round(average ?? 0), sub: rangeLabel(win.months, range) }
+      // Named by the months it averages (whole ones), not the whole window, which can include ones still to come.
+      : { label: 'Average', figure: Math.round(average ?? 0), sub: span.length === 1 ? monthName(span[0]) : span.length ? rangeLabel(span, '6M') : rangeLabel(win.months, range) }
 
   // The categories read the picked day or month, else the whole period. Changes compare its full months with as
   // many full months just before, inside the ledger; a day or a month still going has nothing to compare.
