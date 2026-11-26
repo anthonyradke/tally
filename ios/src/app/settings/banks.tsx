@@ -7,18 +7,18 @@ import { api, type BankAccount, type BankItem } from '@/lib/api'
 import { linkBanks, openPlaidLink, refreshBank, useBank } from '@/lib/bank'
 import { formatCents } from '@/lib/money'
 import { useBusy } from '@/design/busy'
-import { checkSummary, kindsFor, why } from '@/design/checkin'
+import { checkSummary, why } from '@/design/checkin'
 import { failure, success, warning } from '@/design/haptics'
 import { useLedger } from '@/design/ledger'
 import { space, usePalette } from '@/design/theme'
 import { Button } from '@/design/ui/Button'
-import { Empty, Row, Section } from '@/design/ui/List'
+import { Empty, Row, Section, Tile } from '@/design/ui/List'
 import { Logo } from '@/design/ui/Logo'
-import { Choice } from '@/design/ui/native/Choice'
 import { notify } from '@/design/ui/Notice'
+import { Press } from '@/design/ui/Press'
+import { SF } from '@/design/ui/SF'
 import { Txt } from '@/design/ui/Txt'
 
-const NONE = -1
 const oops = { symbol: 'exclamationmark.triangle.fill', hue: 'orange' } as const
 const ago = (iso: string | null) => {
   if (!iso) return 'Not checked yet'
@@ -26,29 +26,38 @@ const ago = (iso: string | null) => {
   return m < 2 ? 'Updated just now' : m < 90 ? `Updated ${Math.round(m)} min ago` : m < 2880 ? `Updated ${Math.round(m / 60)} hr ago` : `Updated ${Math.round(m / 1440)} days ago`
 }
 
-/** One bank account and which Tally account it is. Only Tally accounts of a fitting kind are offered (a checking
- *  account mapped to a card flips every sign); one nobody has answered yet shows "Choose", not "Not Tracked". */
-function Mapping({ a, taken, asked }: { a: BankAccount; taken: Set<number>; asked: boolean }) {
+/** One bank account on two lines, so neither its own name nor the Tally account it feeds is ever squeezed out: name,
+ *  last four and balance on top, the Tally account under them (or "Choose an Account" while nobody has answered).
+ *  Tapping it opens the list to choose from (bank-account/[id]), as Settings does with a value too long for its row. */
+function Mapping({ a, asked }: { a: BankAccount; asked: boolean }) {
   const L = useLedger()
   const p = usePalette()
-  const busy = useBusy()
   const mine = a.tally_account_id != null ? L.acct.get(a.tally_account_id) : undefined
-  const kinds = kindsFor(a.type, a.subtype)
-  const options: [number, string][] = [...(L.b?.accounts ?? [])
-    .filter((x) => x.id === mine?.id || (x.active && (!kinds.length || kinds.includes(x.kind)) && !taken.has(x.id)))
-    .map((x) => [x.id, x.name] as [number, string]), [NONE, 'Not Tracked']]
-  const place = (v: number) => busy.run(async () => {
-    try { await api.bank.mapAccount(a.id, v === NONE ? null : v); success(); await refreshBank() }
-    catch (e) { failure(); notify({ text: why(e, "Couldn't change it"), ...oops }) }
-  })
+  const into = mine ? mine.name : asked ? 'Choose an Account' : 'Not Tracked'
+  const balance = a.current != null ? formatCents(a.current) : ''
   return (
-    <Row leading={<View style={{ width: 36 }} />} title={`${a.name}${a.mask ? ` ••${a.mask}` : ''}`}
-      subtitle={a.current != null ? formatCents(a.current) : undefined}
-      trailing={busy.on ? <ActivityIndicator color={p.label2} /> : <Choice options={options} value={mine ? mine.id : asked ? null : NONE} onChange={place} none="Choose" />} />
+    <Press feel="highlight" haptic={false} onPress={() => router.push({ pathname: '/settings/bank-account/[id]', params: { id: String(a.id) } })}
+      accessibilityLabel={[a.name, a.mask ? `ending ${a.mask}` : '', balance, mine ? `in Tally as ${mine.name}` : into].filter(Boolean).join(', ')}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingLeft: 64, paddingRight: space.l, paddingVertical: 10, minHeight: 64 }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.s }}>
+            <Txt v="body" numberOfLines={1} style={{ flexShrink: 1 }}>{a.name}</Txt>
+            {a.mask ? <Txt v="body" tone="label2" num style={{ flexShrink: 0 }}>••{a.mask}</Txt> : null}
+            <View style={{ flexGrow: 1 }} />
+            {balance ? <Txt v="body" tone="label2" num style={{ flexShrink: 0 }}>{balance}</Txt> : null}
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <SF name="arrow.turn.down.right" size={12} color={p.label3} weight="semibold" />
+            <Txt v="subhead" color={mine ? p.label2 : asked ? p.tint : p.label3} numberOfLines={1} style={{ flexShrink: 1 }}>{into}</Txt>
+          </View>
+        </View>
+        <SF name="chevron.right" size={13} color={p.label3} weight="semibold" />
+      </View>
+    </Press>
   )
 }
 
-function Bank({ it, taken, asked }: { it: BankItem; taken: Set<number>; asked: Set<number> }) {
+function Bank({ it, asked }: { it: BankItem; asked: Set<number> }) {
   const repairing = useBusy()
   const name = it.institution ?? 'This Bank'
   const repair = () => repairing.run(async () => {
@@ -80,7 +89,7 @@ function Bank({ it, taken, asked }: { it: BankItem; taken: Set<number>; asked: S
     <Section inset={64} footer={it.error ? 'Sign in again to keep this bank up to date.' : ago(it.synced_at)}>
       <Row leading={<Logo item={it.id} name={it.institution ?? undefined} letter size={36} />} title={it.institution ?? 'Bank'}
         subtitle={`${it.accounts.length} ${it.accounts.length === 1 ? 'account' : 'accounts'}`} />
-      {it.accounts.map((a) => <Mapping key={a.id} a={a} taken={taken} asked={asked.has(a.id)} />)}
+      {it.accounts.map((a) => <Mapping key={a.id} a={a} asked={asked.has(a.id)} />)}
       {it.error ? <Row title={repairing.on ? 'Signing In…' : 'Sign In Again'} tint onPress={repair} disabled={repairing.on} /> : null}
       <Row title="Disconnect" destructive onPress={disconnect} />
     </Section>
@@ -93,7 +102,6 @@ export default function Banks() {
   const [busy, setBusy] = useState<string | null>(null)
   const guard = useBusy()
   const s = q.data
-  const taken = new Set((s?.items ?? []).flatMap((i) => i.accounts.map((a) => a.tally_account_id)).filter((x): x is number => x != null))
   const asked = new Set((s?.ask ?? []).map((a) => a.id))
   const run = (label: string, fn: () => Promise<void>) => guard.run(async () => {
     setBusy(label)
@@ -128,12 +136,20 @@ export default function Banks() {
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: p.bg }} contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 60 }}>
       {s.env === 'sandbox' && <Txt v="footnote" tone="orange" center>Plaid sandbox: test banks with made-up transactions.</Txt>}
-      {s.items.map((it) => <Bank key={it.id} it={it} taken={taken} asked={asked} />)}
-      <View style={{ gap: space.m }}>
-        <Button label="Add a Bank" symbol="plus" onPress={connect} busy={busy === 'Connect'} />
-        {s.env === 'sandbox' && <Button label="Add a Test Bank" kind="tinted" onPress={() => run('Test', async () => { await api.bank.sandbox(); success(); await refreshBank() })} busy={busy === 'Test'} />}
-        <Button label="Check Now" kind="plain" onPress={sync} busy={busy === 'Check'} />
-      </View>
+      {/* First on the page, so it's found without scrolling past every bank. */}
+      <Section inset={62}>
+        <Row leading={<Tile symbol="plus" color={p.tint} size={30} />} title={busy === 'Connect' ? 'Connecting…' : 'Add a Bank'} tint
+          onPress={connect} />
+        {s.env === 'sandbox' && (
+          <Row leading={<Tile symbol="testtube.2" color={p.orange} size={30} />} title={busy === 'Test' ? 'Adding…' : 'Add a Test Bank'} tint
+            onPress={() => run('Test', async () => { await api.bank.sandbox(); success(); await refreshBank() })} />
+        )}
+        {s.items.length > 0 && (
+          <Row leading={<Tile symbol="arrow.clockwise" color={p.blue} size={30} />} title={busy === 'Check' ? 'Checking…' : 'Check Now'} tint
+            onPress={sync} />
+        )}
+      </Section>
+      {s.items.map((it) => <Bank key={it.id} it={it} asked={asked} />)}
     </ScrollView>
   )
 }
