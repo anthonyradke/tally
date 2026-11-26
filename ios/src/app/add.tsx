@@ -2,14 +2,13 @@
 // usual category and account with it; the date sits under the amount. One button saves; offline, it waits on the
 // phone and goes to Tally later.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, ScrollView, TextInput, View } from 'react-native'
+import { ActivityIndicator, ScrollView, TextInput, useWindowDimensions, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useQuery } from '@tanstack/react-query'
 import { api, ApiError, locked, unreachable, type Txn, type TxnInput } from '@/lib/api'
 import { refreshBank } from '@/lib/bank'
-import { cachedTxn, useTransactions } from '@/lib/data'
+import { useTransactions, useTxn } from '@/lib/data'
 import { enqueue, newClientId, send } from '@/lib/outbox'
 import { close, useBusy, useCloseHere } from '@/design/busy'
 import { accountChoices, addedText, categoryChoices, entryOf, fromKinds, loadedAmount, modeOf, needsTo, offered, ready as isReady,
@@ -36,8 +35,7 @@ const NONE = -1
 export default function Add() {
   const { id } = useLocalSearchParams<{ id?: string }>()
   const editing = id ? Number(id) : null
-  const old = useQuery({ queryKey: ['transactions', 'one', editing], queryFn: () => api.transaction(editing!), enabled: editing !== null,
-    initialData: () => (editing !== null ? cachedTxn(editing) : undefined) })
+  const old = useTxn(editing)
   const L = useLedger()
   if (editing !== null && (!old.data || !L.b)) {
     const gone = old.error instanceof ApiError && old.error.status === 404
@@ -83,6 +81,7 @@ function useSettled<T>(value: T, ms: number): [T, (v: T) => void] {
 
 /** The form itself, starting from `t` when editing it. */
 function Composer({ t }: { t?: Txn }) {
+  const { width } = useWindowDimensions()
   const p = usePalette()
   const insets = useSafeAreaInsets()
   const L = useLedger()
@@ -212,7 +211,7 @@ function Composer({ t }: { t?: Txn }) {
         <Animated.View style={[{ alignItems: 'center', paddingVertical: space.m, gap: space.s }, shakeStyle]}>
           <View style={{ minHeight: 76, justifyContent: 'center' }}>
             {/* A refund reads like it does in the lists: green with a +. A negative correction keeps its −. */}
-            <NumericText typing text={refund ? '+' + typed : neg ? '−' + typed : typed} down={false}
+            <NumericText typing text={refund ? '+' + typed : neg ? '−' + typed : typed} down={false} maxWidth={width - space.l * 2}
               style={{ fontSize: amount.length > 7 ? 52 : 64, lineHeight: 76, fontWeight: '600', fontFamily: 'ui-rounded', letterSpacing: -1,
                 color: amount ? (refund ? p.tint : p.label) : p.label3, fontVariant: ['tabular-nums'] }} />
           </View>

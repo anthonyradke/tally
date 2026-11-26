@@ -5,9 +5,8 @@ import { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { Image } from 'expo-image'
-import { useQuery } from '@tanstack/react-query'
 import { api, ApiError, type Account } from '@/lib/api'
-import { cachedTxn, useTransactions } from '@/lib/data'
+import { useTransactions, useTxn } from '@/lib/data'
 import { fromISO } from '@/lib/dates'
 import { formatCents } from '@/lib/money'
 import { authHeaders } from '@/lib/server'
@@ -32,7 +31,7 @@ export default function TxnPage() {
   const p = usePalette()
   const L = useLedger()
   const [found, setFound] = useState(false)
-  const q = useQuery({ queryKey: ['transactions', 'one', tid], queryFn: () => api.transaction(tid), initialData: () => cachedTxn(tid) })
+  const q = useTxn(tid)
   const t = q.data
   const c = t ? L.cat.get(t.category_id) : undefined
   const type = c?.type
