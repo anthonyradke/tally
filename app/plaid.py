@@ -185,6 +185,12 @@ def sync(access_token: str, cursor: str | None) -> dict:
     return call("/transactions/sync", body)
 
 
+def refresh(access_token: str) -> None:
+    """Ask Plaid to check the bank for new transactions now instead of on its own schedule (1-4 times a day). It
+    answers at once; what the bank has arrives later through the webhook (SYNC_UPDATES_AVAILABLE)."""
+    call("/transactions/refresh", {"access_token": access_token}, timeout=15)
+
+
 def remove(access_token: str) -> None:
     call("/item/remove", {"access_token": access_token})
 

@@ -24,6 +24,7 @@ import re
 import sqlite3
 import threading
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
@@ -72,7 +73,9 @@ MIGRATIONS = (("accounts", "since", "TEXT"), ("accounts", "skip", "INTEGER NOT N
               # 2026-11-25: a paired row the bank changed (amount or date), as it was, until `follow` has looked
               ("txns", "was_amount", "INTEGER"), ("txns", "was_day", "TEXT"),
               # when a sync of the connection was last tried, worked or not (fresh())
-              ("items", "tried_at", "TEXT"))
+              ("items", "tried_at", "TEXT"),
+              # when Plaid was last asked to check the bank now (refresh())
+              ("items", "refreshed_at", "TEXT"))
 # Plaid's warnings that a connection will stop working soon: they stay until it's repaired, not just until the next
 # sync that still works.
 WARNINGS = ("PENDING_EXPIRATION", "PENDING_DISCONNECT")
@@ -348,6 +351,65 @@ def sync_all(bcon) -> dict:
             bcon.execute("UPDATE items SET error='SYNC_FAILED' WHERE id=?", (it["id"],))
             bcon.commit()
             out[it["id"]] = {"error": "SYNC_FAILED", "message": "Syncing this bank failed; it will be tried again."}
+    return out
+
+
+# ---------- asking Plaid to check the banks now ----------
+# Plaid checks a bank only 1-4 times a day by itself. /transactions/refresh asks it to check now; the news then comes
+# through the webhook like any other. Each bank is asked at most once per REFRESH_PULL from a pull to refresh (and
+# the schedule), once per REFRESH_OPEN from opening the app.
+REFRESH_PULL = 600
+REFRESH_OPEN = 3600
+REFRESH_PAUSE = 86400  # after PRODUCT_NOT_ENABLED: the plan doesn't include refresh, so stop asking for a day
+
+
+def refresh_paused(bcon) -> bool:
+    since = get_meta(bcon, "refresh_paused")
+    cut = (datetime.now(timezone.utc) - timedelta(seconds=REFRESH_PAUSE)).isoformat(timespec="seconds")
+    return bool(since and since > cut)
+
+
+def claim_refresh(bcon, min_age: int, skip_errors: bool = False) -> list[tuple[int, str]]:
+    """The connections not asked to refresh within `min_age` seconds, as (id, access token), marked as asked now so
+    a second caller doesn't ask again. `skip_errors`: leave out connections in error (a warning that one will expire
+    soon isn't one; it still works)."""
+    if refresh_paused(bcon):
+        return []
+    cut = (datetime.now(timezone.utc) - timedelta(seconds=min_age)).isoformat(timespec="seconds")
+    with settling:
+        rows = bcon.execute("SELECT id, access_token, error, refreshed_at FROM items ORDER BY id").fetchall()
+        due = [(r["id"], r["access_token"]) for r in rows if (r["refreshed_at"] or "") < cut
+               and not (skip_errors and r["error"] and r["error"] not in WARNINGS)]
+        now = _now()
+        bcon.executemany("UPDATE items SET refreshed_at=? WHERE id=?", [(now, iid) for iid, _ in due])
+        bcon.commit()
+    return due
+
+
+def refresh(bcon, items: list[tuple[int, str]]) -> dict[int, str]:
+    """Ask Plaid to check these connections' banks now, several at once. Returns "ok" or Plaid's error code per
+    connection. Never raises: a refusal (a bank that needs signing in again, a rate limit, a plan without refresh)
+    is logged and the sync goes on as before."""
+    if not items:
+        return {}
+
+    def one(it: tuple[int, str]) -> tuple[int, str]:
+        iid, token = it
+        try:
+            plaid.refresh(token)
+            return iid, "ok"
+        except plaid.PlaidError as e:
+            log.warning("refresh of bank connection %s refused: %s", iid, e.code)
+            return iid, e.code
+        except Exception:  # noqa: BLE001 - a refresh is a bonus; nothing here may break a sync
+            log.exception("refresh of bank connection %s failed", iid)
+            return iid, "FAILED"
+
+    with ThreadPoolExecutor(max_workers=min(4, len(items)), thread_name_prefix="tally-refresh") as ex:
+        out = dict(ex.map(one, items))
+    if "PRODUCT_NOT_ENABLED" in out.values():
+        with settling:
+            set_meta(bcon, "refresh_paused", _now())
     return out
 
 
