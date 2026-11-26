@@ -21,6 +21,7 @@ export default function SettingsStack() {
       <Stack.Screen name="server" options={{ title: 'Server' }} />
       <Stack.Screen name="icon" options={{ title: 'App Icon' }} />
       <Stack.Screen name="banks" options={{ title: 'Banks' }} />
+      <Stack.Screen name="outbox" options={{ title: 'Waiting to Send' }} />
     </Stack>
   )
 }
