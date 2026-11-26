@@ -8,7 +8,7 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## Unreleased
+## 4.5.0 (2026-11-26)
 Added
 - Accounts has a ticker under net worth, like a stock ticker: net worth and each account slide by on one line with
   a short symbol, the balance and how much it moved this month, green when that's good news and red when it isn't
