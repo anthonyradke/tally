@@ -24,6 +24,10 @@ anything below get written here first.
   today (what earlier months had spent by the same day, so rent on the 1st is in both). Outer ahead of inner means
   spending faster than usual; the outer ring turns orange, then red past a full lap. With no earlier month, the
   inner ring is the share of the month gone.
+- **This month against last** on Summary, under the rings, after Stocks: this month's spending added up day by day
+  as a tint line ending on today's dot, last month's in gray behind it. Press and hold to read a day; the figure
+  and its one line ("$170 less than last month by the 12th") follow the finger with a tick a day. It's the first of
+  a row of pages (the week is the second) with page dots under them; the last page looked at stays.
 - **Wallet** on Accounts: cards and bank accounts stacked as cards in their banks' colors, the account name and
   last four digits on the face, or a picture of the real card. A card zooms open into its page (iOS 18 zoom).
 - **Trends** on Insights, after Health: a grid with its scale on the right, a dashed average, bars that dim
@@ -41,4 +45,5 @@ a drawn checkmark. Haptics mark taps (light), commits (success) and refusals (th
 ## Gestures
 - Rows swipe like Mail: left to delete; in the check-in, right to add and left to skip.
 - Press and hold an entry for a preview and a menu.
+- Charts that page read on press and hold (as Health's do); a quick swipe pages.
 - Holding delete on the keypad keeps deleting, faster the longer it's held.

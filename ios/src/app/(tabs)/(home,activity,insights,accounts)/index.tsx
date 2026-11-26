@@ -1,5 +1,5 @@
-// Summary: what this month has cost so far against a usual month, the week day by day, what just happened, and
-// anything from the bank.
+// Summary: what this month has cost so far against a usual month, then pages of charts (this month against last
+// month day by day, the week day by day), what just happened, and anything from the bank.
 import { useMemo, useState } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native'
 import { router, Stack } from 'expo-router'
@@ -13,10 +13,12 @@ import { useRefresh } from '@/design/feed'
 import { useLedger } from '@/design/ledger'
 import { categoryLook } from '@/design/look'
 import { space, usePalette } from '@/design/theme'
-import { addMonths, complete, pace, usualBy, weekDays } from '@/design/trends'
+import { addMonths, complete, monthCompare, pace, usualBy, weekDays } from '@/design/trends'
 import { Card, Empty, Row, Section, Tile } from '@/design/ui/List'
 import { loadGate } from '@/design/ui/LoadState'
-import { Money, Rolling } from '@/design/ui/Money'
+import { Rolling } from '@/design/ui/Money'
+import { MonthCompareChart } from '@/design/ui/MonthCompareChart'
+import { Pager } from '@/design/ui/Pager'
 import { Rings } from '@/design/ui/Ring'
 import { Txt } from '@/design/ui/Txt'
 import { TxnRow } from '@/design/ui/TxnRow'
@@ -33,6 +35,9 @@ const HEADER = (
 
 const monthName = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'long' })
 const weekday = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { weekday: 'long' })
+const monthDay = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+/** "Nov 22 – 28", or "Nov 29 – Dec 5" across a month's end. */
+const span = (a: string, z: string) => (a.slice(0, 7) === z.slice(0, 7) ? `${monthDay(a)} – ${Number(z.slice(8))}` : `${monthDay(a)} – ${monthDay(z)}`)
 const whole = (c: number) => formatCents(c, { cents: false })
 
 export default function Summary() {
@@ -58,9 +63,13 @@ export default function Summary() {
   }, [week.data, start, L.today, L.cat, p])
   const weekTotal = days.reduce((n, d) => n + d.total, 0)
 
+  // This month against last month, added up day by day: the posted spending of both, refunds netted out.
+  const ym = monthOf(L.today)
+  const two = useTransactions({ type: 'Spending', start: addMonths(ym, -1), end: L.today, limit: 5000 }, !!L.b)
+  const compare = useMemo(() => (two.data && L.b ? monthCompare(two.data.items, L.today, L.b.start) : null), [two.data, L.today, L.b])
+
   // The rings: this month against what earlier months had spent by the same day, and in all (up to three full
   // months before this one). Rent on the 1st is in both, so the start of a month doesn't read as running ahead.
-  const ym = monthOf(L.today)
   const earlier = useMemo(() => (L.b ? complete(L.b, [-3, -2, -1].map((n) => addMonths(ym, n)), L.today) : []), [L.b, ym, L.today])
   const history = useTransactions({ type: 'Spending', start: earlier[0], end: earlier.length ? lastOfMonth(earlier[earlier.length - 1]) : undefined, limit: 5000 }, earlier.length > 0)
   const ready = !earlier.length || !!history.data
@@ -107,15 +116,21 @@ export default function Summary() {
               </View>
             </Card>
 
-            <Section title="This Week">
-              <View style={{ padding: space.l, gap: space.l }}>
+            <Pager remember="tally.summaryPage" labels={['This Month', 'This Week']} pages={[
+              <Card key="month" pad style={{ flex: 1 }}>
+                <MonthCompareChart data={compare} spent={spent} />
+              </Card>,
+              <Card key="week" pad style={{ flex: 1, gap: space.l }}>
                 <View>
-                  <Txt v="subhead" tone="label2">{picked === null ? 'Total' : weekday(days[picked].date)}</Txt>
-                  <Money cents={picked === null ? weekTotal : days[picked].total} v="title2" weight="700" />
+                  <Txt v="subhead" tone="label2" weight="600">{picked === null ? 'This Week' : weekday(days[picked].date)}</Txt>
+                  <Rolling cents={picked === null ? weekTotal : days[picked].total} v="title1" />
+                  <Txt v="subhead" tone="label2" num>{picked === null ? span(start, addDays(start, 6)) : monthDay(days[picked].date)}</Txt>
                 </View>
-                <WeekChart days={days} picked={picked} onPick={setPicked} />
-              </View>
-            </Section>
+                <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+                  <WeekChart days={days} picked={picked} onPick={setPicked} height={170} />
+                </View>
+              </Card>,
+            ]} />
 
             <Section title="Latest" action={{ label: 'See All', onPress: () => router.navigate('/(tabs)/(activity)/activity') }} inset={70}>
               {(latest.data?.items ?? []).map((t) => <TxnRow key={t.id} t={t} showDate />)}
