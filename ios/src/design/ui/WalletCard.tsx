@@ -2,6 +2,7 @@
 // otherwise a face made for it in its bank's colors, with the bank's logo, the account's name and last four digits,
 // and its balance. Card proportions, continuous corners and a soft shadow, as Wallet draws them.
 import { View, type StyleProp, type ViewStyle } from 'react-native'
+import { BlurView } from 'expo-blur'
 import { Image } from 'expo-image'
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { useQuery } from '@tanstack/react-query'
@@ -64,9 +65,10 @@ export function WalletCard({ a, balance, width, style, compact, title }: {
   const id = `g${a.id}`
   return (
     // The shadow view has the card's color and shape, so iOS draws the shadow from its outline instead of rendering
-    // each card offscreen to find it.
-    <View style={[{ width, height, borderRadius: 16, borderCurve: 'continuous', backgroundColor: from, shadowColor: '#000', shadowOpacity: 0.22,
-      shadowRadius: 12, shadowOffset: { width: 0, height: 6 } }, style]}>
+    // each card offscreen to find it. Like Wallet, the shadow is a soft glow in the card's own color, which is what
+    // lifts a card off a black background (a black shadow there is invisible).
+    <View style={[{ width, height, borderRadius: 16, borderCurve: 'continuous', backgroundColor: from, shadowColor: color ?? from,
+      shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } }, style]}>
       <View style={{ flex: 1, borderRadius: 16, borderCurve: 'continuous', overflow: 'hidden' }}>
         {face?.art ? (
           <Image source={{ uri: api.receiptUrl(face.art), headers: authHeaders() }} cachePolicy="disk" contentFit="cover"
@@ -109,10 +111,13 @@ export function WalletCard({ a, balance, width, style, compact, title }: {
             )}
           </View>
         )}
+        {/* A picture of the real card keeps its printing clear: the balance sits where Wallet prints the last four
+            digits (bottom left, the same place on every card), on frosted glass. */}
         {face?.art && !compact && (
-          <View style={{ position: 'absolute', right: space.m, bottom: space.m, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: 'rgba(0,0,0,0.45)' }}>
+          <BlurView intensity={40} tint="dark" style={{ position: 'absolute', left: space.m, bottom: space.m, borderRadius: 12, overflow: 'hidden',
+            paddingHorizontal: 10, paddingVertical: 5, backgroundColor: 'rgba(0,0,0,0.25)' }}>
             <Txt v="subhead" weight="600" color="#FFFFFF" num>{formatCents(balance)}</Txt>
-          </View>
+          </BlurView>
         )}
         <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16, borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.18)' }} />
       </View>

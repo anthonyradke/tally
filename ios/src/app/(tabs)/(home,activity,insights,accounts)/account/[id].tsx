@@ -95,7 +95,7 @@ export default function AccountPage() {
           </View>
         )}
       </Card>
-      {a.kind === 'card' && (
+      {wallet && (
         <Section compact title="Card" footer={art ? undefined : 'Show a picture of the real card instead of the one Tally made.'}>
           <Row title={art ? 'Change Card Picture' : 'Choose Card Picture…'} tint onPress={pickArt} />
           {art ? <Row title="Remove Card Picture" destructive onPress={removeArt} /> : null}
