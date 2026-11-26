@@ -19,11 +19,19 @@ export const fadeOut = FadeOut.duration(160)
 
 /** A digit changing in place, like SwiftUI's numeric text: the new one comes in from below while the old one leaves
  *  toward the top (reversed when the number goes down), both fading. `h`: the line height. */
-export const digitIn = (down: boolean, h: number) => new Keyframe({
+// Built once per direction and height: a new Keyframe for every character on every render re-registered each one.
+const cache = new Map<string, unknown>()
+const once = <T,>(key: string, make: () => T): T => {
+  if (!cache.has(key)) cache.set(key, make())
+  return cache.get(key) as T
+}
+export const DIGIT_IN_MS = 300
+export const DIGIT_OUT_MS = 220
+export const digitIn = (down: boolean, h: number) => once(`in${down}${h}`, () => new Keyframe({
   0: { opacity: 0, transform: [{ translateY: (down ? -1 : 1) * h * 0.4 }] },
   100: { opacity: 1, transform: [{ translateY: 0 }], easing: EASE },
-}).duration(300)
-export const digitOut = (down: boolean, h: number) => new Keyframe({
+}).duration(DIGIT_IN_MS))
+export const digitOut = (down: boolean, h: number) => once(`out${down}${h}`, () => new Keyframe({
   0: { opacity: 1, transform: [{ translateY: 0 }] },
   100: { opacity: 0, transform: [{ translateY: (down ? 1 : -1) * h * 0.4 }], easing: EASE },
-}).duration(220)
+}).duration(DIGIT_OUT_MS))
