@@ -248,13 +248,17 @@ def disconnect(iid: int, b: Bank):
 
 @router.put("/accounts/{aid}")
 async def map_account(aid: int, request: Request, b: Bank, con: Con):
-    """Body: {"tally_account_id": id or null}: which ledger account this bank account is."""
+    """Body: {"tally_account_id": id or null}: which ledger account this bank account is (null: not tracked, don't
+    ask again). {"tally_account_id": null, "ask": true} puts it back among the accounts to ask about (the Undo of
+    "Not Tracked")."""
     raw = await body(request)
     target = opt_id(raw.get("tally_account_id"), "Account")
-    return await asyncio.to_thread(_map_account, b, con, aid, target)
+    if raw.get("ask") is not None and not isinstance(raw.get("ask"), bool):
+        bad("ask is true or false.")
+    return await asyncio.to_thread(_map_account, b, con, aid, target, raw.get("ask") is True)
 
 
-def _map_account(b, con, aid: int, target: Optional[int]) -> dict:
+def _map_account(b, con, aid: int, target: Optional[int], ask: bool = False) -> dict:
     st = service.load(con)
     if target is not None and target not in st.acct:
         bad("Unknown account.")
@@ -265,6 +269,8 @@ def _map_account(b, con, aid: int, target: Optional[int]) -> dict:
         raise HTTPException(404)
     with bank.settling:
         bank.assign(b, st, aid, target)
+        if ask and target is None:
+            b.execute("UPDATE accounts SET skip=0 WHERE id=?", (aid,))
         b.commit()
         return {"paired": bank.link(b, st)}
 
@@ -494,13 +500,17 @@ def _accept_sure(b, con) -> list:
 
 @router.post("/inbox/{bid}/pair")
 async def pair(bid: int, request: Request, b: Bank, con: Con):
-    """Body: {"txn_id": id}: this bank row is that entry, already in Tally."""
+    """Body: {"txn_id": id, "how"?: "manual" | "auto"}: this bank row is that entry, already in Tally. "auto" is for
+    putting back an entry Tally added by itself (the Undo of Remove), so it stays under Added Automatically."""
     raw = await body(request)
     tid = whole(raw.get("txn_id"), "Entry")
-    return await asyncio.to_thread(_pair, b, con, bid, tid)
+    how = raw.get("how") or "manual"
+    if how not in ("manual", "auto"):
+        bad("how is manual or auto.")
+    return await asyncio.to_thread(_pair, b, con, bid, tid, how)
 
 
-def _pair(b, con, bid: int, tid: int) -> dict:
+def _pair(b, con, bid: int, tid: int, how: str = "manual") -> dict:
     with bank.settling:
         r = _bank_row(b, bid)
         e = con.execute("SELECT * FROM transactions WHERE id=?", (tid,)).fetchone()
@@ -518,7 +528,7 @@ def _pair(b, con, bid: int, tid: int) -> dict:
         if any(mapped.get(o["account_id"]) == acct for o in b.execute(
                 "SELECT account_id FROM txns WHERE txn_id=? AND status='linked'", (tid,))):
             raise HTTPException(409, {"errors": ["Another bank line on this account is already that entry."]})
-        bank.decide(b, bid, tid, "manual")
+        bank.decide(b, bid, tid, how)
         b.commit()
     return {"ok": True}
 

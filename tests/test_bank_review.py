@@ -586,6 +586,39 @@ def test_a_broken_bank_isnt_asked_on_every_open(client, fake, monkeypatch):
     assert len(asked) == 1
 
 
+def test_not_tracked_can_be_undone(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    client.post("/api/bank/sandbox/connect")
+    card = next(a for a in client.get("/api/bank").json()["ask"] if a["name"] == "Card")["id"]
+    assert client.put(f"/api/bank/accounts/{card}", json={"tally_account_id": None}).status_code == 200
+    assert [a["name"] for a in client.get("/api/bank").json()["ask"]] == ["Checking"]
+    assert client.put(f"/api/bank/accounts/{card}", json={"tally_account_id": None, "ask": True}).status_code == 200
+    assert [a["name"] for a in client.get("/api/bank").json()["ask"]] == ["Checking", "Card"]
+    assert client.put(f"/api/bank/accounts/{card}", json={"tally_account_id": None, "ask": "yes"}).status_code == 422
+
+
+@pytest.mark.parametrize("look_first", [False, True])
+def test_undo_of_remove_keeps_it_added_automatically(client, fake, monkeypatch, look_first):
+    """The check-in's Undo of Remove: restore the entry, reset the row, pair it back as Tally's own."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    fake.push(added=[_shell(40.00)])
+    client.post("/api/bank/sandbox/connect")
+    setup_all(client)
+    added = client.get("/api/bank/recent").json()
+    assert [x["what"] for x in added] == ["Shell"]
+    gone = client.delete(f"/api/transactions/{added[0]['txn_id']}").json()
+    client.get("/api/bank/inbox")  # the row is set aside
+    _restore(client, gone)
+    if look_first:
+        client.get("/api/bank/inbox")  # the entry is back: so is the row, already
+    assert client.post(f"/api/bank/txns/{added[0]['id']}/reset").status_code == 200
+    r = client.post(f"/api/bank/inbox/{added[0]['id']}/pair", json={"txn_id": gone["id"], "how": "auto"})
+    assert r.status_code == 200, r.text
+    assert [x["txn_id"] for x in client.get("/api/bank/recent").json()] == [gone["id"]]
+    assert client.get("/api/bank/inbox").json() == []
+    assert client.post(f"/api/bank/inbox/{added[0]['id']}/pair", json={"txn_id": 1, "how": "x"}).status_code == 422
+
+
 def test_automap_needs_more_than_a_kind_word(client, fake, monkeypatch):
     """"Chase Checking" isn't the Test Bank's checking, nor "Amex CC" its card; "Test Card" and "Checking 1111" are."""
     freeze(monkeypatch, date(2026, 9, 30))
