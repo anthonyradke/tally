@@ -4,6 +4,7 @@ export const selectionAsync = noop, notificationAsync = noop, impactAsync = noop
 export const NotificationFeedbackType = {}, ImpactFeedbackStyle = {}
 export const router = { push: noop, back: noop, replace: noop, canGoBack: () => false }
 export const Platform = { OS: 'ios' }
-export const AppState = { addEventListener: () => ({ remove() {} }) }
+export const AccessibilityInfo = { announceForAccessibility() {} }
+export const AppState ={ addEventListener: () => ({ remove() {} }) }
 export const useFocusEffect = () => {}, useRoute = () => ({ key: 'screen' }), useColorScheme = () => 'light'
 export default {}

@@ -16,6 +16,7 @@ import { keepOnPhone, queryClient } from '@/lib/data'
 import { watchCover } from '@/lib/lock'
 import { flush, loadOutbox } from '@/lib/outbox'
 import { loadServer, useServer } from '@/lib/server'
+import { loadLogoEpoch } from '@/design/actions'
 import { usePalette } from '@/design/theme'
 import { LockCover } from '@/design/ui/LockCover'
 import { NoticeHost } from '@/design/ui/Notice'
@@ -78,7 +79,7 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false)
   useEffect(() => {
     watchCover()
-    Promise.all([loadServer(), loadOutbox()]).finally(() => {
+    Promise.all([loadServer(), loadOutbox(), loadLogoEpoch()]).finally(() => {
       setReady(true)
       SplashScreen.hideAsync().catch(() => {})
     })

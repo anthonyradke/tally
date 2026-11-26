@@ -2,44 +2,20 @@
 // Island and lifts away after a few seconds, or when tapped. It floats in its own window above every sheet (add,
 // check-in, settings, welcome), the way LockCover does, so Undo and errors are never hidden under one.
 import { useEffect, useState, type ReactNode } from 'react'
-import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import Animated, { FadeOut, Keyframe } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FullWindowOverlay } from 'react-native-screens'
 import { BlurView } from 'expo-blur'
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect'
-import type { SFSymbol } from 'expo-symbols'
-import { create } from 'zustand'
-import { ApiError } from '@/lib/api'
-import { failure, tap } from '../haptics'
+import { tap } from '../haptics'
 import { EASE } from '../motion'
-import { space, usePalette, type Hue } from '../theme'
+import { clearNotice as clear, runAction, useNotice } from '../notify'
+import { space, usePalette } from '../theme'
 import { SF } from './SF'
 import { Txt } from './Txt'
 
-interface Note { id: number; text: string; symbol?: SFSymbol; hue?: Hue; action?: { label: string; run: () => unknown } }
-const useNotice = create<{ note: Note | null }>(() => ({ note: null }))
-let seq = 0
-
-export function notify(n: Omit<Note, 'id'>) {
-  useNotice.setState({ note: { ...n, id: ++seq } })
-  AccessibilityInfo.announceForAccessibility?.(n.action ? `${n.text}. ${n.action.label} available.` : n.text)
-}
-const clear = (id: number) => { if (useNotice.getState().note?.id === id) useNotice.setState({ note: null }) }
-
-/** Why an action failed, in words for a notice: the server's own reason when it gave one. */
-export const reasonOf = (e: unknown, fallback: string) =>
-  e instanceof ApiError && e.errors.length && e.status < 502 ? e.errors.join(' ') : fallback
-
-/** Runs a notice's action (Undo); if it fails, says so with the reason instead of failing quietly. */
-async function runAction(n: Note) {
-  try {
-    await n.action!.run()
-  } catch (e) {
-    failure()
-    notify({ text: reasonOf(e, `Couldn't ${n.action!.label.toLowerCase()}`), symbol: 'exclamationmark.triangle.fill', hue: 'orange' })
-  }
-}
+export { notify, reasonOf } from '../notify'
 
 const glass = process.env.EXPO_OS === 'ios' && isLiquidGlassAvailable()
 // In from just above with a slight scale, like the system's own banners; out as a quick fade.
