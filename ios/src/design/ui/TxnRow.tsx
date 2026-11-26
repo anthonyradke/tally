@@ -1,7 +1,7 @@
 // An entry in a list: the place's logo (or the category's symbol), its name, the category and account, and the
 // amount. Tap opens it; press and hold for a preview and a menu; swipe left to delete. In one account's list
 // (`account`), the amount reads like that account's statement and a move names the other side.
-import { useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Link, router } from 'expo-router'
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
@@ -19,7 +19,9 @@ import { Txt } from './Txt'
 
 const web = process.env.EXPO_OS === 'web'
 
-export function TxnRow({ t, showDate, showAccount = true, account }: { t: Txn; showDate?: boolean; showAccount?: boolean; account?: Account }) {
+// Memoized: a list re-rendering (a page arriving, a filter switching) leaves the rows whose entry didn't change alone;
+// the query cache keeps an unchanged entry the same object.
+export const TxnRow = memo(function TxnRow({ t, showDate, showAccount = true, account }: { t: Txn; showDate?: boolean; showAccount?: boolean; account?: Account }) {
   const p = usePalette()
   const L = useLedger()
   const [found, setFound] = useState(false)
@@ -91,4 +93,4 @@ export function TxnRow({ t, showDate, showAccount = true, account }: { t: Txn; s
       {row}
     </ReanimatedSwipeable>
   )
-}
+})
