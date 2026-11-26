@@ -215,9 +215,10 @@ export const api = {
    *  with the same number (a ledger set up again) is never shown for this one. */
   logoUrl: (q: { name?: string; account?: number; item?: number; tag?: string }) =>
     `${getServer()}/api/logo${q.item !== undefined ? `?item=${q.item}` : q.account !== undefined ? `?account=${q.account}` : `?name=${encodeURIComponent(q.name ?? '')}`}${q.tag && (q.item !== undefined || q.account !== undefined) ? `&t=${encodeURIComponent(q.tag)}` : ''}`,
-  /** A brand's color (#RRGGBB) from Plaid or from its logo; null when there isn't one. */
+  /** A brand's color (#RRGGBB) from Plaid or from its logo; null when there isn't one. `wash` (newer servers): whether
+   *  the color is worth a wash behind a page (not a black or gray logo's). */
   logoColor: (q: { name?: string; account?: number; item?: number }) =>
-    call<{ color: string | null }>('GET', `/logo/color${q.item !== undefined ? `?item=${q.item}` : q.account !== undefined ? `?account=${q.account}` : `?name=${encodeURIComponent(q.name ?? '')}`}`),
+    call<{ color: string | null; wash?: boolean }>('GET', `/logo/color${q.item !== undefined ? `?item=${q.item}` : q.account !== undefined ? `?account=${q.account}` : `?name=${encodeURIComponent(q.name ?? '')}`}`),
   /** Each account's card face: a picture of the real card if one was added, and from its bank the last four digits,
    *  the bank's name and its color. */
   cards: () => call<Record<string, CardFace>>('GET', '/cards'),
