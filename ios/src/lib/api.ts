@@ -213,8 +213,10 @@ export const api = {
    *  show a symbol instead. */
   /** `tag`: what the account or bank is called, added to the address so an image cached for an earlier account or bank
    *  with the same number (a ledger set up again) is never shown for this one. */
+  /** `lv`: bumped when the server changes which image a bank's logo is (lv=2: Plaid's own first), so the phone's disk
+   *  cache doesn't keep the old one. */
   logoUrl: (q: { name?: string; account?: number; item?: number; tag?: string }) =>
-    `${getServer()}/api/logo${q.item !== undefined ? `?item=${q.item}` : q.account !== undefined ? `?account=${q.account}` : `?name=${encodeURIComponent(q.name ?? '')}`}${q.tag && (q.item !== undefined || q.account !== undefined) ? `&t=${encodeURIComponent(q.tag)}` : ''}`,
+    `${getServer()}/api/logo${q.item !== undefined ? `?item=${q.item}` : q.account !== undefined ? `?account=${q.account}` : `?name=${encodeURIComponent(q.name ?? '')}`}${q.tag && (q.item !== undefined || q.account !== undefined) ? `&t=${encodeURIComponent(q.tag)}` : ''}${q.item !== undefined || q.account !== undefined ? '&lv=2' : ''}`,
   /** A brand's color (#RRGGBB) from Plaid or from its logo; null when there isn't one. `wash` (newer servers): whether
    *  the color is worth a wash behind a page (not a black or gray logo's). */
   logoColor: (q: { name?: string; account?: number; item?: number }) =>
