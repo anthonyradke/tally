@@ -276,17 +276,48 @@ def _map_account(b, con, aid: int, target: Optional[int], ask: bool = False) -> 
 def sync(b: Bank, con: Con, max_age: Optional[int] = None, repaired: Optional[int] = None):
     """`max_age` (seconds): skip asking the banks when every connection was checked more recently than that (the app
     asks on every open; the banks only change a few times a day). `repaired`: a connection the phone just signed in
-    again through update mode (Link finished, not cancelled): this sync clears its expiry warning."""
+    again through update mode (Link finished, not cancelled): this sync clears its expiry warning.
+
+    Plaid is also asked to check the banks themselves now (bank.refresh); what they have arrives minutes later
+    through the webhook. A pull to refresh (no `max_age`) asks every bank not asked in the last 10 minutes before it
+    syncs; opening the app asks those not asked within the hour, without waiting for the answer. `refreshing` is how
+    many banks were asked."""
     if repaired is not None:
         if not b.execute("SELECT 1 FROM items WHERE id=?", (repaired,)).fetchone():
             raise HTTPException(404)
         with bank.settling:
             bank.set_meta(b, f"repair:{repaired}", bank._now())
-        return _refresh(b, con, [repaired])
-    if max_age is not None and bank.fresh(b, max_age):
+        return {**_refresh(b, con, [repaired]), "refreshing": 0}
+    if max_age is None:
+        asked = bank.claim_refresh(b, bank.REFRESH_PULL)
+        bank.refresh(b, asked)
+        return {**_refresh(b, con), "refreshing": len(asked)}
+    asked = bank.claim_refresh(b, bank.REFRESH_OPEN, skip_errors=True)
+    refresh_later(asked)
+    if bank.fresh(b, max_age):
         with bank.settling:
-            return {"synced": {}, "paired": bank.link(b, service.load(con))}
-    return _refresh(b, con)
+            return {"synced": {}, "paired": bank.link(b, service.load(con)), "refreshing": len(asked)}
+    return {**_refresh(b, con), "refreshing": len(asked)}
+
+
+def refresh_later(items: list[tuple[int, str]]) -> Optional[threading.Thread]:
+    """bank.refresh on its own thread and database connection, so the caller doesn't wait for Plaid."""
+    if not items:
+        return None
+    path = os.environ.get("TALLY_BANK_DB")  # the request's database, even if the setting changes meanwhile
+
+    def run():
+        try:
+            b = bank.connect(path)
+            try:
+                bank.refresh(b, items)
+            finally:
+                b.close()
+        except Exception:  # noqa: BLE001
+            log.exception("bank refresh failed")
+    t = threading.Thread(target=run, name="tally-refresh-later", daemon=True)
+    t.start()
+    return t
 
 
 SYNC_HOURS = float(os.environ.get("TALLY_BANK_SYNC_HOURS", "4"))
@@ -302,9 +333,58 @@ def sync_now(items: Optional[list[int]] = None) -> None:
         con.close()
 
 
+# Plaid is asked to check every bank every REFRESH_HOURS from REFRESH_FROM to REFRESH_UNTIL, server local time
+# (TZ=America/Denver on x1): 07:00, 09:00, ... 23:00. 0 turns it off.
+REFRESH_HOURS = float(os.environ.get("TALLY_BANK_REFRESH_HOURS", "2"))
+REFRESH_FROM, REFRESH_UNTIL = 7, 23
+
+
+def next_refresh(now: datetime) -> datetime:
+    """The first scheduled refresh after `now` (naive local time)."""
+    first = now.replace(hour=REFRESH_FROM, minute=0, second=0, microsecond=0)
+    last = now.replace(hour=REFRESH_UNTIL, minute=0, second=0, microsecond=0)
+    t = first
+    while t <= last:
+        if t > now:
+            return t
+        t += timedelta(hours=REFRESH_HOURS)
+    return first + timedelta(days=1)
+
+
+def refresh_now() -> dict[int, str]:
+    """One scheduled ask of every working bank (not those in error, not one asked in the last 10 minutes)."""
+    b = bank.connect()
+    try:
+        return bank.refresh(b, bank.claim_refresh(b, bank.REFRESH_PULL, skip_errors=True))
+    finally:
+        b.close()
+
+
+async def refresh_loop() -> None:
+    while REFRESH_HOURS > 0:
+        at = next_refresh(datetime.now())
+        # In steps, so a suspended machine or a changed clock doesn't oversleep by much.
+        while (left := (at - datetime.now()).total_seconds()) > 0:
+            await asyncio.sleep(min(left, 900))
+        try:
+            await asyncio.to_thread(refresh_now)
+        except Exception:
+            log.exception("bank refresh failed")
+
+
+async def _sync_every() -> None:
+    while SYNC_HOURS > 0:
+        await asyncio.sleep(SYNC_HOURS * 3600)
+        try:
+            await asyncio.to_thread(sync_now)
+        except Exception:
+            log.exception("bank sync failed")
+
+
 async def sync_loop() -> None:
     """Points every connection at the webhook, then checks the banks every SYNC_HOURS while the server runs (the
-    webhook brings news sooner; this catches anything it missed)."""
+    webhook brings news sooner; this catches anything it missed), and asks Plaid to check them on the
+    refresh schedule."""
     if not plaid.enabled():
         return
     try:
@@ -315,12 +395,7 @@ async def sync_loop() -> None:
             b.close()
     except Exception:
         log.exception("couldn't point the connections at the webhook")
-    while SYNC_HOURS > 0:
-        await asyncio.sleep(SYNC_HOURS * 3600)
-        try:
-            await asyncio.to_thread(sync_now)
-        except Exception:
-            log.exception("bank sync failed")
+    await asyncio.gather(_sync_every(), refresh_loop())
 
 
 # ---------- Plaid's webhook ----------
