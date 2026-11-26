@@ -52,8 +52,9 @@ const shade = (c: string, k: number) => {
   return `#${f((n >> 16) & 255)}${f((n >> 8) & 255)}${f(n & 255)}`
 }
 
-export function WalletCard({ a, balance, width, style, compact }: {
-  a: Account; balance: number; width: number; style?: StyleProp<ViewStyle>; compact?: boolean
+/** `title`: what the top strip says instead of the bank (a card behind others shows only that strip). */
+export function WalletCard({ a, balance, width, style, compact, title }: {
+  a: Account; balance: number; width: number; style?: StyleProp<ViewStyle>; compact?: boolean; title?: string
 }) {
   const faces = useCardFaces().data
   const face = faces?.[String(a.id)]
@@ -64,7 +65,6 @@ export function WalletCard({ a, balance, width, style, compact }: {
   const light = lum(from) > 0.45
   const ink = light ? '#1C1C1E' : '#FFFFFF'
   const ink2 = light ? 'rgba(28,28,30,0.62)' : 'rgba(255,255,255,0.72)'
-  const owed = a.kind === 'card' || a.kind === 'loan'
   const id = `g${a.id}`
   return (
     <View style={[{ width, height, borderRadius: 16, borderCurve: 'continuous', shadowColor: '#000', shadowOpacity: 0.22,
@@ -94,7 +94,7 @@ export function WalletCard({ a, balance, width, style, compact }: {
           <View style={{ flex: 1, padding: space.l, justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
               <Logo account={a.id} symbol={a.bank || face?.institution ? KIND_LOOK[a.kind].symbol : 'person.fill'} color="rgba(255,255,255,0.22)" size={28} />
-              <Txt v="subhead" weight="600" color={ink} numberOfLines={1} style={{ flex: 1 }}>{face?.institution ?? bankName(a) ?? a.name}</Txt>
+              <Txt v="subhead" weight="600" color={ink} numberOfLines={1} style={{ flex: 1 }}>{title ?? face?.institution ?? bankName(a) ?? a.name}</Txt>
             </View>
             {!compact && (
               <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: space.m }}>
@@ -103,7 +103,7 @@ export function WalletCard({ a, balance, width, style, compact }: {
                   {face?.mask ? <Txt v="footnote" color={ink2} num>•••• {face.mask}</Txt> : null}
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Txt v="caption" color={ink2}>{owed ? 'Balance' : 'Available'}</Txt>
+                  <Txt v="caption" color={ink2}>Balance</Txt>
                   <Txt v="title3" weight="600" color={ink} num>{formatCents(balance)}</Txt>
                 </View>
               </View>
