@@ -4,7 +4,7 @@ import { ScrollView, View } from 'react-native'
 import Animated, { FadeOut } from 'react-native-reanimated'
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable'
 import { dayLabel } from '@/lib/dates'
-import { discard, enqueue, flush, useOutbox, type Queued } from '@/lib/outbox'
+import { blockedText, discard, enqueue, sendNow as sendAll, useOutbox, type Queued } from '@/lib/outbox'
 import { useServer } from '@/lib/server'
 import { useBusy } from '@/design/busy'
 import { failure, success, thump, warning } from '@/design/haptics'
@@ -58,15 +58,16 @@ function Entry({ q, elsewhere }: { q: Queued; elsewhere: boolean }) {
 export default function Outbox() {
   const p = usePalette()
   const items = useOutbox((s) => s.items)
+  const blocked = useOutbox((s) => s.blocked)
   const server = useServer((s) => s.url)
   const busy = useBusy()
   const sendNow = () => busy.run(async () => {
     try {
-      const sent = await flush(true)
+      const { sent, blocked } = await sendAll()
       const left = useOutbox.getState().items.filter((x) => !x.url || x.url === server)
       if (sent && !left.length) { success(); notify({ text: `Sent ${sent}`, symbol: 'checkmark.circle.fill' }) }
       else if (sent) { warning(); notify({ text: `Sent ${sent} · ${left.length} Still Waiting`, symbol: 'exclamationmark.triangle.fill', hue: 'orange' }) }
-      else { failure(); notify({ text: left.some((x) => x.error) ? 'Tally Refused Them' : 'Tally Can’t Be Reached', symbol: 'exclamationmark.triangle.fill', hue: 'orange' }) }
+      else { failure(); notify({ text: blockedText(blocked) ?? (left.some((x) => x.error) ? 'Tally Refused Them' : 'Tally Can’t Be Reached'), symbol: blocked === 'token' ? 'key.fill' : 'exclamationmark.triangle.fill', hue: 'orange' }) }
     } catch {
       failure()
       notify({ text: 'Couldn’t Send', symbol: 'exclamationmark.triangle.fill', hue: 'orange' })
@@ -75,7 +76,7 @@ export default function Outbox() {
   if (!items.length) return <Empty symbol="tray" title="Nothing Waiting" body="Everything saved on this phone is in Tally." />
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: p.bg }} contentContainerStyle={{ padding: space.l, gap: space.xxl, paddingBottom: 60 }}>
-      <Section compact footer="Saved on this phone while Tally couldn’t be reached. Swipe left to discard one.">
+      <Section compact footer={`${blockedText(blocked) ?? 'Saved on this phone while Tally couldn’t be reached.'} Swipe left to discard one.`}>
         {items.map((q) => <Entry key={q.cid} q={q} elsewhere={!!q.url && q.url !== server} />)}
       </Section>
       <Button label="Send Now" onPress={sendNow} busy={busy.on} />

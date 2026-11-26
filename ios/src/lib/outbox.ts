@@ -56,9 +56,8 @@ const blockOf = (e: unknown): Blocked => (locked(e) ? 'token' : unreachable(e) ?
 
 /** Adds new entries now, or keeps them on the phone when Tally can't be reached or refused the token (then it
  *  returns null, and `useOutbox.getState().blocked` says which; `queuedText()` words it). A refusal of the entry
- *  itself still throws. */
-export async function sendOrQueue(lines: TxnInput[], label: string): Promise<Txn[] | null> {
-  const cid = newClientId()
+ *  itself still throws. `cid`: the composer's own client id, so a retried save can't add it twice. */
+export async function sendOrQueue(lines: TxnInput[], label: string, cid: string = newClientId()): Promise<Txn[] | null> {
   try {
     const r = await send(lines, cid)
     useOutbox.setState({ blocked: null })

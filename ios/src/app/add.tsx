@@ -1,15 +1,15 @@
 // Add or edit a transaction. The amount is typed on the pad and grows on screen digit by digit; a name brings its
 // usual category and account with it; the date sits under the amount. One button saves; offline, it waits on the
 // phone and goes to Tally later.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, ScrollView, TextInput, useWindowDimensions, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { api, ApiError, locked, unreachable, type Txn, type TxnInput } from '@/lib/api'
+import { api, ApiError, type Txn, type TxnInput } from '@/lib/api'
 import { refreshBank } from '@/lib/bank'
 import { useTransactions, useTxn } from '@/lib/data'
-import { enqueue, newClientId, send } from '@/lib/outbox'
+import { newClientId, queuedText, QUEUED_TOKEN, sendOrQueue } from '@/lib/outbox'
 import { close, useBusy, useCloseHere } from '@/design/busy'
 import { accountChoices, addedText, categoryChoices, entryOf, fromKinds, loadedAmount, modeOf, needsTo, offered, ready as isReady,
   toKinds, typedBase, TYPES, undoInput, type Mode } from '@/design/compose'
@@ -37,7 +37,11 @@ export default function Add() {
   const editing = id ? Number(id) : null
   const old = useTxn(editing)
   const L = useLedger()
-  if (editing !== null && (!old.data || !L.b)) {
+  const [opened] = useState(() => Date.now())
+  // A copy from a list fetched a while ago is being refetched: wait for it, or the form (which copies the entry once)
+  // would save the old amount over a change the bank made since. A later refetch doesn't hide a form in use.
+  const refetching = old.isFetching && old.dataUpdatedAt < opened
+  if (editing !== null && (!old.data || !L.b || refetching)) {
     const gone = old.error instanceof ApiError && old.error.status === 404
     if (old.isError || (!L.b && L.q.isError)) return <Missing gone={gone} />
     return <Missing loading />
@@ -72,12 +76,6 @@ function Header({ title }: { title: string }) {
   )
 }
 
-/** `value`, once it has stopped changing for `ms`. */
-function useSettled<T>(value: T, ms: number): [T, (v: T) => void] {
-  const [settled, setSettled] = useState(value)
-  useEffect(() => { const id = setTimeout(() => setSettled(value), ms); return () => clearTimeout(id) }, [value, ms])
-  return [settled, setSettled]
-}
 
 /** The form itself, starting from `t` when editing it. */
 function Composer({ t }: { t?: Txn }) {
@@ -92,7 +90,6 @@ function Composer({ t }: { t?: Txn }) {
   const [fresh, setFresh] = useState(!!t) // a loaded amount: the first key replaces it
   const [neg, setNeg] = useState(!!t && t.amount < 0)
   const [what, setWhat] = useState(t?.what ?? '')
-  const [logoName, setLogoName] = useSettled(what.trim(), 450) // the logo looks up a name once typing pauses
   const [cat, setCat] = useState<number | null>(t?.category_id ?? null)
   const [fromPick, setFrom] = useState<number | null>(t ? t.from_id : null)
   const [toPick, setTo] = useState<number | null>(t ? t.to_id : null)
@@ -138,7 +135,7 @@ function Composer({ t }: { t?: Txn }) {
   }
   const pick = (x: Txn) => {
     tick()
-    setWhat(x.what); setLogoName(x.what)
+    setWhat(x.what)
     const xc = L.cat.get(x.category_id)
     if (xc?.active) setCat(x.category_id)
     if (mode === 'in') { if (offered(accountChoices(all, toKinds('in'), null), x.to_id)) setTo(x.to_id) }
@@ -147,8 +144,10 @@ function Composer({ t }: { t?: Txn }) {
   }
   const press = (k: string) => {
     const next = typeKey(typedBase(amount, k, fresh), k)
-    if (next === null) { warning(); shake.set(withSequence(...[-9, 9, -6, 6, -3, 0].map((x) => withTiming(x, { duration: 55 })))); return } // the passcode shake
+    if (next === null) { warning(); shake.set(withSequence(...[-9, 9, -6, 6, -3, 0].map((x) => withTiming(x, { duration: 55 })))); return false } // the passcode shake
+    if (next === amount && !fresh) return false // nothing changed (delete on an empty amount): no tick
     setAmount(next); setFresh(false)
+    return true
   }
   const switchMode = (m: Mode) => { setMode(m); setCat(null); setNeg(false); setFrom(null); setTo(null) }
 
@@ -167,21 +166,14 @@ function Composer({ t }: { t?: Txn }) {
         const before = undoInput(t)
         notify({ text: 'Saved', symbol: 'checkmark.circle.fill', action: { label: 'Undo', run: async () => { await api.updateTxn(t.id, before); await refreshBank() } } })
       } else {
-        const lines = [input]
-        try {
-          const r = await send(lines, cid.current)
-          const made = Array.isArray(r) ? r : [r]
-          done.current = true
-          success(); closeHere()
+        const made = await sendOrQueue([input], name, cid.current)
+        done.current = true
+        success(); closeHere()
+        if (made) {
           notify({ text: addedText(name, refund), symbol: 'checkmark.circle.fill', action: { label: 'Undo', run: async () => { await api.deleteTxn(made[0].id); await refreshBank() } } })
-        } catch (e) {
-          if (!unreachable(e) && !locked(e)) throw e
-          enqueue({ cid: cid.current, lines, label: name })
-          done.current = true
-          success(); closeHere()
-          notify(locked(e)
-            ? { text: 'Saved on your phone. Check the token in Settings.', symbol: 'key.fill', hue: 'orange' }
-            : { text: 'Saved on your phone', symbol: 'icloud.slash.fill', hue: 'orange' })
+        } else {
+          const text = queuedText()
+          notify({ text, symbol: text === QUEUED_TOKEN ? 'key.fill' : 'icloud.slash.fill', hue: 'orange' })
         }
       }
       await refreshBank()
@@ -228,10 +220,10 @@ function Composer({ t }: { t?: Txn }) {
 
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, minHeight: 56 }}>
-            <Logo name={wantsLogo(type ?? (mode === 'in' ? 'Money in' : mode === 'out' ? 'Spending' : 'Transfer')) ? logoName : undefined}
+            <Logo name={wantsLogo(type ?? (mode === 'in' ? 'Money in' : mode === 'out' ? 'Spending' : 'Transfer')) ? what.trim() : undefined}
               symbol={look.symbol} color={p[look.hue]} size={30} />
             <TextInput value={what} onChangeText={setWhat} placeholder="Name" placeholderTextColor={p.label3}
-              onFocus={() => setNaming(true)} onBlur={() => { setNaming(false); setLogoName(what.trim()) }} returnKeyType="done" autoCorrect={false}
+              onFocus={() => setNaming(true)} onBlur={() => setNaming(false)} returnKeyType="done" autoCorrect={false}
               style={{ flex: 1, fontSize: 17, color: p.label, paddingVertical: space.m }} />
           </View>
           {suggestions.length > 0 && (naming || !what) && (
