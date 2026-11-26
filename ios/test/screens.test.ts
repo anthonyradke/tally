@@ -32,6 +32,16 @@ test('Summary and Accounts open Settings from a button straight in their header 
   }
 })
 
+test('every Settings page is in its stack, which gives each one Done', () => {
+  const dir = join(src, 'app/settings')
+  const layout = readFileSync(join(dir, '_layout.tsx'), 'utf8')
+  const pages = files(dir).map((f) => f.slice(dir.length + 1).replace(/\.tsx$/, '')).filter((n) => n !== '_layout')
+  for (const page of pages) assert.match(layout, new RegExp(`<Stack\\.Screen name="${page.replace(/[[\]]/g, '\\$&')}"`), page)
+  assert.match(layout, /unstable_headerRightItems: \(\) => \[\{ type: 'button', label: 'Done'/)
+  // A page's own right-hand toolbar would replace the layout's Done.
+  for (const page of pages) assert.doesNotMatch(readFileSync(join(dir, `${page}.tsx`), 'utf8'), /<Stack\.Toolbar placement="right"/, page)
+})
+
 test('no leftovers of the retired web app', () => {
   const hits = files(src).filter((f) => /\bweb\/|\/static\/|pwa|service ?worker/i.test(readFileSync(f, 'utf8')))
   assert.deepEqual(hits.map((f) => f.slice(src.length)), [])
