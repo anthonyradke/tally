@@ -99,7 +99,7 @@ export default function Activity() {
         ListHeaderComponent={
           <View style={{ paddingHorizontal: space.l, paddingTop: space.s, paddingBottom: space.s, gap: space.m }}>
             {gate.note}
-            <Switcher options={FILTERS} value={filter} onChange={choose} />
+            <Switcher options={FILTERS} initial="all" onChange={choose} />
             {line ? <Txt v="subhead" tone="label2">{line}</Txt> : null}
           </View>
         }
