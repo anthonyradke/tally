@@ -1,5 +1,6 @@
-// Accounts: net worth over time (drag across the line to read any month), your cards and bank accounts stacked like
-// Wallet (tap one and it zooms open into its page), then investments and loans with their banks' logos. A hidden
+// Accounts: net worth over time (drag across the line to read any month), a ticker of every balance and its move this
+// month, your cards and bank accounts stacked like Wallet (tap one and it zooms open into its page), then investments
+// and loans with their banks' logos. A hidden
 // account that still holds money (or owes it) stays here, in its own section, since net worth counts it.
 import { useMemo, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, useWindowDimensions, View } from 'react-native'
@@ -11,12 +12,14 @@ import { formatCents } from '@/lib/money'
 import { useRefresh } from '@/design/feed'
 import { pastMonths, useLedger } from '@/design/ledger'
 import { bankName, KIND_LOOK } from '@/design/look'
+import { tickerItems } from '@/design/ticker'
 import { space, usePalette } from '@/design/theme'
 import { Card, Empty, Row, Section, Tile } from '@/design/ui/List'
 import { LineChart } from '@/design/ui/LineChart'
 import { loadGate } from '@/design/ui/LoadState'
 import { Logo } from '@/design/ui/Logo'
 import { Rolling } from '@/design/ui/Money'
+import { Ticker } from '@/design/ui/Ticker'
 import { Txt } from '@/design/ui/Txt'
 import { CARD_RATIO, useCardFaces, WalletCard } from '@/design/ui/WalletCard'
 
@@ -29,6 +32,7 @@ const HEADER = (
 )
 const longMonth = (iso: string) => fromISO(iso).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 const whole = (c: number) => formatCents(c, { cents: false })
+const openAccount = (id: number) => router.push({ pathname: '/account/[id]', params: { id: String(id) } })
 
 export default function Accounts() {
   const p = usePalette()
@@ -44,16 +48,24 @@ export default function Accounts() {
   const shown = scrub !== null ? months[scrub] : now
   const change = L.month && months.length > 1 ? L.month.net_worth - months[months.length - 2].net_worth : 0
   const trend = months.length > 1 ? months[months.length - 1].net_worth - months[0].net_worth : 0
+  const before = L.month && months.length > 1 ? months[months.length - 2] : undefined
   const balance = (a: Account) => now?.balances[a.id] ?? 0
   const all = L.b?.accounts ?? []
-  const accounts = all.filter((a) => a.active)
-  const hidden = all.filter((a) => !a.active && balance(a) !== 0)
   const { width } = useWindowDimensions()
   const cardW = width - space.l * 2
   // Bank accounts at the back and cards in front, like Wallet's payment cards; within each, the biggest balance
   // nearest the front. The front card shows everything; the ones behind show their name in the strip that peeks out.
-  const deck = accounts.filter((a) => a.kind === 'card' || a.kind === 'cash')
-    .sort((x, y) => (x.kind === y.kind ? Math.abs(balance(x)) - Math.abs(balance(y)) : x.kind === 'card' ? 1 : -1))
+  // The ticker runs through them in the order the screen shows them.
+  const { accounts, hidden, deck, ticker } = useMemo(() => {
+    const list = L.b?.accounts ?? []
+    const at = (a: Account) => now?.balances[a.id] ?? 0
+    const accounts = list.filter((a) => a.active)
+    const hidden = list.filter((a) => !a.active && at(a) !== 0)
+    const deck = accounts.filter((a) => a.kind === 'card' || a.kind === 'cash')
+      .sort((x, y) => (x.kind === y.kind ? Math.abs(at(x)) - Math.abs(at(y)) : x.kind === 'card' ? 1 : -1))
+    const order = [...deck, ...LISTED.flatMap((k) => accounts.filter((a) => a.kind === k)), ...hidden]
+    return { accounts, hidden, deck, ticker: tickerItems(order, list, now, before) }
+  }, [L.b, now, before])
   // The Wallet's totals add up the cards it shows (a hidden account's money is under Hidden, not here).
   const sum = (list: Account[], kind: Account['kind']) => list.filter((a) => a.kind === kind).reduce((n, a) => n + balance(a), 0)
   const strip = (a: Account) => { const mask = faces?.[String(a.id)]?.mask; return mask ? `${a.name} •• ${mask}` : a.name }
@@ -80,6 +92,7 @@ export default function Accounts() {
                 </View>
               )}
             </Card>
+            <Ticker items={ticker} onOpen={openAccount} style={{ marginHorizontal: -space.l, marginTop: -space.l }} />
 
             {deck.length > 0 && (
               <View style={{ gap: space.s }}>
@@ -141,6 +154,6 @@ function AccountRow({ a, balance, subtitle }: { a: Account; balance: number; sub
   return (
     <Row leading={<Logo account={a.id} symbol={look.symbol} color={p[look.hue]} size={36} />} title={a.name} subtitle={subtitle}
       value={formatCents(balance)} valueTone="label" chevron
-      onPress={() => router.push({ pathname: '/account/[id]', params: { id: String(a.id) } })} />
+      onPress={() => openAccount(a.id)} />
   )
 }
