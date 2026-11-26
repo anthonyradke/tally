@@ -501,6 +501,29 @@ def test_generic_lines_teach_nothing(client, world, fake, monkeypatch):
         {"entity": None, "merchant": "Blue Bottle", "raw": "SQ *BLUE BOTTLE 0412"}) == ["m:BLUE BOTTLE", "d:BLUE BOTTLE"]
 
 
+def test_accept_sure_adds_what_it_can_and_settles(client, world, fake, monkeypatch):
+    """A sure row that can't make a whole entry (dated before the ledger starts) waits; the others are added."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    ids = _mapped_world(client, world)
+    fake.push(added=[prow("a", "acc-card", 5.25, "2026-09-02", "BLUE BOTTLE 1", "Blue Bottle"),
+                     prow("b", "acc-card", 6.00, "2026-09-05", "BLUE BOTTLE 2", "Blue Bottle"),
+                     prow("c", "acc-card", 4.75, "2026-09-20", "BLUE BOTTLE 3", "Blue Bottle"),
+                     prow("d", "acc-card", 3.50, "2026-09-21", "BLUE BOTTLE 4", "Blue Bottle")])
+    client.post("/api/bank/sync")
+    box = client.get("/api/bank/inbox").json()
+    for raw in ("BLUE BOTTLE 1", "BLUE BOTTLE 2"):
+        b = next(x for x in box if x["raw"] == raw)
+        client.post(f"/api/bank/inbox/{b['id']}/accept", json={"what": "Coffee", "category_id": world["food"]})
+    bank_db = bank.connect()
+    bank_db.execute("UPDATE txns SET date='2020-01-01', authorized_date='2020-01-01' WHERE plaid_id='d'")
+    bank_db.execute("UPDATE accounts SET since=NULL WHERE id=?", (ids["Card"],))
+    bank_db.commit()
+    r = client.post("/api/bank/inbox/accept-sure")
+    assert r.status_code == 200, r.text
+    assert [t["amount"] for t in r.json()] == [475]
+    assert [b["raw"] for b in client.get("/api/bank/inbox").json()] == ["BLUE BOTTLE 4"]
+
+
 def test_automap_needs_more_than_a_kind_word(client, fake, monkeypatch):
     """"Chase Checking" isn't the Test Bank's checking, nor "Amex CC" its card; "Test Card" and "Checking 1111" are."""
     freeze(monkeypatch, date(2026, 9, 30))

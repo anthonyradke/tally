@@ -481,20 +481,10 @@ def accept_sure(b: Bank, con: Con):
 
 
 def _accept_sure(b, con) -> list:
-    st = service.load(con)
-    done = []
-    for item in bank.inbox(b, st):
-        if item["guess"] and item["guess"]["confidence"] == "sure":
-            r = b.execute("SELECT * FROM txns WHERE id=?", (item["id"],)).fetchone()
-            if r["status"] != "new":
-                continue  # paired with an entry added earlier in this loop
-            tid = _accept(b, st, r, {})
-            con.commit()
-            b.commit()
-            st = service.load(con)
-            bank.link(b, st)
-            done.append(tid)
-    return _full(con, done) if done else []
+    """The same loop as Add all: a row that can't make a whole entry waits, and the rest are added and settled."""
+    st = _link(b, con)
+    return _accept_rows(b, con, [x["id"] for x in bank.inbox(b, st)
+                                 if x["guess"] and x["guess"]["confidence"] == "sure"])
 
 
 @router.post("/inbox/{bid}/pair")
