@@ -527,14 +527,28 @@ def clean(raw: str) -> str:
     return " ".join(words[:4])
 
 
+# Words that name how money moved, not who it went to: a line made only of these (CHECK 1041 and CHECK 1042 both
+# clean to CHECK; VENMO, ATM WITHDRAWAL, ONLINE TRANSFER) says nothing about what the next one is for.
+_GENERIC = set("CHECK CHECKS VENMO ZELLE ATM ONLINE TRANSFER TRANSFERS XFER XFR DEPOSIT DEPOSITS WITHDRAWAL WITHDRAW "
+               "MOBILE FROM TO CASH APP DEBIT CREDIT ACH EXTERNAL INTERNAL SAV SAVINGS CHK CHECKING POS CASHOUT "
+               "INSTANT WEB PPD CCD TRANSACTION BANKING BANK REF PAYPAL SQUARE PAY PAYMENT AUTOPAY BRANCH TELLER FUNDS "
+               "E ID INST ELECTRONIC EDEPOSIT REMOTE IMAGE SHARE DRAFT".split())
+
+
+def _generic(text: str) -> bool:
+    return bool(text) and all(w in _GENERIC for w in text.split())
+
+
 def keys(r) -> list[str]:
-    """Ways to recognise the same merchant, most specific first."""
+    """Ways to recognise the same merchant, most specific first. A generic line or merchant (a check, Venmo, an ATM)
+    is no merchant at all: nothing is learned from it, so one check filed as rent doesn't make every check rent."""
     out = []
-    if r["entity"]:
+    merchant = clean(r["merchant"]) if r["merchant"] else ""
+    if r["entity"] and not _generic(merchant):
         out.append("e:" + r["entity"])
-    if r["merchant"]:
-        out.append("m:" + clean(r["merchant"]))
-    if c := clean(r["raw"]):
+    if r["merchant"] and not _generic(merchant):
+        out.append("m:" + merchant)
+    if (c := clean(r["raw"])) and not _generic(c):
         out.append("d:" + c)
     return out
 

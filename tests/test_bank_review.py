@@ -481,6 +481,26 @@ def test_reconnecting_a_bank_takes_back_its_accounts_and_decisions(client, fake,
     assert client.get("/api/bank/inbox").json() == []
 
 
+def test_generic_lines_teach_nothing(client, world, fake, monkeypatch):
+    """Two checks filed as Rent don't make the next check (or every Venmo) a sure Rent."""
+    freeze(monkeypatch, date(2026, 9, 30))
+    _mapped_world(client, world)
+    rent = client.post("/api/categories", json={"name": "Rent", "type": "Spending"}).json()["id"]
+    fake.push(added=[prow("c1", "acc-chk", 1500.0, "2026-09-03", "CHECK 1041"),
+                     prow("c2", "acc-chk", 1500.0, "2026-09-05", "CHECK 1042"),
+                     prow("c3", "acc-chk", 85.0, "2026-09-12", "CHECK 1043"),
+                     prow("v1", "acc-chk", 20.0, "2026-09-13", "VENMO PAYMENT 1001", "Venmo"),
+                     prow("v2", "acc-chk", 30.0, "2026-09-14", "VENMO PAYMENT 1002", "Venmo")])
+    client.post("/api/bank/sync")
+    box = {b["raw"]: b for b in client.get("/api/bank/inbox").json()}
+    for raw in ("CHECK 1041", "CHECK 1042", "VENMO PAYMENT 1001"):
+        client.post(f"/api/bank/inbox/{box[raw]['id']}/accept", json={"what": "Rent", "category_id": rent})
+    left = {b["raw"]: b["guess"] for b in client.get("/api/bank/inbox").json()}
+    assert left["CHECK 1043"]["source"] != "history" and left["VENMO PAYMENT 1002"]["source"] != "history"
+    assert bank.clean("SQ *BLUE BOTTLE 0412") == "BLUE BOTTLE" and bank.keys(
+        {"entity": None, "merchant": "Blue Bottle", "raw": "SQ *BLUE BOTTLE 0412"}) == ["m:BLUE BOTTLE", "d:BLUE BOTTLE"]
+
+
 def test_automap_needs_more_than_a_kind_word(client, fake, monkeypatch):
     """"Chase Checking" isn't the Test Bank's checking, nor "Amex CC" its card; "Test Card" and "Checking 1111" are."""
     freeze(monkeypatch, date(2026, 9, 30))
