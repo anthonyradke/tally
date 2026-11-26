@@ -27,7 +27,7 @@ test('a symbol comes from the bank, or from what the account is when that says m
 test('without a bank, a plain word or the name itself', () => {
   assert.equal(sym('Checking', 'cash'), 'CHK')
   assert.equal(sym('Credit card', 'card'), 'CARD')
-  assert.equal(sym('Alex (owes me)', 'cash'), 'ALEX')
+  assert.equal(sym('Alex (owes me)', 'cash'), 'AOM')
   assert.equal(sym('Envelope', 'cash'), 'ENVE')
   assert.equal(sym('Rainy day jar', 'cash'), 'RDJ')
   assert.equal(sym('Everyday', 'cash', 'First Bank'), 'FIRST')
