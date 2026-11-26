@@ -1,5 +1,5 @@
 // Settings: which accounts show, the banks, entries waiting on the phone, the app icon and the connection to the
-// server. Face ID is iOS's own app lock.
+// server. Face ID unlocks Tally (FaceIdRow).
 import { ScrollView } from 'react-native'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
@@ -12,6 +12,7 @@ import { useOutbox } from '@/lib/outbox'
 import { useServer } from '@/lib/server'
 import { space, usePalette } from '@/design/theme'
 import { Row, Section, Tile } from '@/design/ui/List'
+import { FaceIdRow } from '@/design/ui/FaceIdRow'
 import { Txt } from '@/design/ui/Txt'
 
 /** Same question and cache as the frame's check on launch (app/_layout.tsx): does this ledger still need setup? */
@@ -65,7 +66,7 @@ export default function Settings() {
         <Row leading={<Tile symbol="server.rack" color={p.gray} size={30} />} title="Server" chevron
           onPress={() => router.push('/settings/server')} />
       </Section>
-      <Section footer="To lock Tally, touch and hold its icon on the Home Screen and choose Require Face ID.">{null}</Section>
+      <FaceIdRow />
       <Txt v="footnote" tone="label3" center>Tally {Constants.expoConfig?.version ?? ''}</Txt>
     </ScrollView>
   )
