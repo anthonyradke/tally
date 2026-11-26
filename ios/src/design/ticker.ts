@@ -136,12 +136,13 @@ export function tickerItems(shown: Account[], all: Account[], now: MonthRow | un
 /** The move as the strip prints it: "▲ $120", "▼ $40", or "—" when nothing moved. */
 export const moveText = (change: number) => (change === 0 ? '—' : `${change > 0 ? '▲' : '▼'} ${formatChange(Math.abs(change))}`)
 
-/** The percent beside it, unsigned (the arrow says which way): one decimal under 100, whole above, capped. */
+/** The percent beside it, unsigned (the arrow says which way): one decimal under 100, whole above. Left off past
+ *  999%: a card that went from $10 to $190 says more in dollars. */
 export function pctText(pct: number | null): string | null {
   if (pct === null || !Number.isFinite(pct) || pct === 0) return null
   const p = Math.abs(pct)
   if (p < 0.1) return '<0.1%'
-  if (p >= 1000) return '>999%'
+  if (p >= 1000) return null
   return `${p < 100 ? p.toFixed(1) : Math.round(p)}%`
 }
 
@@ -185,3 +186,9 @@ export function itemAt(x: number, offset: number, starts: readonly number[], w: 
 
 /** How many copies of the run fill a strip `band` wide and leave one to slide in. */
 export const copiesFor = (band: number, w: number) => (w > 0 ? Math.max(2, Math.ceil(band / w) + 1) : 1)
+
+/** Milliseconds now, from a gesture's worklet (when the finger last moved). */
+export function clock(): number {
+  'worklet'
+  return Date.now()
+}
