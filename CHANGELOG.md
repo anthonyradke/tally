@@ -8,6 +8,16 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## Unreleased
+Added
+- Activity shows what's still pending at the bank, dimmed above the day cards, as banking apps do: in All and in
+  Spending, Income or Transfers, whichever it belongs to. Each account's page shows its own. They aren't counted
+  anywhere, and they're replaced by the real entry once the bank posts them. Tap one to see what the bank calls it.
+
+Changed
+- Switching filters in Activity slides the list toward the new filter while the old one drifts out the other way,
+  instead of fading through a blank. A filter that hasn't loaded yet shows placeholder rows until it has.
+
 ## 4.3.0 (2026-11-26)
 Added
 - Face ID: opening Tally, or coming back after five minutes away, asks Apple's Face ID (or the iPhone passcode)

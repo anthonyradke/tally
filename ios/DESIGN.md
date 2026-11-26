@@ -34,8 +34,10 @@ anything below get written here first.
   around the one under the finger, and a swipe to page through time.
 - **Brand wash** on an entry's page, fading from the merchant's color into the background.
 - **Mail's switcher** on Activity: the chosen filter widens into a colored capsule; a swipe across jumps to the
-  first or last. The capsule moves the instant the finger lifts; the list crossfades to the new filter as Mail's
-  does (out 90 ms, in 150 ms), never through a blank.
+  first or last. The capsule moves the instant the finger lifts. The list follows it sideways: the old screenful
+  drifts 28 pt away from the side the capsule moved toward and fades while the new one comes in from that side, both
+  on screen at once, the first rows a beat ahead (~320 ms, a critically damped curve). Never a blank frame: a filter
+  not loaded yet comes in as gray placeholder rows that pulse softly, then crossfade to the real ones in place.
 
 ## Motion
 After Face ID and Apple Pay: quick ease-out curves and critically damped springs, nothing overshoots or wobbles
@@ -44,6 +46,9 @@ a drawn checkmark. Haptics mark taps (light), commits (success) and refusals (th
 
 ## Gestures
 - Rows swipe like Mail: left to delete; in the check-in, right to add and left to skip.
+- Pending bank rows sit dimmed (55%) above the day cards in Activity and on their account's page, under "Pending"
+  instead of a category. They aren't entries yet: no swipe, no menu, never counted. A tap folds out that they're
+  added once the bank posts them.
 - Press and hold an entry for a preview and a menu.
 - Charts that page read on press and hold (as Health's do); a quick swipe pages.
 - Holding delete on the keypad keeps deleting, faster the longer it's held.
