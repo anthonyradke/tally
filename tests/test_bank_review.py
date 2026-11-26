@@ -550,6 +550,42 @@ def test_zero_rows_skip_the_inbox_and_dropped_holds_go(client, world, fake, monk
     assert client.get("/api/bank").json()["waiting"] == 0
 
 
+def test_expiry_warnings_last_until_repaired(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    client.post("/api/bank/sandbox/connect")
+    b = bank.connect()
+    b.execute("UPDATE items SET error='PENDING_EXPIRATION'")
+    b.commit()
+    client.post("/api/bank/sync")
+    assert client.get("/api/bank").json()["items"][0]["error"] == "PENDING_EXPIRATION"
+    real = fake.__call__
+    monkeypatch.setattr(plaid, "call", lambda p, body, timeout=30: {"link_token": "link-1"} if p == "/link/token/create"
+                        else real(p, body, timeout))
+    iid = client.get("/api/bank").json()["items"][0]["id"]
+    assert client.post("/api/bank/link-token", json={"item_id": iid}).json()["link_token"] == "link-1"
+    client.post("/api/bank/sync")  # what the app does once update mode succeeds
+    assert client.get("/api/bank").json()["items"][0]["error"] is None
+
+
+def test_a_broken_bank_isnt_asked_on_every_open(client, fake, monkeypatch):
+    freeze(monkeypatch, date(2026, 9, 30))
+    client.post("/api/bank/sandbox/connect")
+    asked = []
+    real = fake.__call__
+
+    def call(path, body, timeout=30):
+        if path == "/transactions/sync":
+            asked.append(path)
+            raise plaid.PlaidError("ITEM_LOGIN_REQUIRED", "sign in again", 400)
+        return real(path, body, timeout)
+    monkeypatch.setattr(plaid, "call", call)
+    client.post("/api/bank/sync")
+    assert client.get("/api/bank").json()["items"][0]["error"] == "ITEM_LOGIN_REQUIRED"
+    client.post("/api/bank/sync?max_age=1800")
+    client.post("/api/bank/sync?max_age=1800")
+    assert len(asked) == 1
+
+
 def test_automap_needs_more_than_a_kind_word(client, fake, monkeypatch):
     """"Chase Checking" isn't the Test Bank's checking, nor "Amex CC" its card; "Test Card" and "Checking 1111" are."""
     freeze(monkeypatch, date(2026, 9, 30))

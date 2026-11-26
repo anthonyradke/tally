@@ -70,7 +70,12 @@ MIGRATIONS = (("accounts", "since", "TEXT"), ("accounts", "skip", "INTEGER NOT N
               ("items", "logo", "TEXT"), ("items", "color", "TEXT"), ("txns", "website", "TEXT"),
               ("txns", "pfc_conf", "TEXT"), ("items", "webhook", "TEXT"),
               # 2026-11-25: a paired row the bank changed (amount or date), as it was, until `follow` has looked
-              ("txns", "was_amount", "INTEGER"), ("txns", "was_day", "TEXT"))
+              ("txns", "was_amount", "INTEGER"), ("txns", "was_day", "TEXT"),
+              # when a sync of the connection was last tried, worked or not (fresh())
+              ("items", "tried_at", "TEXT"))
+# Plaid's warnings that a connection will stop working soon: they stay until it's repaired, not just until the next
+# sync that still works.
+WARNINGS = ("PENDING_EXPIRATION", "PENDING_DISCONNECT")
 
 
 _setup = threading.Lock()
@@ -261,6 +266,9 @@ def sync_item(bcon, iid: int) -> dict:
     """Pull everything new for one connection. The cursor is saved only once a whole run of pages is in, and a run
     the bank changed under us starts over from the saved cursor, as Plaid asks."""
     it = bcon.execute("SELECT * FROM items WHERE id=?", (iid,)).fetchone()
+    with settling:
+        bcon.execute("UPDATE items SET tried_at=? WHERE id=?", (_now(), iid))
+        bcon.commit()
     counts = Counter()
     for _attempt in range(3):
         cursor, pages = it["cursor"], []
@@ -309,16 +317,20 @@ def sync_item(bcon, iid: int) -> dict:
                      "SELECT 1 FROM forgotten f JOIN accounts a ON a.tally_account_id=f.account WHERE a.id=txns.account_id"
                      " AND f.day=COALESCE(txns.authorized_date, txns.date) AND f.amount=txns.amount AND f.raw=txns.raw)",
                      (_now(),))
-        bcon.execute("UPDATE items SET cursor=?, error=NULL, synced_at=? WHERE id=?", (cursor, _now(), iid))
+        repaired = get_meta(bcon, f"repair:{iid}") is not None  # update mode was opened for it since
+        bcon.execute(f"UPDATE items SET cursor=?, synced_at=?, error=CASE WHEN error IN ({','.join('?' * len(WARNINGS))})"
+                     " AND NOT ? THEN error END WHERE id=?", (cursor, _now(), *WARNINGS, repaired, iid))
+        bcon.execute("DELETE FROM meta WHERE key=?", (f"repair:{iid}",))
         bcon.commit()
     return dict(counts)
 
 
 def fresh(bcon, max_age: int) -> bool:
-    """Every connection was checked within the last `max_age` seconds."""
+    """Every connection was checked within the last `max_age` seconds. A connection in error counts from when it was
+    last tried, so a broken bank isn't asked again on every open of the app."""
     cut = (datetime.now(timezone.utc) - timedelta(seconds=max_age)).isoformat(timespec="seconds")
-    rows = bcon.execute("SELECT synced_at FROM items").fetchall()
-    return all(r[0] and r[0] > cut for r in rows)
+    rows = bcon.execute("SELECT synced_at, tried_at FROM items").fetchall()
+    return all(max(r[0] or "", r[1] or "") > cut for r in rows)
 
 
 def sync_all(bcon) -> dict:

@@ -61,6 +61,9 @@ def _link_token(b, iid: Optional[int]) -> dict:
         if not row:
             raise HTTPException(404)
         token = row[0]
+        # Opening update mode is the repair of a warned connection: its next good sync clears the warning.
+        with bank.settling:
+            bank.set_meta(b, f"repair:{iid}", bank._now())
     user = None if token else bank.plaid_user(b)
     try:
         lt = plaid.link_token(token, user)
@@ -239,6 +242,7 @@ def disconnect(iid: int, b: Bank):
     with bank.settling:
         bank.forget(b, iid)
         b.execute("DELETE FROM items WHERE id=?", (iid,))
+        b.execute("DELETE FROM meta WHERE key=?", (f"repair:{iid}",))
         b.commit()
 
 
