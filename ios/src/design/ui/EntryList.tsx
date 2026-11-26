@@ -1,8 +1,9 @@
 // One account's or one category's entries under its page's own header: posted entries newest first, read a page at a
-// time as you scroll, with the scheduled ones folded into a row above them and dimmed when opened.
+// time as you scroll, with the scheduled ones folded into a row above them and dimmed when opened, and what's still
+// pending at the bank (`pending`) dimmed above those.
 import { useState, type ReactElement } from 'react'
 import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native'
-import type { Account, Txn, TxnQuery } from '@/lib/api'
+import type { Account, PendingTxn, Txn, TxnQuery } from '@/lib/api'
 import { useTransactions } from '@/lib/data'
 import { addDays } from '@/lib/dates'
 import { tick } from '../haptics'
@@ -11,13 +12,14 @@ import { loadOf, useLedger } from '../ledger'
 import { radius, space, usePalette } from '../theme'
 import { Empty, Row, Section, Tile } from './List'
 import { Blocked } from './LoadState'
+import { PendingRow } from './PendingRow'
 import { SF } from './SF'
 import { Txt } from './Txt'
 import { TxnRow } from './TxnRow'
 
 /** `scheduled`: whether entries still to come belong to this list (not for a month in the past). */
-export function EntryList({ query, header, account, title = 'Transactions', aside, scheduled = true }: {
-  query: TxnQuery; header: ReactElement; account?: Account; title?: string; aside?: string; scheduled?: boolean
+export function EntryList({ query, header, account, title = 'Transactions', aside, scheduled = true, pending }: {
+  query: TxnQuery; header: ReactElement; account?: Account; title?: string; aside?: string; scheduled?: boolean; pending?: PendingTxn[]
 }) {
   const p = usePalette()
   const L = useLedger()
@@ -32,6 +34,11 @@ export function EntryList({ query, header, account, title = 'Transactions', asid
   const top = (
     <View style={{ gap: space.xxl, paddingBottom: space.s }}>
       {header}
+      {pending?.length ? (
+        <Section title="Pending" inset={70}>
+          {pending.map((r) => <PendingRow key={r.id} r={r} account={account} />)}
+        </Section>
+      ) : null}
       {soon.length > 0 && (
         <Section inset={70}>
           {[

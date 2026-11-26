@@ -1,14 +1,17 @@
-// One account: its card (zoomed open from Accounts), its balance and how it got there month by month, then its
-// entries signed like its statement. A credit card can wear a picture of the real card.
+// One account: its card (zoomed open from Accounts), its balance and how it got there month by month, then what's
+// still pending at the bank and its entries, signed like its statement. A credit card can wear a picture of the real
+// card.
 import { useMemo, useRef, useState } from 'react'
 import { ScrollView, useWindowDimensions, View } from 'react-native'
 import { Link, Stack, useLocalSearchParams } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '@/lib/api'
+import { usePending } from '@/lib/bank'
 import { fromISO } from '@/lib/dates'
 import { pastMonths, useLedger } from '@/design/ledger'
 import { bankName, KIND_LOOK } from '@/design/look'
+import { pendingOn } from '@/design/pending'
 import { space, usePalette } from '@/design/theme'
 import { failure, success } from '@/design/haptics'
 import { EntryList } from '@/design/ui/EntryList'
@@ -37,6 +40,8 @@ export default function AccountPage() {
   const faces = useCardFaces()
   const client = useQueryClient()
   const art = faces.data?.[String(aid)]?.art
+  const allPending = usePending().data
+  const pending = useMemo(() => pendingOn(allPending, aid), [allPending, aid])
   const busy = useRef(false)
   const pickArt = async () => {
     if (busy.current) return
@@ -106,7 +111,7 @@ export default function AccountPage() {
   return (
     <>
       <Stack.Screen options={{ title: a.name }} />
-      <EntryList query={{ account: aid }} header={header} account={a} />
+      <EntryList query={{ account: aid }} header={header} account={a} pending={pending} />
     </>
   )
 }

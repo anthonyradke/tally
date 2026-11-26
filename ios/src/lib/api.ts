@@ -68,6 +68,11 @@ export type Confidence = 'sure' | 'likely' | 'guess' | 'unknown'
 export interface BankGuess { what: string; category_id: number | null; from_id: number | null; to_id: number | null; amount: number; confidence: Confidence; source: 'history' | 'transfer' | 'plaid' | 'none'; why: string; pair_id: number | null }
 /** `account_id`: the Tally account it's on. Pending rows come without a guess: the bank can still change them. */
 export interface BankRow { id: number; date: string; authorized_date: string | null; raw: string; merchant: string | null; logo: string | null; amount: number; pending: boolean; account_id: number; bank_account: string; guess: BankGuess | null }
+/** A pending bank row (GET /bank/pending), shaped like the entry it would most likely become. `amount`: cents signed
+ *  as an entry of `type` carries it (spending positive and a refund negative, money in positive, a move positive),
+ *  so `amountLook(type, amount)` and `signFrom` read it like any entry. `from_id`/`to_id`: that entry's accounts;
+ *  `account_id`: the account the bank shows it on. `what`: the inbox's name for it; `category_id`: its guess. */
+export interface PendingTxn { id: number; date: string; what: string; category_id: number | null; type: CatType; amount: number; from_id: number | null; to_id: number | null; account_id: number; raw: string; merchant: string | null; logo: string | null; website: string | null }
 export interface BankAccept { what?: string; category_id?: number; from_id?: number | null; to_id?: number | null; amount?: number; date?: string; note?: string }
 export interface BankAudit { account_id: number; bank_account: string; first: string; bank_balance: number | null; tally_balance: number | null; gap: number | null; pending: number; balance_at: string | null; matched: number; missing: { id: number; date: string; raw: string; merchant: string | null; amount: number }[]; extra: { id: number; date: string; what: string; amount: number }[] }
 /** `added`: entries Tally added by itself (a ledger set up from the banks). */
@@ -236,6 +241,8 @@ export const api = {
     /** 404 when the server has no Plaid keys (the real Tally, for now): bank sync is off there. */
     status: () => call<BankStatus>('GET', '/bank'),
     inbox: () => call<BankRow[]>('GET', '/bank/inbox', undefined, 30_000),
+    /** Pending rows on tracked accounts, newest first: shown dimmed until the bank posts them. Read only. */
+    pending: () => call<PendingTxn[]>('GET', '/bank/pending'),
     /** `maxAge` (seconds): the server skips the banks when it checked them all more recently than that. */
     sync: (maxAge?: number) => call<BankSynced>('POST', maxAge === undefined ? '/bank/sync' : `/bank/sync?max_age=${maxAge}`, undefined, 90_000),
     /** After update mode finished for a connection: syncs and clears its expiry warning. */

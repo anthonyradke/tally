@@ -2,7 +2,7 @@
 // yet, and connecting a bank through Plaid Link. The server does the work (app/bank.py); this asks and shows.
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useQuery } from '@tanstack/react-query'
-import { api, ApiError, type Account, type BankConnected, type BankRow, type BankStatus, type BankSynced } from './api'
+import { api, ApiError, type Account, type BankConnected, type BankRow, type BankStatus, type BankSynced, type PendingTxn } from './api'
 import { invalidateAll, queryClient } from './data'
 
 /** The server's bank sync, or null when it has none (404: no Plaid keys, as on the real Tally). */
@@ -22,6 +22,19 @@ export const useBankOn = () => !!useBank().data
 
 export const useBankInbox = (enabled = true) =>
   useQuery({ queryKey: ['bank', 'inbox'], queryFn: api.bank.inbox, enabled, staleTime: 15_000 })
+
+/** Pending rows at the bank, or null on a server without bank sync (404, like the status). Under the `bank` key, so
+ *  `invalidateAll` and `refreshBank` refetch it with the rest: a row that posted drops out of it. */
+async function pending(): Promise<PendingTxn[] | null> {
+  try {
+    return await api.bank.pending()
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null
+    throw e
+  }
+}
+
+export const usePending = () => useQuery({ queryKey: ['bank', 'pending'], queryFn: pending, staleTime: 30_000, retry: false })
 
 /** After anything that changes bank rows or entries: the inbox, the status count, and every list of entries
  *  (`invalidateAll` covers the bank queries too). */
@@ -110,6 +123,7 @@ export async function freshBank(): Promise<{ status: BankStatus; rows: BankRow[]
   const synced = await api.bank.sync(30 * 60).catch(() => null)
   // Entries Tally added by itself, or bank rows paired with entries: balances and lists changed under the screens.
   if (syncChanged(synced)) await invalidateAll()
+  else if (synced) queryClient.invalidateQueries({ queryKey: ['bank', 'pending'] }).catch(() => {}) // holds come and go on their own
   const [st, rows] = await Promise.all([
     queryClient.fetchQuery({ queryKey: ['bank'], queryFn: status, staleTime: 0, retry: false }),
     queryClient.fetchQuery({ queryKey: ['bank', 'inbox'], queryFn: api.bank.inbox, staleTime: 0 }),
