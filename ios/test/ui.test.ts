@@ -6,6 +6,7 @@ import { createElement, Fragment } from 'react'
 import { axisLabel, barHeight, barScale, linePath, niceMax } from '@/design/ui/chart'
 import { charKeys, fitSize } from '@/design/ui/numeric'
 import { sectionRows } from '@/design/ui/rows'
+import { DELETE, keyEffect, typedCents, typedText, typeKey } from '@/design/ui/typing'
 
 test('a flat line is drawn across the middle, not along the bottom', () => {
   const { line } = linePath([500, 500, 500], 100, 132)
@@ -74,6 +75,24 @@ test('a figure steps down to fit its room, never below the floor', () => {
   assert.equal(fitSize(48, 1000, 226), 48 * 0.55)
   assert.equal(fitSize(48, 300, undefined), 48)
   assert.ok(fitSize(48, 300, 226) * (300 / 48) <= 226)
+})
+
+test('keypad typing: refusals, deleting an empty amount changes nothing, replace starts over', () => {
+  assert.equal(typeKey('12', '3'), '123')
+  assert.equal(typeKey('0', '5'), '5')
+  assert.equal(typeKey('', '.'), '0.')
+  assert.equal(typeKey('1.5', '.'), null)
+  assert.equal(typeKey('1.25', '9'), null)
+  assert.equal(typeKey('1234567', '8'), null)
+  assert.deepEqual(keyEffect('', DELETE), { next: '', changed: false })
+  assert.deepEqual(keyEffect('4', DELETE), { next: '', changed: true })
+  assert.deepEqual(keyEffect('1.25', '9'), { next: null, changed: false })
+  assert.equal(typeKey('42.50', '7', true), '7')
+  assert.equal(typeKey('42.50', '.', true), '0.')
+  assert.equal(typeKey('42.50', DELETE, true), '')
+  assert.deepEqual(keyEffect('', DELETE, true), { next: '', changed: false })
+  assert.equal(typedText('1234.5'), '$1,234.5')
+  assert.equal(typedCents('12.34'), 1234)
 })
 
 const el = (key: string | null, label = '') => createElement('Row', key === null ? { label } : { key, label })
