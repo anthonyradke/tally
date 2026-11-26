@@ -8,13 +8,17 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
-## Unreleased
+## 4.4.0 (2026-11-26)
 Added
 - Activity shows what's still pending at the bank, dimmed above the day cards, as banking apps do: in All and in
   Spending, Income or Transfers, whichever it belongs to. Each account's page shows its own. They aren't counted
   anywhere, and they're replaced by the real entry once the bank posts them. Tap one to see what the bank calls it.
 
+- A picture of the real card can go on a checking account too (a debit card).
+
 Changed
+- Wallet cards glow softly in their own color, as in Wallet, and on a card with a picture the balance sits on frosted
+  glass where Wallet prints the last four digits, keeping the card's own printing clear.
 - Switching filters in Activity slides the list toward the new filter while the old one drifts out the other way,
   instead of fading through a blank. A filter that hasn't loaded yet shows placeholder rows until it has.
 
