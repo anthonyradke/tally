@@ -8,6 +8,13 @@ Tally follows [semantic versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 The number lives in `ios/app.json` (shown at the bottom of Settings), `ios/package.json` and `pyproject.toml`. Each
 release gets a git tag (`v3.0.0`) and an entry here, newest first.
 
+## Unreleased
+Added
+- Accounts has a ticker under net worth, like a stock ticker: net worth and each account slide by on one line with
+  a short symbol, the balance and how much it moved this month, green when that's good news and red when it isn't
+  (a card balance going up is red). Touch it to stop it and drag to look along it; tap one to open that account.
+  With Reduce Motion on it stays still and scrolls by hand.
+
 ## 4.4.0 (2026-11-26)
 Added
 - Activity shows what's still pending at the bank, dimmed above the day cards, as banking apps do: in All and in

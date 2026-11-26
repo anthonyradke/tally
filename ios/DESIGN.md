@@ -30,6 +30,10 @@ anything below get written here first.
   a row of pages (the week is the second) with page dots under them; the last page looked at stays.
 - **Wallet** on Accounts: cards and bank accounts stacked as cards in their banks' colors, the account name and
   last four digits on the face, or a picture of the real card. A card zooms open into its page (iOS 18 zoom).
+- **Ticker** on Accounts, under net worth: net worth and every account on one line drifting right to left like a
+  market ticker (~30 pt/s), each with a short symbol, its balance and the month's move (green when it's good for
+  you, so a card or loan going down is green). Touch stops it and a drag scrubs it; it starts again a moment after
+  letting go. With Reduce Motion or VoiceOver it's a row to scroll by hand.
 - **Trends** on Insights, after Health: a grid with its scale on the right, a dashed average, bars that dim
   around the one under the finger, and a swipe to page through time.
 - **Brand wash** on an entry's page, fading from the merchant's color into the background.
